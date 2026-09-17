@@ -1,10 +1,16 @@
 # /faz leva — a leva que a linha dispara
 
-Você está na sessão nova, e o usuário colou a linha que o `/faz <pedido>`
-entregou: ela cita o documento do entendimento e as quatro skills do
+Você está na sessão nova, e o usuário colou a linha de `/goal` que o
+`/faz <pedido>` entregou: ela nomeia esta skill com `leva <documento>`, o
+documento do entendimento e as quatro skills do
 [Matt Pocock](https://github.com/mattpocock/skills) que esta leva encadeia. É a
 linha que autoriza as três reservadas ao usuário — `to-spec`, `to-tickets` e
 `implement` —, porque é ele quem as nomeia; o `code-review` você invoca sozinho.
+O `/goal` é o laço: a condição dele é a leva inteira, e a sessão só para quando
+ela vale. Se a sua primeira mensagem não é o kickoff dele (`A session-scoped
+Stop hook is now active with condition: "..."`), o `/goal` não foi despachado —
+o workspace não está confiado, e é só nele que o comando existe: diga isso ao
+usuário em uma linha e siga assim mesmo, porque a linha vale como pedido dele.
 
 **As quatro se cumprem pela ferramenta `Skill`, nunca lendo o `SKILL.md` delas.**
 Dar `cat` no arquivo de uma skill e seguir o texto à mão não é invocá-la: perde

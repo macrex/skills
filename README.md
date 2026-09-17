@@ -18,9 +18,9 @@ skills dele é `disable-model-invocation`, isto é, **nenhum agente as invoca
 sozinho** — só o usuário, nomeando-as. Então `/faz <pedido>` já começa o
 interrogatório, com as duas skills que são invocáveis por design (`grilling` e
 `domain-modeling`), e ao fechar o entendimento grava-o num documento e entrega a
-linha pronta do segundo, `/faz leva <documento>`, que cita esse documento e
-nomeia as três que só ele destrava. Colá-la numa **sessão nova** roda o resto até
-o fim: o documento é o
+linha de `/goal` pronta, que nomeia `/faz leva <documento>`, cita esse documento
+e nomeia as três que só ele destrava. Colá-la numa **sessão nova** roda o resto
+até o fim, com o `/goal` segurando a sessão até a leva fechar: o documento é o
 que leva o entendimento de uma sessão à outra, e o contexto limpo é o que dá
 desempenho a uma leva longa.
 
@@ -91,7 +91,7 @@ links quebrados e notas fora do hub. Copie-o para `<vault>/.scripts/` e rode
 
 | Skill | Faz | Dispara |
 |---|---|---|
-| [`faz`](skills/faz/) | Simplifica o fluxo SDD/TDD do [Matt Pocock](https://github.com/mattpocock/skills) começando o interrogatório no seu comando e entregando a linha pronta do segundo movimento para o resto: interrogatório, spec, tickets, implementação no modo que você escolher — inline, sub-agents ou workflow, recomendado pela qualidade —, revisão em dois eixos, correções e teste de qualidade | `/faz <pedido>` |
+| [`faz`](skills/faz/) | Simplifica o fluxo SDD/TDD do [Matt Pocock](https://github.com/mattpocock/skills) começando o interrogatório no seu comando e entregando um `/goal` pronto para o resto: interrogatório, spec, tickets, implementação no modo que você escolher — inline, sub-agents ou workflow, recomendado pela qualidade —, revisão em dois eixos, correções e teste de qualidade | `/faz <pedido>` |
 | [`obsidian-docs`](skills/obsidian-docs/) | Documentação de projeto nasce num vault Obsidian, nunca no repositório: spec, plano, ADR, bug, evolução, análise — com hub por projeto e índice automático. Também migra pro vault a documentação já existente (`migrar`/`migrar tudo`). Traz junto o servidor MCP `vault-docs` | `/obsidian-docs`, "documentar" |
 | [`cpv`](skills/cpv/) | Fecha a leva: descobre todos os repositórios que a sessão tocou, varre segredos, commita no estilo de cada um, empurra e registra a evolução na documentação | `/cpv` |
 
