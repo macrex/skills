@@ -1,21 +1,30 @@
 ---
 name: faz
-description: Faz uma leva inteira a partir de um pedido — do interrogatório à validação — quando o usuário digita /faz <pedido>. Só por invocação do usuário.
+description: Faz uma leva inteira a partir de um pedido — do interrogatório à validação — quando o usuário digita /faz <pedido>, e cumpre a leva quando ele cola a linha /faz leva <documento>. Só por invocação do usuário.
 argument-hint: <o que fazer>
 disable-model-invocation: true
 ---
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3
+# Versao: 3.1
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o
 trabalho, esta só encadeia e para três vezes para o usuário decidir. São dois
-movimentos porque metade das skills dele é reservada ao usuário: este arquivo é
-o primeiro, do comando ao fim do interrogatório; `references/movimento-2.md` é
-o segundo, disparado numa sessão nova pela linha de `/goal` que o primeiro
-entrega pronta.
+movimentos porque metade das skills dele é reservada ao usuário: `/faz <pedido>`
+é o primeiro, do comando ao fim do interrogatório; `/faz leva <documento>` é o
+segundo, disparado numa sessão nova pela linha que o primeiro entrega pronta.
+
+## Qual dos dois você está cumprindo
+
+O pedido nomeia `/mattpocock-skills:to-spec` (ou `/to-spec`)? Então ele é a linha
+que o movimento 1 imprimiu, e o que vale é `references/leva.md`: leia-o com a
+ferramenta `Read` e cumpra aquele arquivo, porque nada desta página se aplica
+ali. O caminho sai da base desta skill (o cabeçalho "Base directory for this
+skill" que veio com ela); sem ele,
+`ls -d ~/.claude/skills/faz ./.claude/skills/faz`. Qualquer outro pedido é o
+movimento 1, abaixo.
 
 ## Movimento 1: o interrogatório, que começa no comando
 
@@ -44,7 +53,7 @@ npx skills@latest add mattpocock/skills    # qualquer agente
 O prefixo dos nomes vem da rota: achadas em `plugins/cache`, as skills chamam-se
 `mattpocock-skills:<skill>`, como esta skill as escreve; achadas em `skills/`,
 chamam-se só `<skill>` — invoque `grilling` e `domain-modeling` assim, e tire o
-`mattpocock-skills:` dos quatro nomes da linha do `/goal`. Sem prefixo,
+`mattpocock-skills:` dos quatro nomes da linha que você entrega. Sem prefixo,
 `code-review` colide com a skill nativa do Claude Code de mesmo nome: no Claude
 Code, instale pelo plugin.
 
@@ -87,7 +96,7 @@ O documento leva o pedido original, o vocabulário canônico que o
 fatos do código que as sustentam (com caminho e linha).
 
 Guarde como ela é endereçável — o título da nota, ou o caminho do arquivo: a
-linha do `/goal` cita isso.
+linha que você entrega cita isso.
 
 ### Pergunte o modelo, e entregue a linha
 
@@ -96,31 +105,24 @@ sessão (recomendado) ou outro, que o usuário nomeia. Ele vale para os agentes 
 sub-agents, de workflow, do `code-review` e das correções; se a implementação
 acabar rodando inline, quem executa ali é a própria sessão.
 
-Então imprima o aviso e a linha para ele colar, com três coisas substituídas, e
-pare. `<movimento-2>` é o caminho absoluto de `references/movimento-2.md` desta
-skill, na forma que a ferramenta `Read` aceita (no Windows, `C:\...`): a base
-está no cabeçalho "Base directory for this skill" que veio com esta skill; sem
-ele, `ls -d ~/.claude/skills/faz ./.claude/skills/faz`. `<documento>` é como a
-nota é endereçável; `<modelo>`, a resposta da pergunta — literalmente
-`da sessão` quando for essa, que na outra ponta significa `model` omitido nos
-agentes, e o nome do modelo quando o usuário nomeou outro. O pedido original não
-vai na linha: já está no documento.
+Então imprima o aviso e a linha para ele colar, com duas coisas substituídas, e
+pare. `<documento>` é como a nota é endereçável; `<modelo>`, a resposta da
+pergunta — literalmente `da sessão` quando for essa, que na outra ponta
+significa `model` omitido nos agentes, e o nome do modelo quando o usuário
+nomeou outro. O pedido original não vai na linha: já está no documento.
 
 > Cole numa **sessão nova** (`/clear` ou outra janela). O entendimento está todo
 > no documento, e a leva é longa: começar com o contexto limpo é o que dá
 > desempenho a ela.
 
 ```
-/goal leia <movimento-2> com a ferramenta Read e siga-o: é o movimento 2 da
-skill faz, que não está na sua lista de skills. Leia <documento> — é o
-entendimento já fechado comigo, e o insumo desta leva. Faça um
-/mattpocock-skills:to-spec expandindo esse documento in-place, depois um
-/mattpocock-skills:to-tickets e então /mattpocock-skills:implement — e antes de
-executá-lo me proponha os três modos (inline, sub-agents, workflow) e a sua
-recomendação —, valide com
-/mattpocock-skills:code-review em dois eixos com agentes no modelo <modelo>,
-aplique todas as correções com o mesmo modelo, faça um teste de qualidade e me
-garanta que está tudo funcionando — sem commitar nada.
+/faz leva <documento> — é o entendimento já fechado comigo, e o insumo desta
+leva. Faça um /mattpocock-skills:to-spec expandindo esse documento in-place,
+depois um /mattpocock-skills:to-tickets e então /mattpocock-skills:implement — e
+antes de executá-lo me proponha os três modos (inline, sub-agents, workflow) e a
+sua recomendação —, valide com /mattpocock-skills:code-review em dois eixos com
+agentes no modelo <modelo>, aplique todas as correções com o mesmo modelo, faça
+um teste de qualidade e me garanta que está tudo funcionando — sem commitar nada.
 ```
 
 É essa linha que autoriza as três reservadas ao usuário — `to-spec`,
@@ -129,6 +131,12 @@ isolado**: o Claude Code procura `/<skill>` precedido e seguido de espaço (ou
 fim de linha) nas mensagens do usuário do turno corrente. Pontuação colada ao
 nome (`/mattpocock-skills:to-tickets,`) cega a busca e a skill é recusada — ao
 imprimir a linha, cada um dos três nomes fica seguido de espaço. O
-`code-review`, que a linha também nomeia, você invoca sozinho. Não tente
-contornar — não replique o que essas skills fazem, não pergunte ao usuário como
-seguir sem ter entregado a linha.
+`code-review`, que a linha também nomeia, você invoca sozinho.
+
+**As quatro se cumprem pela ferramenta `Skill`, nunca lendo o `SKILL.md` delas.**
+Dar `cat` no arquivo de uma skill e seguir o texto à mão não é invocá-la: perde
+os sub-agentes que ela abre e o rigor que ela cobra, e ainda faz o relatório
+dizer que ela rodou. Recusa da ferramenta `Skill` numa das três é turno expirado
+— peça ao usuário que cole o nome de novo, sozinho numa linha, e espere. Não
+tente contornar — não replique o que essas skills fazem, não pergunte ao
+usuário como seguir sem ter entregado a linha.

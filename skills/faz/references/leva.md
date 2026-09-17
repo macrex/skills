@@ -1,10 +1,18 @@
-# Movimento 2 do /faz: a leva, disparada pela linha
+# /faz leva — a leva que a linha dispara
 
-Você está na sessão nova, e chegou aqui pela linha de `/goal` que o movimento 1
-entregou: ela cita este arquivo, o documento do entendimento e as quatro skills
-do [Matt Pocock](https://github.com/mattpocock/skills) que esta leva encadeia. É
-a linha que autoriza as três reservadas ao usuário — `to-spec`, `to-tickets` e
+Você está na sessão nova, e o usuário colou a linha que o `/faz <pedido>`
+entregou: ela cita o documento do entendimento e as quatro skills do
+[Matt Pocock](https://github.com/mattpocock/skills) que esta leva encadeia. É a
+linha que autoriza as três reservadas ao usuário — `to-spec`, `to-tickets` e
 `implement` —, porque é ele quem as nomeia; o `code-review` você invoca sozinho.
+
+**As quatro se cumprem pela ferramenta `Skill`, nunca lendo o `SKILL.md` delas.**
+Dar `cat` no arquivo de uma skill e seguir o texto à mão não é invocá-la: perde
+os sub-agentes que ela abre e o rigor que ela cobra, e ainda faz o relatório
+dizer que ela rodou. Recusa da ferramenta `Skill` numa das três é turno expirado
+— peça ao usuário que cole o nome de novo, sozinho numa linha, e espere; não
+emule o que ela faria.
+
 Nesta sessão para-se **uma vez**, com os tickets na mesa, para o usuário escolher
 como a implementação roda; nada mais é perguntado — o conteúdo já foi confirmado
 no interrogatório. Antes de tudo, `git status --porcelain`: o que já estiver sujo
