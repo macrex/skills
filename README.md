@@ -165,11 +165,16 @@ Migrando da rota CLI para a rota plugin, limpe a rota antiga:
 
 ```bash
 rm -rf ~/.claude/skills/{faz,cpv,obsidian-docs}
+rm -f ~/.claude/agents/vault-migrador.md
 claude mcp remove vault-docs
 ```
 
-O `claude mcp remove` é necessário porque o plugin passa a declarar o servidor, e dois registros
-com o mesmo nome colidem.
+As três linhas cobrem os três passos da rota antiga, e nenhuma perde conteúdo — o plugin passa a
+entregar as skills, o agent e o servidor. O `claude mcp remove` importa porque o registro antigo
+some da lista, mas continua subindo um segundo processo do mesmo servidor. E o
+`~/.claude/agents/vault-migrador.md` importa porque agent de escopo pessoal aparece **ao lado** do
+que o plugin traz: você acaba com `vault-migrador` e `macrex-skills:vault-migrador` na lista,
+apontando para cópias que podem divergir.
 
 **Linter do vault**, opcional, nas duas rotas: `skills/obsidian-docs/scripts/validar_vault.py`
 checa o vault inteiro — frontmatter, links quebrados e notas fora do hub. Copie-o para
