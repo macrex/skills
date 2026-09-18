@@ -54,10 +54,14 @@ dizem o que falta configurar.
 As três skills atendem pelo **nome nu** — `/faz`, `/obsidian-docs`, `/cpv` — e também por
 `/macrex-skills:faz` e companhia.
 
+**As regras do vault entram sozinhas.** Um hook de `SessionStart` e `SubagentStart` injeta o
+roteamento no início de toda sessão e de todo sub-agente, só quando você configurou a pasta do
+vault — você não escreve nada no seu `CLAUDE.md`. Detalhes em [O MCP `vault-docs`](#o-mcp-vault-docs).
+
 **As ferramentas do vault mudam de nome nesta rota.** O Claude Code nomeia o servidor de um
 plugin por `plugin:<plugin>:<servidor>`, então o que aqui é `mcp__vault-docs__salvar_nota`
-chega como `mcp__plugin_macrex-skills_vault-docs__salvar_nota`. As três skills e o agent
-`vault-migrador` já aceitam os dois prefixos; se você escreveu regra própria no seu
+chega como `mcp__plugin_macrex-skills_vault-docs__salvar_nota`. As três skills, o agent
+`vault-migrador` e o hook já aceitam os dois prefixos; se você escreveu regra própria no seu
 `CLAUDE.md` citando `mcp__vault-docs__*`, é ela que precisa aceitar os dois também.
 
 **Ressalva no Windows:** o plugin invoca o servidor com `python3`, que é o certo em Unix e no
@@ -214,10 +218,20 @@ cada nota — e a linha `Repo: <caminho>` no hub, que a primeira chamada com `re
 Sem grafo, as ferramentas de código respondem "sem grafo em <pasta>" e o resto segue igual. Duas
 fontes, cada pergunta na sua: o que foi decidido e por quê → vault; o que o código é agora → grafo.
 
-**CLAUDE.md.** A skill e o servidor já carregam as próprias regras: doc nasce no vault e nunca
-no repo, acesso só pelas ferramentas, `atualizar_nota` in-place, migração é cópia. Mas elas só
-passam a valer **depois que a skill dispara** — e o `CLAUDE.md` vale sempre. Por isso o que
-compensa fixar lá é o que nenhum gatilho cobre, mais as guardas que você não quer refém de um:
+**CLAUDE.md: na rota plugin, você não escreve nada.** O problema é que a skill só passa a valer
+depois que dispara, e ela acorda quando um documento nasce — não quando você vai mexer em
+código. Antes, isso obrigava cada pessoa a copiar um bloco de regras para o próprio
+`CLAUDE.md`. Agora o plugin resolve: ele traz um hook de `SessionStart` e `SubagentStart`
+(`hooks/vault-rules.js`) que injeta as regras no início de toda sessão **e de todo sub-agente**,
+que é onde elas mais se perdiam.
+
+O hook **só injeta se você configurou a pasta do vault** — ele lê o valor do `userConfig` em
+`settings.json`, ou a variável `OBSIDIAN_VAULT`. Quem instalou o plugin sem usar Obsidian não
+recebe regra nenhuma. O que é injetado: ler o hub antes de mexer em código, doc nasce no vault e
+nunca no repo, registrar a evolução ao fechar a leva, migração é cópia e nunca recorte, acesso
+só pelas ferramentas do MCP, e os dois prefixos de ferramenta.
+
+Na **rota CLI** não há plugin para carregar hook, então ali o bloco continua sendo manual:
 
 ```markdown
 - O vault é a memória dos projetos: ANTES de mexer no código, leia o hub
@@ -226,14 +240,7 @@ compensa fixar lá é o que nenhum gatilho cobre, mais as guardas que você não
 - Todo artefato .md de documentação nasce no vault pela skill `obsidian-docs`, NUNCA no repo
   do projeto. Ao fechar uma leva ou versão, registre a evolução.
 - Migração pro vault é CÓPIA, nunca recorte: proibido apagar ou mover arquivo do repo.
-- As ferramentas do vault têm dois nomes — `mcp__vault-docs__*` pela rota CLI e
-  `mcp__plugin_macrex-skills_vault-docs__*` pela rota plugin. "Sem o MCP na sessão" só é
-  verdade quando nenhum dos dois prefixos está presente.
 ```
-
-A primeira linha é a que mais rende e é a única que **nada** no plugin dispara: a skill acorda
-quando um documento nasce, não quando você vai mexer em código. As outras três são cinto de
-segurança — a de migração existe porque remoção automática já apagou centenas de arquivos.
 
 ## A `/cpv` e a autorização de commit
 

@@ -1,6 +1,6 @@
 {
   "name": "macrex-skills",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "As três skills que trabalham juntas: /faz leva um pedido até código verificado encadeando o SDD/TDD do Matt Pocock, /obsidian-docs guarda o porquê num vault Obsidian fora do repositório, e /cpv fecha a leva no git e na documentação ao mesmo tempo. Traz o servidor MCP vault-docs e o agent vault-migrador.",
   "author": {
     "name": "Guilherme Gabriel",
@@ -17,6 +17,7 @@
     "sdd",
     "tdd"
   ],
+  "hooks": "./hooks/hooks.json",
   "agents": [
     "./skills/obsidian-docs/assets/vault-migrador.md"
   ],
