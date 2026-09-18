@@ -1,0 +1,41 @@
+{
+  "name": "macrex-skills",
+  "version": "1.0.0",
+  "description": "As três skills que trabalham juntas: /faz leva um pedido até código verificado encadeando o SDD/TDD do Matt Pocock, /obsidian-docs guarda o porquê num vault Obsidian fora do repositório, e /cpv fecha a leva no git e na documentação ao mesmo tempo. Traz o servidor MCP vault-docs e o agent vault-migrador.",
+  "author": {
+    "name": "Guilherme Gabriel",
+    "url": "https://github.com/macrex"
+  },
+  "homepage": "https://github.com/macrex/skills",
+  "repository": "https://github.com/macrex/skills",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "obsidian",
+    "documentacao",
+    "git",
+    "sdd",
+    "tdd"
+  ],
+  "agents": [
+    "./skills/obsidian-docs/assets/vault-migrador.md"
+  ],
+  "mcpServers": {
+    "vault-docs": {
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/skills/obsidian-docs/scripts/servidor_vault.py",
+        "--vault",
+        "${user_config.vault}"
+      ]
+    }
+  },
+  "userConfig": {
+    "vault": {
+      "type": "directory",
+      "title": "Pasta de projetos do vault Obsidian",
+      "description": "Onde as notas ficam (ex.: D:\\obsidian\\projetos). Deixe em branco para usar a variável OBSIDIAN_VAULT, ou se você não usa o vault.",
+      "required": false
+    }
+  }
+}

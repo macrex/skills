@@ -3,7 +3,7 @@ name: cpv
 description: Fecha a leva — commit no estilo de cada repositório que ela mexeu, push e a nota no vault Obsidian. Só quando o usuário digita /cpv ou pede expressamente para fechar a leva. Argumento opcional 'sem-vault'.
 argument-hint: [sem-vault]
 disable-model-invocation: true
-allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vault-docs
+allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vault-docs mcp__plugin_macrex-skills_vault-docs
 ---
 
 # /cpv — fecha a leva
@@ -22,7 +22,7 @@ Antes de qualquer outra coisa, rode o descobridor e use a saída dele como o
 Contexto que o resto deste arquivo cita:
 
 ```bash
-node "$HOME/.claude/skills/cpv/scripts/repos-da-leva.js" 2>&1 || node "$HOME/.agents/skills/cpv/scripts/repos-da-leva.js" 2>&1 || node "$HOME/.claude/scripts/repos-da-leva.js" 2>&1 || echo "DESCOBRIDOR AUSENTE"
+node "${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/repos-da-leva.js" 2>/dev/null || node "$HOME/.claude/skills/cpv/scripts/repos-da-leva.js" 2>&1 || node "$HOME/.agents/skills/cpv/scripts/repos-da-leva.js" 2>&1 || node "$HOME/.claude/scripts/repos-da-leva.js" 2>&1 || echo "DESCOBRIDOR AUSENTE"
 ```
 
 ## A leva não é o `cwd` — é o que ela mexeu

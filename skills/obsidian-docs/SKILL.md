@@ -10,7 +10,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 14
+# Versao: 14.1
 
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções — pasta por tipo, nome com data, frontmatter, link e
@@ -20,8 +20,14 @@ e escreve o conteúdo; ele cuida do **como**. Estrutura: `Home.md` → `<projeto
 
 **NUNCA** Read/Grep/Glob/Write/Edit direto nos arquivos do vault, nem `git` nele: as
 convenções vivem no servidor, e por fora dele nascem notas órfãs. Sem as ferramentas
-`mcp__vault-docs__*` na sessão: confira com `claude mcp list`; se faltar o registro, registre
-você mesmo com `python <pasta desta skill>/scripts/servidor_vault.py --instalar --vault
+do vault na sessão, confira com `claude mcp list` — e o nome delas depende da rota: pela rota
+`npx skills add` elas são `mcp__vault-docs__*`; pelo plugin, `mcp__plugin_macrex-skills_vault-docs__*`.
+Só faltam de verdade quando **nenhum** dos dois prefixos está lá, e aí o que fazer também depende
+da rota. **Veio do plugin** (esta skill está sob `~/.claude/plugins/cache/`): o plugin já
+declara o servidor, e registrar de novo criaria um segundo `vault-docs` ao lado dele —
+**não** rode `--instalar`; o que falta é o reinício, ou a pasta do vault, que o cliente
+preenche em `/plugin`. **Veio do `npx skills add`**: registre você mesmo com
+`python <pasta desta skill>/scripts/servidor_vault.py --instalar --vault
 <pasta de projetos do vault>`. Só o reinício do Claude Code
 é do usuário (sessão aberta antes do registro não carrega o servidor): faça tudo que não
 depende do vault, diga que a gravação ficou pendente do reinício e encerre o turno com isso claro.

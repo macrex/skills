@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.2
+# Versao: 3.3
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o
@@ -26,7 +26,7 @@ linha que o movimento 1 imprimiu, e o que vale é `references/leva.md`: leia-o
 com a ferramenta `Read` e cumpra aquele arquivo, porque nada desta página se
 aplica ali. O caminho sai da base desta skill (o cabeçalho "Base directory for this
 skill" que veio com ela); sem ele,
-`ls -d ~/.claude/skills/faz ./.claude/skills/faz`. Qualquer outro pedido é o
+`ls -d "${CLAUDE_PLUGIN_ROOT}/skills/faz" ~/.claude/skills/faz ./.claude/skills/faz 2>/dev/null`. Qualquer outro pedido é o
 movimento 1, abaixo.
 
 ## Movimento 1: o interrogatório, que começa no comando

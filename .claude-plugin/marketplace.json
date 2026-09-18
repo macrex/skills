@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "macrex",
+  "description": "Skills de agente de IA em que o trabalho só termina quando está registrado: pedido até código verificado, documentação fora do repo e fechamento no git.",
+  "owner": {
+    "name": "Guilherme Gabriel",
+    "url": "https://github.com/macrex"
+  },
+  "plugins": [
+    {
+      "name": "macrex-skills",
+      "description": "As três skills que trabalham juntas: /faz leva um pedido até código verificado encadeando o SDD/TDD do Matt Pocock, /obsidian-docs guarda o porquê num vault Obsidian fora do repositório, e /cpv fecha a leva no git e na documentação ao mesmo tempo. Traz o servidor MCP vault-docs e o agent vault-migrador.",
+      "author": {
+        "name": "Guilherme Gabriel",
+        "url": "https://github.com/macrex"
+      },
+      "category": "productivity",
+      "source": ".",
+      "homepage": "https://github.com/macrex/skills"
+    }
+  ]
+}

@@ -1,8 +1,17 @@
 # skills
 
-Skills de agente de IA que eu uso todo dia. Seguem a [spec Agent Skills](https://agentskills.io/specification)
-e instalam com o [CLI `skills`](https://skills.sh), no Claude Code e em qualquer
-agente que leia o formato.
+Skills de agente de IA que eu uso todo dia. No Claude Code são um **plugin**, e é
+assim que eu recomendo instalar:
+
+```
+/plugin marketplace add macrex/skills
+/plugin install macrex-skills@macrex
+```
+
+São duas linhas e acabou: as três skills, o servidor MCP `vault-docs` já conectado e o
+agent `vault-migrador`, sem nenhum passo manual. Detalhes e a rota alternativa (o
+[CLI `skills`](https://skills.sh), para Cursor, Codex e qualquer agente que leia a
+[spec Agent Skills](https://agentskills.io/specification)) estão em [Instalar](#instalar).
 
 As três giram em torno de uma ideia só: **o trabalho termina quando está
 registrado**, não quando o código compila. A `/faz` leva um pedido até código
@@ -25,6 +34,63 @@ que leva o entendimento de uma sessão à outra, e o contexto limpo é o que dá
 desempenho a uma leva longa.
 
 ## Instalar
+
+Duas rotas, e você **escolhe uma**, não as duas — o porquê está no fim desta seção.
+
+### Rota plugin (Claude Code) — recomendada
+
+```
+/plugin marketplace add macrex/skills
+/plugin install macrex-skills@macrex
+```
+
+É tudo. Ao habilitar o plugin, o Claude Code pergunta a **pasta de projetos do seu vault
+Obsidian** (`~/obsidian/projetos`, `D:\obsidian\projetos`) e sobe o servidor MCP `vault-docs`
+apontando para ela — sem `--instalar`, sem `cp`, sem editar nada. O agent `vault-migrador` vem
+junto. Não usa Obsidian? Deixe a pasta em branco: o plugin instala igual, o servidor cai na
+variável `OBSIDIAN_VAULT` se ela existir, e sem nenhuma das duas as ferramentas de vault só
+dizem o que falta configurar.
+
+As três skills atendem pelo **nome nu** — `/faz`, `/obsidian-docs`, `/cpv` — e também por
+`/macrex-skills:faz` e companhia.
+
+**As ferramentas do vault mudam de nome nesta rota.** O Claude Code nomeia o servidor de um
+plugin por `plugin:<plugin>:<servidor>`, então o que aqui é `mcp__vault-docs__salvar_nota`
+chega como `mcp__plugin_macrex-skills_vault-docs__salvar_nota`. As três skills e o agent
+`vault-migrador` já aceitam os dois prefixos; se você escreveu regra própria no seu
+`CLAUDE.md` citando `mcp__vault-docs__*`, é ela que precisa aceitar os dois também.
+
+**Ressalva no Windows:** o plugin invoca o servidor com `python3`, que é o certo em Unix e no
+shebang do script. Se o seu launcher for `python` e o MCP não conectar (`claude mcp list` não
+mostra `vault-docs … ✔ Connected`), o caminho é ter um `python3` no PATH, ou usar a rota CLI
+abaixo, que registra o servidor com o seu python.
+
+**O auto-update nasce desligado.** Ele já vem ligado para os marketplaces da Anthropic; este é
+de terceiro, então ligue você: `/plugin`, aba **Marketplaces**, `macrex`, **Enable auto-update**.
+Ligado, a versão nova chega sozinha — a checagem roda em segundo plano alguns minutos depois de
+a sessão começar, e o Claude Code avisa para rodar `/reload-plugins`; sem isso ela entra no
+próximo lançamento.
+
+Para não depender de alguém lembrar do toggle — máquina nova, time inteiro —, o mesmo vai em
+`settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "macrex": {
+      "source": { "source": "github", "repo": "macrex/skills" },
+      "autoUpdate": true
+    }
+  }
+}
+```
+
+### Rota CLI (`npx skills add`) — para quem não usa o Claude Code
+
+Plugin é conceito só do Claude Code. Em Cursor, Codex ou qualquer agente que leia a spec Agent
+Skills, a rota é esta — e ela tem três passos, porque aqui não há plugin para declarar o MCP nem
+o agent. **No Claude Code, prefira a rota acima**: estes três passos são exatamente o que ela
+elimina.
 
 **1. As skills.** Todas de uma vez, no perfil do usuário:
 
@@ -71,8 +137,9 @@ dependência) e do `claude` no PATH.
 
 Depois **reinicie o Claude Code** — sessão aberta antes do registro não enxerga o servidor — e
 confira com `claude mcp list`, que deve mostrar `vault-docs … ✔ Connected`. Se preferir não
-registrar nada à mão, basta invocar a `/obsidian-docs`: sem as ferramentas `mcp__vault-docs__*`
-na sessão, a própria skill roda o `--instalar` e pede o reinício.
+registrar nada à mão, basta invocar a `/obsidian-docs`: **nesta rota**, sem as ferramentas
+`mcp__vault-docs__*` na sessão, a própria skill roda o `--instalar` e pede o reinício — na rota
+plugin ela não roda, porque lá o servidor já vem declarado.
 
 **3. O agent `vault-migrador`**, que o modo `migrar tudo` de `obsidian-docs` usa para varrer
 os projetos em paralelo. O CLI de skills não instala agents, então copie o arquivo que veio na skill:
@@ -83,9 +150,26 @@ cp ~/.claude/skills/obsidian-docs/assets/vault-migrador.md ~/.claude/agents/
 
 Sem ele a migração em lote ainda roda, com `general-purpose` no lugar.
 
-**Linter do vault**, opcional: `scripts/validar_vault.py` checa o vault inteiro — frontmatter,
-links quebrados e notas fora do hub. Copie-o para `<vault>/.scripts/` e rode
-`python .scripts/validar_vault.py --resumo`.
+### Escolha uma rota, não as duas
+
+Skill de escopo pessoal **ganha** de skill de plugin no nome nu. Quem tem
+`~/.claude/skills/faz` e instala o plugin continua rodando a cópia antiga ao digitar `/faz`: o
+plugin só responde por `/macrex-skills:faz`, as atualizações chegam e não são usadas. E isso não
+dá erro nenhum — é por isso que o aviso está aqui.
+
+Migrando da rota CLI para a rota plugin, limpe a rota antiga:
+
+```bash
+rm -rf ~/.claude/skills/{faz,cpv,obsidian-docs}
+claude mcp remove vault-docs
+```
+
+O `claude mcp remove` é necessário porque o plugin passa a declarar o servidor, e dois registros
+com o mesmo nome colidem.
+
+**Linter do vault**, opcional, nas duas rotas: `skills/obsidian-docs/scripts/validar_vault.py`
+checa o vault inteiro — frontmatter, links quebrados e notas fora do hub. Copie-o para
+`<vault>/.scripts/` e rode `python .scripts/validar_vault.py --resumo`.
 
 ## As skills
 
@@ -130,21 +214,26 @@ cada nota — e a linha `Repo: <caminho>` no hub, que a primeira chamada com `re
 Sem grafo, as ferramentas de código respondem "sem grafo em <pasta>" e o resto segue igual. Duas
 fontes, cada pergunta na sua: o que foi decidido e por quê → vault; o que o código é agora → grafo.
 
-**CLAUDE.md.** As skills só entram sozinhas se o roteamento estiver no seu `CLAUDE.md`. O mínimo:
+**CLAUDE.md.** A skill e o servidor já carregam as próprias regras: doc nasce no vault e nunca
+no repo, acesso só pelas ferramentas, `atualizar_nota` in-place, migração é cópia. Mas elas só
+passam a valer **depois que a skill dispara** — e o `CLAUDE.md` vale sempre. Por isso o que
+compensa fixar lá é o que nenhum gatilho cobre, mais as guardas que você não quer refém de um:
 
 ```markdown
-- Todo artefato .md de documentação (spec, plano, design, bug, evolução, ADR, arquitetura,
-  análise, pesquisa, relatório) → skill `obsidian-docs`, que grava no vault pelo MCP
-  `vault-docs` (`salvar_nota`). NUNCA no repo do projeto.
-- Ler/achar doc: `buscar`, `ler_nota`, `listar_notas`, `conexoes`, `visao_geral`. Nunca
-  Read/Grep/Write/Edit direto nos arquivos do vault, nunca git nele.
-- Doc existente que muda → `atualizar_nota` (in-place), nunca recriar no repo.
-- Migração pro vault é CÓPIA, nunca recorte: proibido apagar ou mover arquivo do repo.
-- O vault é a memória dos projetos: antes de mexer no código, leia o hub
+- O vault é a memória dos projetos: ANTES de mexer no código, leia o hub
   (`ler_nota <nome-da-pasta-do-repo>`) e a evolução mais recente
-  (`listar_notas projeto=<projeto> tipo=evolucao limite=1`).
-- Ao fechar uma leva ou versão, registrar a evolução (`salvar_nota tipo=evolucao`).
+  (`listar_notas projeto=<projeto> tipo=evolucao limite=1`). Código e git vêm depois.
+- Todo artefato .md de documentação nasce no vault pela skill `obsidian-docs`, NUNCA no repo
+  do projeto. Ao fechar uma leva ou versão, registre a evolução.
+- Migração pro vault é CÓPIA, nunca recorte: proibido apagar ou mover arquivo do repo.
+- As ferramentas do vault têm dois nomes — `mcp__vault-docs__*` pela rota CLI e
+  `mcp__plugin_macrex-skills_vault-docs__*` pela rota plugin. "Sem o MCP na sessão" só é
+  verdade quando nenhum dos dois prefixos está presente.
 ```
+
+A primeira linha é a que mais rende e é a única que **nada** no plugin dispara: a skill acorda
+quando um documento nasce, não quando você vai mexer em código. As outras três são cinto de
+segurança — a de migração existe porque remoção automática já apagou centenas de arquivos.
 
 ## A `/cpv` e a autorização de commit
 
@@ -195,9 +284,9 @@ Cada uma funciona sozinha, mas duas puxam algo de fora:
   `to-tickets` já escrevem por padrão.
 - **`obsidian-docs`** e a parte de documentação da **`cpv`** precisam do MCP
   `vault-docs` — e ele não vem de fora: mora dentro da própria skill, em
-  `skills/obsidian-docs/scripts/servidor_vault.py`, e se registra no passo 2 da instalação.
-  Python 3.9+, sem nenhuma dependência. Sem o servidor, a `cpv` roda com `sem-vault` e
-  fecha só o git.
+  `skills/obsidian-docs/scripts/servidor_vault.py`, e sobe declarado pelo plugin (rota
+  plugin) ou registrado pelo `--instalar` (rota CLI). Python 3.9+, sem nenhuma dependência.
+  Sem o servidor, a `cpv` roda com `sem-vault` e fecha só o git.
 
 ## Adaptar para você
 
