@@ -230,21 +230,33 @@ código. Antes, isso obrigava cada pessoa a copiar um bloco de regras para o pr�
 (`hooks/vault-rules.js`) que injeta as regras no início de toda sessão **e de todo sub-agente**,
 que é onde elas mais se perdiam.
 
-O hook **só injeta se você configurou a pasta do vault** — ele lê o valor do `userConfig` em
-`settings.json`, ou a variável `OBSIDIAN_VAULT`. Quem instalou o plugin sem usar Obsidian não
-recebe regra nenhuma. O que é injetado: ler o hub antes de mexer em código, doc nasce no vault e
-nunca no repo, registrar a evolução ao fechar a leva, migração é cópia e nunca recorte, acesso
-só pelas ferramentas do MCP, e os dois prefixos de ferramenta.
+O hook **só injeta se você configurou a pasta do vault** — ele lê o valor do `userConfig` nas
+configurações do Claude Code (usuário e projeto, com e sem `.local`) ou a variável
+`OBSIDIAN_VAULT`. Quem deixou a pasta em branco de propósito não recebe regra nenhuma; qualquer
+outra incerteza injeta assim mesmo, porque a primeira linha do bloco manda ignorá-lo quando não
+há ferramenta de vault na sessão — falhar calado seria o plugin não funcionar sem avisar.
 
-Na **rota CLI** não há plugin para carregar hook, então ali o bloco continua sendo manual:
+O que é injetado: ler o hub e a evolução mais recente antes de mexer em código; doc nasce no
+vault e nunca no repo, incluindo as specs do superpowers; registrar a evolução ao fechar a leva;
+migração é cópia e nunca recorte; acesso só pelas ferramentas do MCP; as duas fontes (vault
+contra grafo) com as regras do graphify; e os dois prefixos de ferramenta.
+
+Na **rota CLI** não há plugin para carregar hook, então ali o bloco continua sendo manual — e
+este é o texto equivalente, para a sua instalação ficar igual à do plugin:
 
 ```markdown
 - O vault é a memória dos projetos: ANTES de mexer no código, leia o hub
-  (`ler_nota <nome-da-pasta-do-repo>`) e a evolução mais recente
-  (`listar_notas projeto=<projeto> tipo=evolucao limite=1`). Código e git vêm depois.
+  (`ler_nota <nome-da-pasta-do-repo>`), a evolução mais recente
+  (`listar_notas projeto=<projeto> tipo=evolucao limite=1`) e, se o projeto usa graphify,
+  `mapa_codigo <projeto>`. Código e git vêm depois.
 - Todo artefato .md de documentação nasce no vault pela skill `obsidian-docs`, NUNCA no repo
-  do projeto. Ao fechar uma leva ou versão, registre a evolução.
-- Migração pro vault é CÓPIA, nunca recorte: proibido apagar ou mover arquivo do repo.
+  do projeto — specs e planos de brainstorming do superpowers incluídos, no lugar de
+  `docs/superpowers/specs|plans/`. Ao fechar uma leva ou versão, registre a evolução.
+- Migração pro vault é CÓPIA, nunca recorte: proibido apagar ou mover arquivo do repo. O commit
+  `docs: migrados para o vault Obsidian` é entulho de um bug antigo; achou um, não empurrado →
+  `git reset HEAD~1`; já empurrado → avise antes.
+- Duas fontes: o que foi decidido → vault; o que o código é agora → grafo. Depois de cada
+  rodada do graphify, `gerar_mapa`; `graphify-out/` fica no repo, no `.gitignore`.
 ```
 
 ## A `/cpv` e a autorização de commit
