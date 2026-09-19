@@ -170,6 +170,47 @@ def testes():
     confere(erro == "erro-jsonrpc" and "desconhecida" in texto, "ferramenta desconhecida vira erro JSON-RPC")
 
 
+def testes_cache():
+    caminho = os.path.join(sv.VAULT, "pagamentos", "Bugs", "2026-02-01 Nota bug.md")
+    antes = sv.notas()
+    de_novo = sv.notas()
+    n1 = next(n for n in antes if n["rel"].endswith("Nota bug.md"))
+    n2 = next(n for n in de_novo if n["rel"].endswith("Nota bug.md"))
+    confere(n1 is n2, "arquivo sem mudanca vem do cache (mesmo objeto)")
+    with open(caminho, "a", encoding="utf-8") as f:
+        f.write("\nLinha nova.\n")
+    n3 = next(n for n in sv.notas() if n["rel"].endswith("Nota bug.md"))
+    confere(n3 is not n1 and "Linha nova." in n3["texto"], "arquivo alterado e relido")
+    os.remove(caminho)
+    confere(not any(n["rel"].endswith("Nota bug.md") for n in sv.notas()), "arquivo apagado some da lista")
+    confere(caminho not in sv._CACHE, "e sai do cache")
+
+
+def testes_validar():
+    rel = sv.validar()
+    # o unico erro e o [[Nao existe]] que testes() gravou de proposito; e nenhuma
+    # nota e orfa, porque o servidor lista todas no hub
+    confere("Erros: 1" in rel and "E4" in rel and "Avisos: 0" in rel,
+            f"vault gravado pelo servidor so tem o E4 deliberado: {rel.splitlines()[-3:]}")
+    # quebra de proposito, por fora do servidor, e o linter tem que ver
+    with open(os.path.join(sv.VAULT, "pagamentos", "Analises", "solta.md"), "w", encoding="utf-8") as f:
+        f.write("# Solta\n\nsem frontmatter, fora do hub\n")
+    with open(os.path.join(sv.VAULT, "pagamentos", "Analises", "torta.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: pagamentos\ntipo: relatorio\nstatus: ativo\n---\n# Torta\n\n[[Nao existe]]\n")
+    erros, avisos, totais = sv.validar_vault()
+    codigos = sorted({c for c, _, _ in erros})
+    confere(codigos == ["E1", "E2", "E3", "E4", "E5"], f"linter acha E1..E5: {codigos}")
+    confere(any(c == "E2" and "'data'" in m for c, _, m in erros), "campo data ausente e E2")
+    confere(any(c == "E3" and "relatorio" in m for c, _, m in erros), "tipo fora do vocabulario e E3")
+    confere(totais["projetos"] == 2, "totais contam os projetos")
+    so_fm = sv.validar(tipo="frontmatter")
+    confere("E4" not in so_fm and "E1" in so_fm, "filtro tipo=frontmatter")
+    so_proj = sv.validar(projeto="pagamentos-repo")
+    confere("solta.md" not in so_proj, "filtro por projeto")
+    confere("Erros:" in sv.relatorio_validacao([], [], totais, so_placar=True)
+            and "Nada" not in sv.relatorio_validacao([], [], totais, so_placar=True), "so_placar imprime so o placar")
+
+
 def testes_git():
     vault = sv.VAULT
     subprocess.run(["git", "-C", vault, "init", "-q", "-b", "main"], check=True)
@@ -185,6 +226,25 @@ def testes_git():
     saida = sv.salvar_nota("loja", "bug", "Segunda", "c", resumo="r")
     confere("sem git" in saida, "--sem-git nao commita")
     sv.SEM_GIT = False
+    # lote: N gravacoes, um commit
+    for i in range(3):
+        saida = sv.salvar_nota("loja", "spec", f"Lote {i}", "c", resumo="r", lote=True)
+        confere("pendente (lote)" in saida, f"lote=true nao commita ({i})")
+    saida = sv.atualizar_nota("2026-02-01 Nota bug" if False else "Segunda", status="resolvido", lote=True)
+    confere("pendente (lote)" in saida, "atualizar_nota lote=true nao commita")
+    antes = subprocess.run(["git", "-C", vault, "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout.strip()
+    try:
+        sv.sincronizar_lote("")
+        confere(False, "sincronizar sem mensagem deveria ser recusado")
+    except sv.ErroUso:
+        confere(True, "sincronizar exige mensagem")
+    saida = sv.sincronizar_lote("loja: lote de 3 specs")
+    depois = subprocess.run(["git", "-C", vault, "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout.strip()
+    confere(int(depois) == int(antes) + 1 and "commit local" in saida, "sincronizar fecha o lote num commit so")
+    confere(saida.startswith("5 arquivo(s) no lote"), f"sincronizar conta os arquivos do lote: {saida}")
+    log = subprocess.run(["git", "-C", vault, "log", "-1", "--format=%s"], capture_output=True, text=True).stdout.strip()
+    confere(log == "loja: lote de 3 specs", "mensagem do lote e a passada")
+    confere("0 arquivo(s) no lote" in sv.sincronizar_lote("nada"), "lote vazio diz que nao ha o que commitar")
 
 
 def main():
@@ -194,6 +254,8 @@ def main():
         os.makedirs(sv.VAULT)
         sv.SEM_GIT = True
         testes()
+        testes_validar()   # antes do cache, que apaga uma nota linkada e criaria outro E4
+        testes_cache()
         shutil.rmtree(sv.VAULT)
         os.makedirs(sv.VAULT)
         sv.SEM_GIT = False

@@ -28,9 +28,14 @@ Ferramentas:
   mapa_codigo     mapa do codigo (graphify-out do repo, ponteiro Repo: do hub)
   consultar_codigo pergunta ao grafo via CLI graphify (query/explain/path)
   gerar_mapa      regrava a nota Mapa do Codigo preservando a Leitura curada
+  validar         linter: frontmatter, vocabulario, wikilinks quebrados, hub, orfas
+  sincronizar     fecha um lote: commit -> pull --rebase -> push de tudo que esta pendente
 
 Vault que e repositorio git: cada gravacao faz commit -> pull --rebase -> push
-(desligue com `--sem-git` no registro). Autoteste: scripts/teste_servidor_vault.py
+(desligue com `--sem-git` no registro). Gravacao em lote: salvar_nota e
+atualizar_nota com lote=true so escrevem em disco, e `sincronizar` fecha o lote
+num commit so. Leitura em cache: cada arquivo e relido apenas quando mtime ou
+tamanho mudam. Autoteste: scripts/teste_servidor_vault.py
 """
 import argparse
 import json
@@ -67,6 +72,8 @@ INSTRUCOES = (
     "nome, frontmatter, hub, Home e git) e atualizar_nota (nota existente). "
     "Codigo: mapa_codigo (antes de mexer no projeto), consultar_codigo (arquitetura), "
     "gerar_mapa (apos o graphify); salvar_nota aceita arquivos= para citar componentes. "
+    "Muitas notas de uma vez (migracao, tickets): lote=true em cada gravacao e "
+    "sincronizar uma vez no fim. validar: linter do vault (rode ao fechar uma leva). "
     "Nunca escreva ou leia os arquivos do vault por fora destas ferramentas."
 )
 
@@ -80,9 +87,14 @@ ERRO_VAULT = (
 
 # ---------- leitura do vault ----------
 
+# caminho -> (mtime_ns, tamanho, nota). O os.walk roda a cada chamada (e barato);
+# o que custa e ler e parsear cada arquivo, e isso so acontece quando ele mudou.
+_CACHE = {}
+
+
 def notas():
     """Todas as notas .md do vault, com frontmatter ja separado."""
-    lista = []
+    lista, vivos = [], set()
     for raiz, dirs, arqs in os.walk(VAULT):
         dirs[:] = sorted(d for d in dirs if d not in IGNORAR)
         for a in sorted(arqs):
@@ -90,21 +102,34 @@ def notas():
                 continue
             caminho = os.path.join(raiz, a)
             try:
+                st = os.stat(caminho)
+            except OSError:
+                continue
+            vivos.add(caminho)
+            guardado = _CACHE.get(caminho)
+            if guardado and guardado[0] == st.st_mtime_ns and guardado[1] == st.st_size:
+                lista.append(guardado[2])
+                continue
+            try:
                 with open(caminho, encoding="utf-8") as f:
                     texto = f.read()
-                mtime = os.path.getmtime(caminho)
             except (OSError, UnicodeDecodeError):
+                _CACHE.pop(caminho, None)
                 continue
             rel = os.path.relpath(caminho, VAULT).replace(os.sep, "/")
             partes = rel.split("/")
-            lista.append({
+            nota = {
                 "rel": rel,
                 "nome": os.path.splitext(a)[0],
                 "projeto": partes[0] if len(partes) > 1 else None,
                 "fm": frontmatter(texto) or {},
                 "texto": texto,
-                "mtime": mtime,
-            })
+                "mtime": st.st_mtime,
+            }
+            _CACHE[caminho] = (st.st_mtime_ns, st.st_size, nota)
+            lista.append(nota)
+    for caminho in [c for c in _CACHE if c not in vivos]:
+        del _CACHE[caminho]
     return lista
 
 
@@ -501,9 +526,12 @@ def garantir_hub(projeto, descricao, repo):
     return True
 
 
+LOTE_PENDENTE = "pendente (lote): chame sincronizar ao fim do lote"
+
+
 def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ativo",
                 tags=None, data=None, artefato=None, descricao_projeto=None, repo=None,
-                sobrescrever=False, arquivos=None):
+                sobrescrever=False, arquivos=None, lote=False):
     projeto, titulo = nome_seguro(projeto), nome_seguro(titulo)
     tipo, status = normalizar(tipo), normalizar(status or "ativo")
     resumo = " ".join(str(resumo or "").split())
@@ -529,7 +557,8 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
             pasta = f"Specs/Tickets - {nome_de_nota(artefato)}"
     rel = "/".join(p for p in (projeto, pasta, nome + ".md") if p)
     caminho = os.path.join(VAULT, *rel.split("/"))
-    puxar()
+    if not lote:
+        puxar()
     if os.path.exists(caminho) and not sobrescrever:
         raise ErroUso(f"ja existe: {rel}. Mudar o conteudo: atualizar_nota; "
                       "regravar do zero: sobrescrever=true.")
@@ -566,14 +595,17 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
                       + ", ".join(f"[[{l}]]" for l in quebrados))
     if aviso:
         linhas.append(aviso)
-    linhas.append("Git: " + sincronizar(f"{projeto}: {nome if tipo == 'mapa' else titulo}"))
+    linhas.append("Git: " + (LOTE_PENDENTE if lote else
+                             sincronizar(f"{projeto}: {nome if tipo == 'mapa' else titulo}")))
     return "\n".join(linhas)
 
 
-def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, resumo=None):
+def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, resumo=None,
+                   lote=False):
     if corpo is None and status is None and tags is None and not sucessora and not resumo:
         raise ErroUso("informe ao menos um de: corpo, status, tags, sucessora, resumo")
-    puxar()
+    if not lote:
+        puxar()
     todas = notas()
     alvo, candidatos = achar(nota, todas)
     if not alvo:
@@ -636,7 +668,107 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
         else:
             mudou.append("resumo ignorado: a nota nao esta listada no hub")
     return (f"Atualizada: {alvo['rel']} ({', '.join(mudou)})\nGit: "
-            + sincronizar(f"{projeto}: {alvo['nome']}"))
+            + (LOTE_PENDENTE if lote else sincronizar(f"{projeto}: {alvo['nome']}")))
+
+
+def sincronizar_lote(mensagem=""):
+    """Fecha um lote: tudo que esta pendente no vault vira um commit so."""
+    mensagem = " ".join(str(mensagem or "").split())
+    if not mensagem:
+        raise ErroUso("mensagem do commit e obrigatoria (ex.: 'pagamentos: migracao de 12 notas')")
+    if not vault_com_git():
+        return "sem git (vault nao e repositorio, ou --sem-git): as notas ja estao em disco"
+    pendentes = git("status", "--porcelain")[1]
+    n = len([l for l in pendentes.splitlines() if l.strip()])
+    return f"{n} arquivo(s) no lote. Git: " + sincronizar(mensagem)
+
+
+# ---------- linter ----------
+
+TIPOS_VALIDOS = TIPOS | {"hub"}
+OBRIGATORIOS = ("projeto", "tipo", "status", "data")
+
+
+def validar_vault(projeto=None, tipo=None):
+    """(erros, avisos, totais) — o mesmo vocabulario e parser que a gravacao usa."""
+    todas = notas()
+    if projeto:
+        p = normalizar(projeto)
+        todas = [n for n in todas if n["projeto"] and normalizar(n["projeto"]) == p]
+    erros, avisos = [], []
+    por_nome, links_para, com_saida = {}, defaultdict(list), set()
+    projetos = defaultdict(list)
+    for n in todas:
+        por_nome.setdefault(n["nome"], n["rel"])
+        if n["projeto"]:
+            projetos[n["projeto"]].append(n["nome"])
+        fm = frontmatter(n["texto"])
+        if fm is None:
+            erros.append(("E1", n["rel"], "sem frontmatter"))
+        else:
+            for campo in OBRIGATORIOS:
+                if campo not in fm:
+                    erros.append(("E2", n["rel"], f"campo '{campo}' ausente"))
+            for campo, validos in (("tipo", TIPOS_VALIDOS), ("status", STATUS)):
+                v = fm.get(campo)
+                if v and not all(x in validos for x in valores(v)):
+                    erros.append(("E3", n["rel"], f"{campo} invalido: '{v}'"))
+        alvos = links_de(n["texto"])
+        if alvos:
+            com_saida.add(n["nome"])
+        for alvo in alvos:
+            links_para[alvo].append(n["rel"])
+    # .base e .canvas sao linkaveis no Obsidian sem serem notas
+    alvos_validos = set(por_nome)
+    for raiz, dirs, arqs in os.walk(VAULT):
+        dirs[:] = [d for d in dirs if d not in IGNORAR]
+        for a in arqs:
+            if os.path.splitext(a)[1].lower() in (".base", ".canvas"):
+                alvos_validos.add(a)
+                alvos_validos.add(os.path.splitext(a)[0])
+    if not projeto:  # com filtro de projeto, links para fora dele nao sao erro
+        for alvo, origens in sorted(links_para.items()):
+            if alvo not in alvos_validos:
+                erros.append(("E4", origens[0], f"wikilink quebrado: [[{alvo}]]"))
+    for proj, nomes in sorted(projetos.items()):
+        if proj not in por_nome:
+            avisos.append(("A3", proj + "/", "projeto sem hub"))
+            continue
+        hub = next(n for n in todas if n["rel"] == por_nome[proj])
+        citados = links_de(hub["texto"])
+        for nome in nomes:
+            if nome != proj and nome not in citados:
+                erros.append(("E5", f"{proj}/{nome}.md", "nao listada no hub"))
+    for nome, rel in sorted(por_nome.items()):
+        if nome not in links_para and nome != "Home":
+            avisos.append(("A1", rel, "orfa: ninguem linka para ela"))
+        if nome not in com_saida:
+            avisos.append(("A2", rel, "sem wikilink de saida"))
+    filtro = {"frontmatter": ("E1", "E2", "E3"), "links": ("E4", "A2"),
+              "orfas": ("A1",), "hub": ("E5", "A3")}.get(normalizar(tipo) if tipo else None)
+    if filtro:
+        erros = [e for e in erros if e[0] in filtro]
+        avisos = [a for a in avisos if a[0] in filtro]
+    return erros, avisos, {"notas": len(por_nome), "projetos": len(projetos)}
+
+
+def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False):
+    linhas = []
+    if not so_placar:
+        linhas += [f"ERRO  {c} {onde}: {msg}" for c, onde, msg in erros]
+        linhas += [f"aviso {c} {onde}: {msg}" for c, onde, msg in avisos[:max_avisos]]
+        if len(avisos) > max_avisos:
+            linhas.append(f"aviso ... e mais {len(avisos) - max_avisos} avisos")
+        linhas.append("" if linhas else "Nada a apontar.")
+    contagem = Counter(c for c, _, _ in erros + avisos)
+    linhas += [f"Notas: {totais['notas']} | Projetos: {totais['projetos']}",
+               f"Erros: {len(erros)} | Avisos: {len(avisos)}"]
+    linhas += [f"  {c}: {contagem[c]}" for c in sorted(contagem)]
+    return "\n".join(linhas)
+
+
+def validar(projeto=None, tipo=None):
+    return relatorio_validacao(*validar_vault(projeto, tipo))
 
 
 # ---------- graphify (grafo de codigo do repo, via ponteiro Repo: do hub) ----------
@@ -934,6 +1066,9 @@ P_NOTA = {"type": "string",
                          "X.md) ou nome da nota como em wikilink (2026-01-02 X)."}
 
 P_PROJ = {"type": "string", "description": "Nome do projeto (pasta no vault)."}
+P_LOTE = {"type": "boolean",
+          "description": "true = parte de um lote: grava so em disco, sem pull/commit/push; "
+                         "feche o lote com sincronizar. Padrao false."}
 P_REPO = {"type": "string",
           "description": "Caminho local do repositorio; so se o hub nao tiver a linha "
                          "`Repo:` (fica registrado nele)."}
@@ -1018,6 +1153,7 @@ FERRAMENTAS = [
                       "description": "Caminhos (relativos ao repo) tocados pela leva: o "
                                      "servidor anexa a secao Componentes tocados a partir "
                                      "do grafo do graphify (evolucao, bug, spec de mudanca)."},
+         "lote": P_LOTE,
      }, "projeto", "tipo", "titulo", "corpo"),
      "fn": salvar_nota},
     {"name": "atualizar_nota",
@@ -1034,8 +1170,29 @@ FERRAMENTAS = [
          "sucessora": {"type": "string",
                        "description": "Nome da nota que substitui esta (sem .md)."},
          "resumo": {"type": "string", "description": "Nova linha de resumo no hub."},
+         "lote": P_LOTE,
      }, "nota"),
      "fn": atualizar_nota},
+    {"name": "sincronizar",
+     "description": "Fecha um lote de gravacoes feitas com lote=true: commit unico -> "
+                    "pull --rebase -> push do vault. Obrigatorio ao fim de toda migracao "
+                    "ou serie de tickets; sem isso as notas ficam so no disco local.",
+     "inputSchema": esquema({
+         "mensagem": {"type": "string",
+                      "description": "Mensagem do commit (ex.: 'pagamentos: migracao de 12 notas')."},
+     }, "mensagem"),
+     "fn": sincronizar_lote},
+    {"name": "validar",
+     "description": "Linter do vault: nota sem frontmatter (E1), campo ausente (E2), tipo ou "
+                    "status fora do vocabulario (E3), wikilink quebrado (E4), nota fora do hub "
+                    "(E5); avisos de orfa (A1), sem link de saida (A2) e projeto sem hub (A3). "
+                    "Rode ao fechar uma leva.",
+     "inputSchema": esquema({
+         "projeto": P_PROJETO,
+         "tipo": {"type": "string",
+                  "description": "So uma checagem: frontmatter | links | orfas | hub."},
+     }),
+     "fn": validar},
     {"name": "mapa_codigo",
      "description": "Mapa do codigo do projeto a partir do graphify-out do repo (ponteiro "
                     "Repo: do hub): frescor do grafo, god nodes, as 20 maiores comunidades e "
@@ -1137,7 +1294,7 @@ def atender(msg):
         responder(id_, {
             "protocolVersion": versao if versao in PROTOCOLOS else PROTOCOLO_PADRAO,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "obsidian-docs", "version": "2.0.0"},
+            "serverInfo": {"name": "obsidian-docs", "version": "2.1.0"},
             "instructions": INSTRUCOES,
         })
     elif metodo == "ping":
