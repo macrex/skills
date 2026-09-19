@@ -10,7 +10,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 14.1
+# Versao: 15.0
 
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções — pasta por tipo, nome com data, frontmatter, link e
@@ -75,6 +75,17 @@ O que cada ferramenta faz e aceita está na descrição dela no próprio MCP.
   `to-tickets`): `tipo=plano` + `artefato=<nome da nota de origem>`. Vai para
   `Specs/Tickets - <artefato>/`, nunca solto em `Specs/` — muitas notas de uma vez afogam o
   artefato que as gerou.
+- **Lote** (`lote=true`): várias notas de uma vez — tickets de uma spec, migração — gravam só
+  em disco, sem pull/commit/push a cada uma, e `sincronizar mensagem=<...>` fecha tudo num
+  commit só. **Obrigatório fechar**: nota em lote sem `sincronizar` fica só na máquina local.
+  Uma nota avulsa não usa lote.
+
+## Validar (`validar`)
+
+`validar` é o linter do vault, o mesmo de `scripts/validar_vault.py`: frontmatter (E1–E3),
+wikilink quebrado (E4), nota fora do hub (E5), órfã e sem link (A1, A2), projeto sem hub (A3).
+Rode `validar projeto=<projeto>` ao fechar uma leva e depois de qualquer migração; erro é para
+corrigir na hora (`atualizar_nota`, ou criar a nota que o link espera), não para relatar.
 
 ## Lifecycle (`atualizar_nota`)
 
@@ -146,8 +157,10 @@ padronização): `references/procedimento-migrar.md`.
    confirmação; ele pode excluir itens.
 3. Projeto no vault — `visao_geral`: hub existente ganha; projeto novo de verdade →
    `descricao_projeto` e `repo` na primeira `salvar_nota`.
-4. Copiar — uma `salvar_nota` por arquivo confirmado: `data` do 1º commit, conteúdo original
-   como `corpo`, `resumo` de 1 linha, wikilinks entre notas relacionadas.
+4. Copiar — uma `salvar_nota` por arquivo confirmado, **com `lote=true`**: `data` do 1º
+   commit, conteúdo original como `corpo`, `resumo` de 1 linha, wikilinks entre notas
+   relacionadas. Ao fim, `sincronizar mensagem="<projeto>: migração de N notas"` e
+   `validar projeto=<projeto>`.
 5. Checagem graphify (só se o projeto usa) — `graphify-out/` no `.gitignore` e fora do index;
    nunca vai pro vault.
 6. Repo do projeto — NÃO TOCAR (regra dura acima).
@@ -159,8 +172,9 @@ Dispara com `/obsidian-docs migrar tudo` ou "migrar todos os projetos". Rode na 
 workspace, a pasta que contém os projetos. Orquestra a migração em massa: descobre os
 projetos, inventaria em paralelo (subagent `vault-migrador`, modelo fixo `sonnet` — nunca
 herdado da sessão), confirma com um GATE único e migra projeto a projeto, sempre sequencial
-(**nunca dois projetos em paralelo** — evita push/rebase concorrente no vault). Cada projeto
-segue as mesmas regras do modo `migrar` (cópia, nunca recorte).
+(**nunca dois projetos em paralelo** — um único vault, um único `sincronizar` por projeto).
+Cada projeto segue as mesmas regras do modo `migrar` (cópia, nunca recorte, lote fechado com
+`sincronizar` e conferido com `validar`).
 
 Detalhe completo (descoberta de projetos, regra de modelo, GATE, migração sequencial,
 relatório): `references/procedimento-migrar-tudo.md`.

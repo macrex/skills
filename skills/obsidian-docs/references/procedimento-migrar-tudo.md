@@ -46,14 +46,16 @@ nada é copiado.
 
 ### 4. Migrar (sequencial, um projeto por vez)
 
-O servidor commita e empurra o vault a cada nota — **NUNCA migrar dois
-projetos em paralelo** (push/rebase concorrentes no mesmo repo). Para cada
-projeto confirmado, na ordem: subagent `vault-migrador` em **modo migração**
-com a lista confirmada (mesma regra de modelo do passo 2, nunca o modelo da
-sessão). Ele aplica o fluxo do modo `migrar`: `visao_geral` (hub
-existente ganha), uma `salvar_nota` por arquivo (data do 1º commit,
-conteúdo original, resumo, wikilinks) e a checagem graphify
-(`graphify-out/` no `.gitignore`, fora do index).
+**NUNCA migrar dois projetos em paralelo**: é um vault só, e dois lotes
+abertos ao mesmo tempo viram um commit com notas de projetos misturados.
+Para cada projeto confirmado, na ordem: subagent `vault-migrador` em **modo
+migração** com a lista confirmada (mesma regra de modelo do passo 2, nunca o
+modelo da sessão). Ele aplica o fluxo do modo `migrar`: `visao_geral` (hub
+existente ganha), uma `salvar_nota` por arquivo com `lote=true` (data do 1º
+commit, conteúdo original, resumo, wikilinks), **um** `sincronizar` fechando
+o lote do projeto, `validar projeto=<projeto>` e a checagem graphify
+(`graphify-out/` no `.gitignore`, fora do index). O agente só devolve depois
+do `sincronizar`: a linha `GIT:` do retorno é a saída dele.
 
 **O repo do projeto NUNCA é tocado**: migração é cópia, nunca recorte. Sem
 `git rm`, sem apagar, sem commit no projeto.

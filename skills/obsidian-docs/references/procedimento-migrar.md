@@ -40,7 +40,7 @@ Aguarde confirmação. O usuário pode excluir itens da lista.
 
 ## 4. Copiar
 
-Uma `salvar_nota` por arquivo confirmado:
+Uma `salvar_nota` por arquivo confirmado, todas com `lote=true`:
 
 1. `data` = primeiro commit do arquivo
    (`git log --follow --format=%ad --date=short -- <arquivo> | tail -1`); sem git, omita (hoje).
@@ -49,8 +49,13 @@ Uma `salvar_nota` por arquivo confirmado:
    mesma migração (bug → spec que originou, evolução → bug que resolveu); o link do hub o
    servidor põe.
 4. `resumo` = 1 linha para o hub.
+5. `lote=true` em todas: a nota vai só para o disco. No fim da lista, uma chamada de
+   `sincronizar mensagem="<projeto>: migração de N notas"` faz o único commit → pull --rebase →
+   push. Sem ela as notas não saem da máquina.
+6. `validar projeto=<projeto>`: E4 (link para nota que não veio) e E5 (fora do hub) são
+   corrigidos na hora, antes do relatório.
 
-Vault git: o servidor commita e empurra a cada nota — não rode git no vault.
+Não rode git no vault: o `sincronizar` é o único commit da migração.
 
 ## 5. Checagem graphify (só se o projeto usa graphify)
 
