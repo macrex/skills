@@ -176,12 +176,28 @@ some da lista, mas continua subindo um segundo processo do mesmo servidor. E o
 que o plugin traz: você acaba com `vault-migrador` e `macrex-skills:vault-migrador` na lista,
 apontando para cópias que podem divergir.
 
-**Linter do vault**, opcional, nas duas rotas: `skills/obsidian-docs/scripts/validar_vault.py`
-checa o vault inteiro — frontmatter, links quebrados e notas fora do hub. Copie-o para
-`<vault>/.scripts/` e rode `python .scripts/validar_vault.py --resumo`.
+**Linter do vault**, nas duas rotas: a ferramenta `validar` do MCP checa o vault inteiro —
+frontmatter, vocabulário, links quebrados, notas fora do hub, órfãs — e o mesmo linter roda na
+linha de comando, de onde a skill está instalada, sem copiar nada:
 
-O autoteste do servidor roda num vault temporário, sem tocar no seu:
-`python skills/obsidian-docs/scripts/teste_servidor_vault.py`.
+```bash
+python ~/.claude/skills/obsidian-docs/scripts/validar_vault.py --vault ~/obsidian/projetos --resumo
+```
+
+Servidor e linter compartilham o vocabulário e o parser: não há duas listas de tipos para
+divergir.
+
+## Testes
+
+Tudo roda em repositórios e vaults temporários, sem tocar nos seus, e é o que a CI
+(`.github/workflows/ci.yml`) executa em Linux e Windows a cada push:
+
+```bash
+python scripts/validar_repo.py                                   # manifestos, caminhos e frontmatter das skills
+python skills/obsidian-docs/scripts/teste_servidor_vault.py      # o servidor do vault, ferramenta a ferramenta
+node skills/cpv/scripts/teste-repos-da-leva.js                   # o descobridor da leva
+node skills/cpv/scripts/teste-segredos.js                        # o varredor de segredos
+```
 
 ## As skills
 
@@ -202,7 +218,8 @@ documento nasce — é isso que evita que ele nasça dentro do repositório.
 
 O servidor é a única porta do vault: ele lê por busca e grava as notas já nas convenções, então
 nenhuma nasce órfã, sem frontmatter ou fora do hub. Funciona com o Obsidian fechado — é tudo
-filesystem, sem plugin. A estrutura que ele mantém: `Home.md` global → `<projeto>/<projeto>.md`
+filesystem, sem plugin. A leitura é cacheada por arquivo: cada nota só é relida quando muda em
+disco, então a latência não cresce com o vault. A estrutura que ele mantém: `Home.md` global → `<projeto>/<projeto>.md`
 (o hub) → `Specs/`, `Arquitetura/`, `Bugs/`, `Evolucoes/`, `Analises/`.
 
 | Ferramenta | O que faz |
@@ -212,8 +229,10 @@ filesystem, sem plugin. A estrutura que ele mantém: `Home.md` global → `<proj
 | `listar_notas` | Caminho + frontmatter, mais recentes primeiro. |
 | `ler_nota` | Conteúdo integral, por caminho relativo ou nome de wikilink. |
 | `conexoes` | Wikilinks de saída e backlinks — navegação pelo grafo. |
-| `salvar_nota` | Nota nova: pasta por tipo, `YYYY-MM-DD titulo.md`, frontmatter, link e entrada no hub, hub e `Home.md` se o projeto for novo, commit+push. Tickets em `Specs/Tickets - <artefato>/`. |
-| `atualizar_nota` | Nota existente: corpo, status, tags, resumo no hub ou sucessora (marca obsoleta e linka). |
+| `salvar_nota` | Nota nova: pasta por tipo, `YYYY-MM-DD titulo.md`, frontmatter, link e entrada no hub, hub e `Home.md` se o projeto for novo, commit+push. Tickets em `Specs/Tickets - <artefato>/`. `lote=true` grava só em disco. |
+| `atualizar_nota` | Nota existente: corpo, status, tags, resumo no hub ou sucessora (marca obsoleta e linka). Também aceita `lote`. |
+| `sincronizar` | Fecha um lote: um commit → `pull --rebase` → push com tudo que `lote=true` deixou pendente. Uma migração de cinquenta notas vira um push, não cinquenta. |
+| `validar` | Linter do vault: frontmatter, vocabulário, wikilinks quebrados, notas fora do hub, órfãs. |
 | `mapa_codigo` | Mapa do código do projeto lendo o `graphify-out/`: frescor do grafo, comunidades, god nodes. |
 | `consultar_codigo` | Pergunta de arquitetura ao grafo (`graphify query/explain/path`), CLI local. |
 | `gerar_mapa` | Regrava a nota `Mapa do Codigo <projeto>` a partir do grafo, preservando a sua leitura curada. |
@@ -283,6 +302,15 @@ node ~/.claude/skills/cpv/scripts/repos-da-leva.js --json    # o mesmo, estrutur
 
 O autoteste dele roda em repositórios temporários, sem tocar em nada seu:
 `node skills/cpv/scripts/teste-repos-da-leva.js`.
+
+Antes de estagiar, o `/cpv` roda o varredor de segredos sobre o que entraria no commit —
+`.env`, chaves, tokens com formato conhecido, URL com senha, atribuição de senha com valor
+literal — e pula o repositório se achar algo. É script, não instrução ao modelo, porque é a única
+barreira quando o modo é `bypassPermissions`:
+
+```bash
+node ~/.claude/skills/cpv/scripts/segredos.js <raiz do repo>     # exit 1 com achado, trecho mascarado
+```
 
 O comando é a **única** autorização de commit, e isso só vale se a regra estiver no seu
 `CLAUDE.md`:
