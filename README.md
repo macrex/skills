@@ -180,6 +180,9 @@ apontando para cópias que podem divergir.
 checa o vault inteiro — frontmatter, links quebrados e notas fora do hub. Copie-o para
 `<vault>/.scripts/` e rode `python .scripts/validar_vault.py --resumo`.
 
+O autoteste do servidor roda num vault temporário, sem tocar no seu:
+`python skills/obsidian-docs/scripts/teste_servidor_vault.py`.
+
 ## As skills
 
 | Skill | Faz | Dispara |
@@ -230,11 +233,13 @@ código. Antes, isso obrigava cada pessoa a copiar um bloco de regras para o pr�
 (`hooks/vault-rules.js`) que injeta as regras no início de toda sessão **e de todo sub-agente**,
 que é onde elas mais se perdiam.
 
-O hook **só injeta se você configurou a pasta do vault** — ele lê o valor do `userConfig` nas
-configurações do Claude Code (usuário e projeto, com e sem `.local`) ou a variável
-`OBSIDIAN_VAULT`. Quem deixou a pasta em branco de propósito não recebe regra nenhuma; qualquer
-outra incerteza injeta assim mesmo, porque a primeira linha do bloco manda ignorá-lo quando não
-há ferramenta de vault na sessão — falhar calado seria o plugin não funcionar sem avisar.
+O hook **só injeta se você configurou a pasta do vault** — ele lê a variável
+`CLAUDE_PLUGIN_OPTION_VAULT`, que é como o Claude Code entrega o `userConfig` aos hooks do
+plugin, a variável `OBSIDIAN_VAULT`, e, como fallback, o valor gravado nas configurações
+(usuário e projeto, com e sem `.local`). Quem deixou a pasta em branco de propósito não recebe
+regra nenhuma; qualquer outra incerteza injeta assim mesmo, porque a primeira linha do bloco
+manda ignorá-lo quando não há ferramenta de vault na sessão — falhar calado seria o plugin não
+funcionar sem avisar.
 
 O que é injetado: ler o hub e a evolução mais recente antes de mexer em código; doc nasce no
 vault e nunca no repo, incluindo as specs do superpowers; registrar a evolução ao fechar a leva;
