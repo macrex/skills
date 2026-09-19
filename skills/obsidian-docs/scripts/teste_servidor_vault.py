@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Autoteste do servidor do vault, num vault temporario — nunca toca no seu.
+
+  python scripts/teste_servidor_vault.py
+
+Cobre o que a convencao promete: hub e Home nascem com o projeto, projeto novo
+sem descricao e recusado, a nota vai para a pasta do tipo com nome datado e
+frontmatter, ticket cai em `Specs/Tickets - <artefato>/`, o hub lista a nota,
+atualizar_nota muda status/resumo/sucessora in-place, busca ignora acento, e o
+vault que e repositorio git recebe um commit por gravacao. O protocolo
+JSON-RPC e exercitado por `atender` (initialize, tools/list, tools/call).
+"""
+import contextlib
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import servidor_vault as sv  # noqa: E402
+
+FALHAS = []
+
+
+def confere(cond, msg):
+    (print if cond else FALHAS.append)(("ok: " if cond else "") + msg)
+
+
+def le(rel):
+    with open(os.path.join(sv.VAULT, *rel.split("/")), encoding="utf-8") as f:
+        return f.read()
+
+
+def existe(rel):
+    return os.path.exists(os.path.join(sv.VAULT, *rel.split("/")))
+
+
+def chamada(nome, **args):
+    """tools/call pelo protocolo, devolvendo (texto, isError)."""
+    saida = io.StringIO()
+    with contextlib.redirect_stdout(saida):
+        sv.atender({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": {"name": nome, "arguments": args}})
+    msg = json.loads(saida.getvalue())
+    if "error" in msg:
+        return msg["error"]["message"], "erro-jsonrpc"
+    r = msg["result"]
+    return r["content"][0]["text"], r["isError"]
+
+
+def testes():
+    # --- projeto novo: exige descricao; com ela nasce hub, Home e a nota ---
+    try:
+        sv.salvar_nota("pagamentos", "spec", "Cobranca recorrente", "corpo", resumo="r")
+        confere(False, "projeto novo sem descricao_projeto deveria ser recusado")
+    except sv.ErroUso as e:
+        confere("nao existe no vault" in str(e), "projeto novo sem descricao e recusado")
+
+    saida = sv.salvar_nota("pagamentos", "spec", "Cobrança recorrente", "Texto da spec.",
+                           resumo="spec da cobranca", descricao_projeto="Modulo de pagamentos",
+                           repo="/tmp/pagamentos", data="2026-01-10", tags=["cobranca"])
+    confere("Salva: pagamentos/Specs/2026-01-10 Cobrança recorrente.md" in saida, "nota vai para Specs/ com data e titulo")
+    confere("Hub: criado e registrado no Home" in saida, "hub criado na primeira nota")
+    nota = le("pagamentos/Specs/2026-01-10 Cobrança recorrente.md")
+    confere(nota.startswith("---\nprojeto: pagamentos\ntipo: spec\nstatus: ativo\ndata: 2026-01-10\ntags: [cobranca]\n---\n"),
+            "frontmatter completo")
+    confere("# Cobrança recorrente" in nota and "Projeto: [[pagamentos]]" in nota, "titulo e link do hub no corpo")
+    hub = le("pagamentos/pagamentos.md")
+    confere("Repo: /tmp/pagamentos" in hub, "hub guarda a linha Repo:")
+    confere("- [[2026-01-10 Cobrança recorrente]] — spec da cobranca" in hub, "hub lista a nota com o resumo")
+    confere("- [[pagamentos]] — Modulo de pagamentos" in le("Home.md"), "Home lista o projeto")
+
+    # --- nota repetida e recusada; sobrescrever regrava ---
+    try:
+        sv.salvar_nota("pagamentos", "spec", "Cobrança recorrente", "outro", resumo="r", data="2026-01-10")
+        confere(False, "nota repetida deveria ser recusada")
+    except sv.ErroUso as e:
+        confere("ja existe" in str(e), "nota repetida e recusada")
+    sv.salvar_nota("pagamentos", "spec", "Cobrança recorrente", "Regravada.", resumo="r",
+                   data="2026-01-10", sobrescrever=True)
+    confere("Regravada." in le("pagamentos/Specs/2026-01-10 Cobrança recorrente.md"), "sobrescrever regrava")
+    confere(le("pagamentos/pagamentos.md").count("[[2026-01-10 Cobrança recorrente]]") == 1,
+            "hub nao duplica a entrada ao regravar")
+
+    # --- tipos, validacao, ticket ---
+    for tipo, pasta in (("bug", "Bugs"), ("evolucao", "Evolucoes"), ("adr", "Arquitetura"), ("analise", "Analises")):
+        sv.salvar_nota("pagamentos", tipo, f"Nota {tipo}", "c", resumo="r", data="2026-02-01")
+        confere(existe(f"pagamentos/{pasta}/2026-02-01 Nota {tipo}.md"), f"tipo {tipo} vai para {pasta}/")
+    for args, erro in ((dict(tipo="nota"), "tipo invalido"), (dict(status="feito"), "status invalido"),
+                       (dict(data="10/01/2026"), "data deve ser"), (dict(resumo=""), "resumo")):
+        base = dict(projeto="pagamentos", tipo="spec", titulo="X", corpo="c", resumo="r")
+        base.update(args)
+        try:
+            sv.salvar_nota(**base)
+            confere(False, f"deveria recusar {args}")
+        except sv.ErroUso as e:
+            confere(erro in str(e), f"recusa {args}")
+    saida = sv.salvar_nota("pagamentos", "plano", "T1 Criar tabela", "c", resumo="r",
+                           artefato="2026-01-10 Cobrança recorrente", data="2026-02-02")
+    confere("pagamentos/Specs/Tickets - 2026-01-10 Cobrança recorrente/2026-02-02 T1 Criar tabela.md" in saida,
+            "ticket cai em Specs/Tickets - <artefato>/")
+    try:
+        sv.salvar_nota("pagamentos", "bug", "B", "c", resumo="r", artefato="x")
+        confere(False, "artefato fora de spec/plano deveria ser recusado")
+    except sv.ErroUso as e:
+        confere("so vale para tipo spec ou plano" in str(e), "artefato so em spec/plano")
+
+    # --- wikilink quebrado e avisado; hub parecido e avisado ---
+    saida = sv.salvar_nota("pagamentos", "analise", "Com link", "Veja [[Nao existe]].", resumo="r", data="2026-02-03")
+    confere("[[Nao existe]]" in saida and "Wikilinks sem nota" in saida, "wikilink quebrado e avisado")
+    saida = sv.salvar_nota("pagamentos-repo", "spec", "S", "c", resumo="r", descricao_projeto="duplicado?")
+    confere("hubs parecidos" in saida and "pagamentos" in saida, "hub parecido e avisado")
+
+    # --- leitura e busca ---
+    confere("Texto" not in sv.ler_nota("2026-01-10 Cobrança recorrente") and "Regravada." in sv.ler_nota("Cobrança recorrente"),
+            "ler_nota resolve por nome e por trecho")
+    confere("pagamentos/Specs/2026-01-10 Cobrança recorrente.md" in sv.buscar("cobranca"), "busca ignora acento")
+    confere("Nenhuma nota" in sv.buscar("zzz"), "busca sem resultado diz isso")
+    lista = sv.listar_notas(projeto="pagamentos", tipo="evolucao")
+    confere("1 de 1 nota(s)" in lista and "Nota evolucao" in lista, "listar_notas filtra por projeto e tipo")
+    con = sv.conexoes("2026-02-03 Com link")
+    confere("[[Nao existe]] (sem arquivo no vault)" in con and "[[pagamentos]] → pagamentos/pagamentos.md" in con,
+            "conexoes mostra saida resolvida e nao resolvida")
+    confere("pagamentos —" in sv.visao_geral() and "SEM HUB" not in sv.visao_geral(), "visao_geral lista o projeto com hub")
+
+    # --- atualizar_nota ---
+    saida = sv.atualizar_nota("2026-02-01 Nota bug", status="resolvido", resumo="bug fechado", tags=["a", "b"])
+    nota = le("pagamentos/Bugs/2026-02-01 Nota bug.md")
+    confere("status: resolvido" in nota and "tags: [a, b]" in nota, "atualizar_nota muda status e tags no frontmatter")
+    confere("- [[2026-02-01 Nota bug]] — bug fechado" in le("pagamentos/pagamentos.md"), "atualizar_nota troca o resumo no hub")
+    sv.atualizar_nota("2026-02-01 Nota bug", corpo="Corpo novo.")
+    nota = le("pagamentos/Bugs/2026-02-01 Nota bug.md")
+    confere("Corpo novo." in nota and "# Nota bug" in nota and "status: resolvido" in nota,
+            "corpo novo preserva frontmatter e recebe o titulo")
+    sv.atualizar_nota("2026-02-01 Nota evolucao", sucessora="2026-02-01 Nota bug")
+    nota = le("pagamentos/Evolucoes/2026-02-01 Nota evolucao.md")
+    confere("status: obsoleto" in nota and "Substituída por [[2026-02-01 Nota bug]]." in nota, "sucessora marca obsoleta e linka")
+    for args, erro in ((dict(nota="Nota", status="ativo"), "mais de uma nota"),
+                       (dict(nota="pagamentos", status="ativo"), "hub e indice"),
+                       (dict(nota="nada disso", status="ativo"), "nao encontrada"),
+                       (dict(nota="2026-02-01 Nota bug"), "ao menos um")):
+        try:
+            sv.atualizar_nota(**args)
+            confere(False, f"deveria recusar {args}")
+        except sv.ErroUso as e:
+            confere(erro in str(e), f"atualizar_nota recusa {args}")
+
+    # --- protocolo ---
+    saida = io.StringIO()
+    with contextlib.redirect_stdout(saida):
+        sv.atender({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {"protocolVersion": "2025-06-18"}})
+        sv.atender({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        sv.atender({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    linhas = [json.loads(l) for l in saida.getvalue().splitlines()]
+    confere(len(linhas) == 2 and linhas[0]["result"]["protocolVersion"] == "2025-06-18", "initialize responde e notificacao nao")
+    nomes = [t["name"] for t in linhas[1]["result"]["tools"]]
+    confere(nomes == [f["name"] for f in sv.FERRAMENTAS] and all("fn" not in t for t in linhas[1]["result"]["tools"]),
+            "tools/list expoe as ferramentas sem o campo fn")
+    texto, erro = chamada("ler_nota", nota="2026-02-01 Nota bug")
+    confere(not erro and "Corpo novo." in texto, "tools/call executa")
+    texto, erro = chamada("salvar_nota", projeto="pagamentos", tipo="spec", titulo="X", corpo="c")
+    confere(erro and "resumo" in texto, "tools/call devolve ErroUso como isError")
+    texto, erro = chamada("ler_nota", inexistente=1)
+    confere(erro and "argumentos invalidos" in texto, "argumento desconhecido vira isError")
+    texto, erro = chamada("nao_existe")
+    confere(erro == "erro-jsonrpc" and "desconhecida" in texto, "ferramenta desconhecida vira erro JSON-RPC")
+
+
+def testes_git():
+    vault = sv.VAULT
+    subprocess.run(["git", "-C", vault, "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", vault, "config", "user.email", "t@local"], check=True)
+    subprocess.run(["git", "-C", vault, "config", "user.name", "teste"], check=True)
+    saida = sv.salvar_nota("loja", "spec", "Primeira", "c", resumo="r", descricao_projeto="Loja")
+    confere("Git: commit local (vault sem remoto)" in saida, "vault git sem remoto: commit local")
+    log = subprocess.run(["git", "-C", vault, "log", "--format=%s"], capture_output=True, text=True).stdout
+    confere(log.strip() == "loja: Primeira", "mensagem do commit e projeto: titulo")
+    limpo = subprocess.run(["git", "-C", vault, "status", "--porcelain"], capture_output=True, text=True).stdout
+    confere(limpo == "", "working tree do vault fica limpa apos gravar")
+    sv.SEM_GIT = True
+    saida = sv.salvar_nota("loja", "bug", "Segunda", "c", resumo="r")
+    confere("sem git" in saida, "--sem-git nao commita")
+    sv.SEM_GIT = False
+
+
+def main():
+    base = tempfile.mkdtemp(prefix="vault-teste-")
+    try:
+        sv.VAULT = os.path.join(base, "projetos")
+        os.makedirs(sv.VAULT)
+        sv.SEM_GIT = True
+        testes()
+        shutil.rmtree(sv.VAULT)
+        os.makedirs(sv.VAULT)
+        sv.SEM_GIT = False
+        if shutil.which("git"):
+            testes_git()
+        else:
+            print("git ausente: testes de sincronizacao pulados")
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+    if FALHAS:
+        print("\nFALHOU:")
+        for f in FALHAS:
+            print("  " + f)
+        sys.exit(1)
+    print("\ntudo ok")
+
+
+if __name__ == "__main__":
+    main()

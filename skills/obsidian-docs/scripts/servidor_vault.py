@@ -10,8 +10,8 @@ modelo.
 
 Registro no Claude Code (uma vez, escopo de usuario — vale em todo projeto):
 
-  python mcp/servidor_vault.py --instalar
-  python mcp/servidor_vault.py --instalar --vault <pasta de projetos do vault>
+  python scripts/servidor_vault.py --instalar
+  python scripts/servidor_vault.py --instalar --vault <pasta de projetos do vault>
 
 `--instalar` roda o `claude mcp add` com o python e o caminho absoluto certos.
 O caminho do vault vem de `OBSIDIAN_VAULT` (a pasta de projetos, a mesma das
@@ -30,7 +30,7 @@ Ferramentas:
   gerar_mapa      regrava a nota Mapa do Codigo preservando a Leitura curada
 
 Vault que e repositorio git: cada gravacao faz commit -> pull --rebase -> push
-(desligue com `--sem-git` no registro). Autoteste: mcp/teste_servidor_vault.py
+(desligue com `--sem-git` no registro). Autoteste: scripts/teste_servidor_vault.py
 """
 import argparse
 import json
