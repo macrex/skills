@@ -104,20 +104,27 @@ dentro dele — e, na leva que motivou este comando, não estava em nenhum.
 
 ### 1. Segredos
 
-Antes de estagiar qualquer coisa, procure no que vai entrar (arquivos novos e
-modificados) por:
+Antes de estagiar qualquer coisa, rode o varredor sobre o repositório — ele lê
+exatamente o que o `add -A` levaria (modificados e novos fora do `.gitignore`) e
+procura segredo pelo nome (`.env`, `*.pem`, `id_rsa`, `credentials.json`…) e pelo
+conteúdo (chave privada, chave AWS, tokens GitHub/Slack/Anthropic, URL com senha,
+atribuição de `password`/`senha`/`api_key`/`token` com valor literal):
 
-- nome de arquivo: `.env`, `.env.*`, `id_rsa`, `*.pem`, `*.pfx`, `*.keystore`,
-  `credentials.json`, `secrets.*`, `config.json` de projeto que o guarde
-- conteúdo: `-----BEGIN * PRIVATE KEY`, `AKIA[0-9A-Z]{16}`, `ghp_`, `github_pat_`,
-  `sk-ant-`, `xox[baprs]-`, e atribuições de `password`/`senha`/`api_key`/`token`
-  com valor literal não vazio
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/segredos.js" <raiz> 2>/dev/null || node "$HOME/.claude/skills/cpv/scripts/segredos.js" <raiz> 2>&1 || node "$HOME/.agents/skills/cpv/scripts/segredos.js" <raiz> 2>&1 || echo "VARREDOR AUSENTE"
+```
 
-Achou → **pule o repositório** e mostre arquivo e linha. Um `.env` empurrado não
-se desfaz com um commit a mais.
+`SEGREDO` na saída (exit 1) → **pule o repositório** e mostre as linhas
+`arquivo:linha  motivo` que ele imprimiu. Não relativize um achado: o trecho sai
+mascarado de propósito, e se for falso positivo o usuário decide, não você. Um
+`.env` empurrado não se desfaz com um commit a mais.
+
+`VARREDOR AUSENTE` → faça a varredura à mão pelos mesmos padrões e diga no
+relatório que o script não rodou.
 
 Assuma que não há segunda barreira: os guards do harness podem não estar instalados
-nesta máquina e o modo pode ser `bypassPermissions`.
+nesta máquina e o modo pode ser `bypassPermissions`. É por isso que a varredura é
+um script, e não a sua atenção.
 
 ### 2. Estagiar
 
@@ -195,7 +202,9 @@ Três linhas **por repositório**:
 
 - o que foi commitado (hash curto e assunto), ou o commit que **já existia**
 - push: para onde, ou por que não
-- vault: nota criada, atualizada ou já existente, com o caminho — ou "pulado"
+- vault: nota criada, atualizada ou já existente, com o caminho — ou "pulado".
+  Com o MCP na sessão, feche com `validar projeto=<projeto>`: erro no linter entra
+  na linha (é o vault que ficou inconsistente, não a leva)
 
 A linha de fechamento **só existe quando tem conteúdo**: algum repositório
 **pulado** (bateu numa condição de parada) ou `NAO INCLUIDOS` não vazio. Nesse
