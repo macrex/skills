@@ -1,10 +1,17 @@
 ---
 name: obsidian-docs
 description: >
-  Vault Obsidian de documentacao — doc nasce no vault, nao no repo. Use ao
-  criar, salvar ou ler doc de qualquer projeto: spec, plano, design, bug,
-  evolucao, ADR, arquitetura, analise, pesquisa, relatorio; achar doc antiga;
-  atualizar Mapa do Codigo. Dispara com: /obsidian-docs, documentar.
+  Documentação de projeto no vault Obsidian, pelo MCP vault-docs: a nota nasce no
+  vault, nunca como .md no repositório. Use SEMPRE que o usuário quiser registrar,
+  escrever, guardar ou consultar qualquer decisão ou documento de um projeto de
+  software, mesmo sem dizer "vault", "Obsidian" ou "documentar": spec ou plano de
+  feature, ADR e decisão de arquitetura, relatório de bug com reprodução e
+  hipótese, evolução ou fechamento de leva, plano de migração, pesquisa
+  comparativa, análise, "anota isso pra depois", "onde decidimos X", "por que
+  fizemos assim", marcar plano como concluído, migrar docs antigas de docs/ para o
+  vault (migrar, migrar tudo), e atualizar o Mapa do Código depois do graphify.
+  Dispara com /obsidian-docs. Não é para README, CLAUDE.md, docstrings, Swagger,
+  comentário de PR ou commit.
 argument-hint: [migrar|migrar tudo]
 ---
 
