@@ -64,6 +64,10 @@ chega como `mcp__plugin_macrex-skills_vault-docs__salvar_nota`. As três skills,
 `vault-migrador` e o hook já aceitam os dois prefixos; se você escreveu regra própria no seu
 `CLAUDE.md` citando `mcp__vault-docs__*`, é ela que precisa aceitar os dois também.
 
+**O que a rota plugin exige na máquina:** `python3` no PATH, para o servidor MCP, e `node`,
+para o hook que injeta as regras e para os scripts do `/cpv`. Sem node o hook falha em silêncio
+e o `/cpv` cai no modo antigo, avisando `DESCOBRIDOR AUSENTE`.
+
 **Ressalva no Windows:** o plugin invoca o servidor com `python3`, que é o certo em Unix e no
 shebang do script. Se o seu launcher for `python` e o MCP não conectar (`claude mcp list` não
 mostra `vault-docs … ✔ Connected`), o caminho é ter um `python3` no PATH, ou usar a rota CLI
@@ -251,6 +255,12 @@ código. Antes, isso obrigava cada pessoa a copiar um bloco de regras para o pr�
 `CLAUDE.md`. Agora o plugin resolve: ele traz um hook de `SessionStart` e `SubagentStart`
 (`hooks/vault-rules.js`) que injeta as regras no início de toda sessão **e de todo sub-agente**,
 que é onde elas mais se perdiam.
+
+A parte do sub-agente apoia-se em `additionalContext` no evento `SubagentStart`, que a
+documentação do Claude Code não lista — funciona hoje, e o hook falha aberto, então se uma
+versão parar de aceitá-lo o único efeito é o sub-agente não receber o bloco, sem erro. Para
+conferir depois de atualizar o Claude Code: abra um sub-agente e pergunte se ele vê o bloco
+`<vault-obsidian>`.
 
 O hook **só injeta se você configurou a pasta do vault** — ele lê a variável
 `CLAUDE_PLUGIN_OPTION_VAULT`, que é como o Claude Code entrega o `userConfig` aos hooks do

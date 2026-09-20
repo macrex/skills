@@ -16,6 +16,12 @@ regra dura proíbe, e este arquivo estaria dando cobertura retroativa a ele.
 
 Sem argumento faz tudo. `sem-vault` para nos passos de git.
 
+O `allowed-tools` do cabeçalho pré-aprova o MCP do vault pelos dois prefixos nus
+(`mcp__vault-docs` e `mcp__plugin_macrex-skills_vault-docs`). A documentação do Claude Code só
+mostra a sintaxe `Bash(...)` ali; o prefixo de servidor é comportamento observado. Se um dia as
+ferramentas do vault voltarem a pedir permissão dentro do `/cpv`, é isso que mudou: liste-as
+uma a uma no cabeçalho.
+
 ## Contexto
 
 Antes de qualquer outra coisa, rode o descobridor e use a saída dele como o
