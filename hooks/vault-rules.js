@@ -8,9 +8,16 @@
 // vault de proposito: a config do plugin existe e o valor esta vazio. Config que
 // nao se consegue ler — arquivo ausente, corrompido, instalacao em escopo de
 // projeto, settings.local.json, um caminho que esta lista nao previu — injeta
-// assim mesmo. A primeira linha do texto manda ignorar quando as ferramentas nao
-// estao na sessao, entao injetar demais custa algumas linhas; injetar de menos
-// seria o plugin nao funcionar, em silencio, para quem acabou de instalar.
+// assim mesmo.
+//
+// A leitura documentada do userConfig e a variavel de ambiente
+// CLAUDE_PLUGIN_OPTION_<CHAVE> que o Claude Code exporta para os hooks do plugin
+// (https://code.claude.com/docs/en/plugins-reference); e ela que decide primeiro.
+// O parse dos settings.json abaixo e o fallback para versoes que nao a exportam.
+//
+// A primeira linha do texto manda ignorar quando as ferramentas nao estao na
+// sessao, entao injetar demais custa algumas linhas; injetar de menos seria o
+// plugin nao funcionar, em silencio, para quem acabou de instalar.
 
 const fs = require('fs');
 const os = require('os');
@@ -19,7 +26,7 @@ const path = require('path');
 const REGRAS = `<vault-obsidian>
 Este projeto documenta no vault Obsidian, pelo MCP \`vault-docs\` que a skill \`obsidian-docs\` traz. As ferramentas aparecem com um de dois prefixos, conforme a rota de instalacao: \`mcp__vault-docs__*\` (CLI \`npx skills add\`) ou \`mcp__plugin_macrex-skills_vault-docs__*\` (plugin; se voce renomeou o plugin, o nome dele entra no lugar). **Se nenhuma ferramenta de vault estiver na sessao, ignore este bloco inteiro.**
 
-- **O vault e a memoria dos projetos, e nada dispara isto sozinho.** ANTES de mexer em codigo, leia o hub (\`ler_nota <nome-da-pasta-do-repo>\`) e a evolucao mais recente (\`listar_notas projeto=<projeto> tipo=evolucao limite=1\`, depois \`ler_nota\`), mais \`mapa_codigo <projeto>\` quando o projeto usa graphify. Projeto citado que nao e o do diretorio atual: resolva la primeiro (\`ler_nota <projeto>\`; nome incerto, \`buscar\` ou \`visao_geral\` — um hub por projeto, MOCs tematicos em \`MOC\\\`). Codigo e git vem depois do vault.
+- **O vault e a memoria dos projetos, e nada dispara isto sozinho.** ANTES de mexer em codigo, leia o hub (\`ler_nota <nome-da-pasta-do-repo>\`) e a evolucao mais recente (\`listar_notas projeto=<projeto> tipo=evolucao limite=1\`, depois \`ler_nota\`), mais \`mapa_codigo <projeto>\` quando o projeto usa graphify. Projeto citado que nao e o do diretorio atual: resolva la primeiro (\`ler_nota <projeto>\`; nome incerto, \`buscar\` ou \`visao_geral\` — um hub por projeto, MOCs tematicos em \`MOC/\`). Codigo e git vem depois do vault.
 - **Todo artefato .md de documentacao nasce no vault**, pela skill \`obsidian-docs\` — spec, plano, design, bug, evolucao, ADR, arquitetura, analise, pesquisa, relatorio, incluindo as specs e planos de brainstorming do superpowers, que vao para o vault no lugar de \`docs/superpowers/specs|plans/\`. NUNCA no repositorio do projeto. Ficam no repo so os operacionais: \`README.md\`, \`CLAUDE.md\`, \`AGENTS.md\`, \`SKILL.md\`, configs.
 - **Ao fechar uma leva ou versao**, registre a evolucao (\`salvar_nota tipo=evolucao\`) e indexe no hub.
 - **Migracao para o vault e CÓPIA, nunca recorte.** PROIBIDO apagar ou mover arquivo do repositorio do projeto, inclusive o que so parece documentacao (\`LEIA.txt\`, \`HELP\`, notas dentro de biblioteca vendorizada). O commit \`docs: migrados para o vault Obsidian (obsidian-docs)\` e entulho de um bug antigo e nao pode ser gerado de novo; achou um (\`git log --all --oneline --grep "migrados para o vault Obsidian"\`)? Nao empurrado, \`git reset HEAD~1\` (mixed, o conteudo fica na working tree); ja empurrado, avise o usuario e pare — reescrever historico publicado e decisao dele. Mantenha a mudanca util que ele carregava (ex.: \`graphify-out/\` no \`.gitignore\`).
@@ -44,6 +51,9 @@ function arquivosDeConfig() {
 // null = nao deu para saber (injeta); true/false = o cliente disse.
 function vaultConfigurado() {
   if ((process.env.OBSIDIAN_VAULT || '').trim()) return true;
+  // Chave presente e vazia = o cliente deixou a pasta em branco de proposito.
+  const opcao = process.env.CLAUDE_PLUGIN_OPTION_VAULT;
+  if (opcao !== undefined) return opcao.trim() !== '';
   let resposta = null;
   for (const arquivo of arquivosDeConfig()) {
     let cfgs;

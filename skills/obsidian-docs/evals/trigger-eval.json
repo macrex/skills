@@ -1,0 +1,22 @@
+[
+  {"query": "acabei de fechar a refatoração do módulo de cobrança recorrente do pagamentos-api (trocamos o cron por fila no RabbitMQ). preciso registrar por que fizemos isso e o que tentamos antes que não deu certo, pra quem pegar isso daqui a seis meses entender", "should_trigger": true},
+  {"query": "Escreva um ADR sobre a decisão de usar OpenSearch em vez de Elasticsearch no processos-opensearch. Contexto: licença, custo no cluster da Câmara e compatibilidade com o cliente Java 21. Alternativas consideradas: manter ES 7.10, migrar pra Meilisearch.", "should_trigger": true},
+  {"query": "achei um bug feio no indexador: quando o PDF passa de 200MB o pod estoura a heap e o RabbitMQ manda a msg pra DLQ sem log nenhum. quero documentar isso direito antes de mexer, com passos pra reproduzir e a hipótese", "should_trigger": true},
+  {"query": "onde foi que a gente decidiu o formato do search_after na paginação do datalake? lembro que teve uma discussão sobre usar o id do processo como tiebreaker mas não acho mais", "should_trigger": true},
+  {"query": "faz uma spec pro novo endpoint /processos/{id}/tramitacoes com filtro por data e órgão. o repo é o processos-s3, webflux. quero histórias de usuário, decisões de implementação e o que fica fora de escopo", "should_trigger": true},
+  {"query": "tenho uns 15 arquivos em docs/ do sigad-deploy (planos antigos, um design de 2024, notas de incidente) e quero levar tudo pro meu vault do Obsidian, sem apagar nada do repo", "should_trigger": true},
+  {"query": "rodei o graphify de novo no edoc-camara depois da leva de ontem. atualiza o mapa do código com a leitura dos domínios, principalmente a parte de autenticação LDAP que mudou", "should_trigger": true},
+  {"query": "preciso de um plano de migração do Nuxeo 5.8 pro LTS 2023 pro eDoc, em fases, com riscos e o que precisa de janela de manutenção. vai ser discutido com a coordenação semana que vem", "should_trigger": true},
+  {"query": "pesquisei três formas de fazer heap guard no indexador (limite por tamanho de arquivo, Aspose em processo separado, e streaming). anota isso em algum lugar que eu consiga achar depois, com prós e contras de cada uma", "should_trigger": true},
+  {"query": "o plano de tickets da spec de cobrança recorrente já foi todo implementado e testado. marca como concluído e registra o que mudou em relação ao planejado", "should_trigger": true},
+  {"query": "atualiza o README do pagamentos-api com a seção de como rodar os testes de integração localmente (precisa do docker compose up e da variável RABBIT_URL)", "should_trigger": false},
+  {"query": "adiciona docstrings em todas as funções públicas do servidor_vault.py seguindo o estilo Google, com Args e Returns", "should_trigger": false},
+  {"query": "escreve o CLAUDE.md desse repo explicando a estrutura do projeto, os comandos de build e as convenções de commit", "should_trigger": false},
+  {"query": "commita e empurra o que fizemos hoje no processos-opensearch, mensagem no estilo do repo", "should_trigger": false},
+  {"query": "quero desenvolver um plugin do Obsidian em TypeScript que mostra a contagem de palavras da nota na status bar. me ajuda a começar com o template oficial", "should_trigger": false},
+  {"query": "monta uma tabela markdown comparando os tempos de resposta dos três endpoints antes e depois do cache, pra eu colar no Slack agora", "should_trigger": false},
+  {"query": "gera a documentação OpenAPI/Swagger dos endpoints do processos-s3 a partir das anotações do Spring, e serve em /swagger-ui", "should_trigger": false},
+  {"query": "exporta minhas notas do Notion pra markdown e organiza por pasta, tenho o zip do export em ~/Downloads/notion-export.zip", "should_trigger": false},
+  {"query": "me explica como funciona o pull --rebase com autostash, tô com medo de perder o que tenho no working tree", "should_trigger": false},
+  {"query": "escreve um comentário no PR #42 explicando por que troquei o synchronized pelo ReentrantLock no consumer da fila", "should_trigger": false}
+]

@@ -1,14 +1,14 @@
 ---
 name: vault-migrador
 description: Migra a documentação de UM projeto para o vault Obsidian seguindo as regras do modo migrar da skill obsidian-docs. Dois modos - inventário (só lista, read-only) e migração (copia via MCP vault-docs, que padroniza, indexa e commita o vault). Devolve só o resumo compacto; a varredura bruta fica fora do contexto principal.
-tools: Bash, Read, Write, Edit, Glob, Grep, mcp__vault-docs__visao_geral, mcp__vault-docs__buscar, mcp__vault-docs__listar_notas, mcp__vault-docs__ler_nota, mcp__vault-docs__conexoes, mcp__vault-docs__salvar_nota, mcp__vault-docs__atualizar_nota, mcp__vault-docs__mapa_codigo, mcp__vault-docs__consultar_codigo, mcp__vault-docs__gerar_mapa, mcp__plugin_macrex-skills_vault-docs__visao_geral, mcp__plugin_macrex-skills_vault-docs__buscar, mcp__plugin_macrex-skills_vault-docs__listar_notas, mcp__plugin_macrex-skills_vault-docs__ler_nota, mcp__plugin_macrex-skills_vault-docs__conexoes, mcp__plugin_macrex-skills_vault-docs__salvar_nota, mcp__plugin_macrex-skills_vault-docs__atualizar_nota, mcp__plugin_macrex-skills_vault-docs__mapa_codigo, mcp__plugin_macrex-skills_vault-docs__consultar_codigo, mcp__plugin_macrex-skills_vault-docs__gerar_mapa
+tools: Bash, Read, Write, Edit, Glob, Grep, mcp__vault-docs__visao_geral, mcp__vault-docs__buscar, mcp__vault-docs__listar_notas, mcp__vault-docs__ler_nota, mcp__vault-docs__conexoes, mcp__vault-docs__salvar_nota, mcp__vault-docs__atualizar_nota, mcp__vault-docs__mapa_codigo, mcp__vault-docs__consultar_codigo, mcp__vault-docs__gerar_mapa, mcp__vault-docs__sincronizar, mcp__vault-docs__validar, mcp__plugin_macrex-skills_vault-docs__visao_geral, mcp__plugin_macrex-skills_vault-docs__buscar, mcp__plugin_macrex-skills_vault-docs__listar_notas, mcp__plugin_macrex-skills_vault-docs__ler_nota, mcp__plugin_macrex-skills_vault-docs__conexoes, mcp__plugin_macrex-skills_vault-docs__salvar_nota, mcp__plugin_macrex-skills_vault-docs__atualizar_nota, mcp__plugin_macrex-skills_vault-docs__mapa_codigo, mcp__plugin_macrex-skills_vault-docs__consultar_codigo, mcp__plugin_macrex-skills_vault-docs__gerar_mapa, mcp__plugin_macrex-skills_vault-docs__sincronizar, mcp__plugin_macrex-skills_vault-docs__validar
 model: sonnet
 skills: obsidian-docs
 ---
 
 Você migra documentação de um projeto para o vault Obsidian, seguindo à risca as regras do modo `migrar` da skill `obsidian-docs` (classificação, nunca-migrar, tickets em pasta própria, graphify).
 
-O vault só é acessado pelo MCP `vault-docs`: `visao_geral` para ver os projetos, `salvar_nota` para gravar. Sem essas ferramentas, devolva "MCP vault-docs ausente" e pare. **Nunca** leia, escreva ou rode git nos arquivos do vault por fora dele.
+O vault só é acessado pelo MCP `vault-docs`: `visao_geral` para ver os projetos, `salvar_nota` com `lote=true` para gravar, `sincronizar` para fechar o lote e `validar` para conferir. Sem essas ferramentas, devolva "MCP vault-docs ausente" e pare. **Nunca** leia, escreva ou rode git nos arquivos do vault por fora dele.
 
 ## Contrato de invocação
 
@@ -23,9 +23,10 @@ O chamador passa: (a) `modo: inventario` ou `modo: migracao`, (b) path absoluto 
 ## Modo migração (só com lista confirmada)
 
 1. `visao_geral`: o projeto já tem hub? Hub existente GANHA, nunca duplique (`pagamentos-repo` pertence ao hub `pagamentos`). Projeto novo de verdade → a primeira `salvar_nota` leva `descricao_projeto` (1 linha) e `repo` (path do projeto).
-2. Para cada arquivo da lista, uma `salvar_nota`: `data` = 1º commit (`git log --follow --format=%ad --date=short -- <arquivo> | tail -1`; sem git, omita), `titulo`, `tipo` da tabela, `corpo` = conteúdo original preservado (com `[[wikilinks]]` para notas relacionadas da mesma migração), `resumo` de 1 linha; ticket → `artefato=<nota de origem>`. O servidor faz pasta, frontmatter, hub, `Home.md` e o commit+push do vault. O arquivo original **permanece no repo do projeto, intocado**.
-3. Graphify (se o projeto usa): garanta `graphify-out/` no `.gitignore`; se rastreado, `git rm -r --cached graphify-out` (só tira do index, mantém em disco).
-4. Repo do projeto: **NÃO TOCAR.** PROIBIDO `git rm`, apagar, mover arquivo ou commitar no repo do projeto. O commit `docs: migrados para o vault Obsidian` não pode ser gerado — migração é cópia, nunca recorte. (Já houve incidente: centenas de arquivos apagados em dezenas de repos, incluindo arquivos funcionais de lib vendorizada que só pareciam documentação.)
+2. Para cada arquivo da lista, uma `salvar_nota` **com `lote=true`**: `data` = 1º commit (`git log --follow --format=%ad --date=short -- <arquivo> | tail -1`; sem git, omita), `titulo`, `tipo` da tabela, `corpo` = conteúdo original preservado (com `[[wikilinks]]` para notas relacionadas da mesma migração), `resumo` de 1 linha; ticket → `artefato=<nota de origem>`. O servidor faz pasta, frontmatter, hub e `Home.md`; a nota fica só em disco até o passo seguinte. O arquivo original **permanece no repo do projeto, intocado**.
+3. `sincronizar mensagem="<projeto>: migração de N notas"` — o único commit → pull --rebase → push do lote. Depois `validar projeto=<projeto>`: E4/E5 você corrige antes de devolver.
+4. Graphify (se o projeto usa): garanta `graphify-out/` no `.gitignore`; se rastreado, `git rm -r --cached graphify-out` (só tira do index, mantém em disco).
+5. Repo do projeto: **NÃO TOCAR.** PROIBIDO `git rm`, apagar, mover arquivo ou commitar no repo do projeto. O commit `docs: migrados para o vault Obsidian` não pode ser gerado — migração é cópia, nunca recorte. (Já houve incidente: centenas de arquivos apagados em dezenas de repos, incluindo arquivos funcionais de lib vendorizada que só pareciam documentação.)
 
 ## Formato do retorno (é o valor final, não mensagem para humano)
 
@@ -35,6 +36,6 @@ INVENTARIO: | arquivo | destino | tipo | (ou "limpo")
 DUVIDAS: <arquivo>: <motivo 1 linha> (se houver)
 GRAPHIFY: out=<sim/nao> gitignore=<ok/faltava> rastreado=<nao/removido>
 MIGRADOS: N arquivos (X specs, Y bugs...) | hub <criado/reusado>
-GIT: repo <intocado> | vault <ok em N notas / falhas: ...> (linha "Git:" de cada salvar_nota)
+GIT: repo <intocado> | vault <saída do sincronizar> | validar <Erros: N | Avisos: M>
 PENDENCIAS: <o que não deu e por quê> (ou "nenhuma")
 ```
