@@ -7,7 +7,7 @@
 //      comentario, valor vazio, input type=password — NAO e achado;
 //   3. so o que entraria no commit e lido: arquivo ignorado pelo .gitignore e
 //      arquivo apagado ficam de fora; untracked novo entra;
-//   4. exit 1 com achado, 0 limpo.
+//   4. exit 1 com achado, 0 limpo, 2 quando nao deu para ler o repositorio.
 //
 //   node scripts/teste-segredos.js
 
@@ -67,6 +67,22 @@ escreve('ok.py', [
 ].join('\n'));
 escreve('foto.png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]));
 
+// nome composto: o `\b` antigo nao via nada com underscore antes ou depois
+const PW = ['PASS', 'WORD'].join('');
+const atrib = (nome, valor) => nome + ' = "' + valor + '"';
+escreve('settings.py', [
+  atrib('DB_' + PW, 'Pr0d' + 'Hunter2!'),
+  atrib('MY_API_KEY', 'abc123' + 'def456ghi789'),
+  atrib('AWS_SECRET_ACCESS_KEY', 'wJalrXUt' + 'nFEMIK7MDENGbPxRfiCY'),
+  atrib('client_secret_prd', 'sup3rs3' + 'cr3t0value'),
+].join('\n'));
+// valor curto: a mascara antiga imprimia a senha inteira
+escreve('curto.py', atrib('senha', 'Ax9k') + '\n');
+// .pem com material so publico nao e segredo; com chave privada dentro, e
+const CERT = ['-----BEGIN CERT', 'IFICATE-----'].join('');
+escreve('certs/ca.pem', CERT + '\nMIIBdummy\n');
+escreve('certs/server.key', CERT + '\nMIIBdummy\n' + PEM + '\nMIIE...\n');
+
 const r = spawnSync(process.execPath, [path.join(__dirname, 'segredos.js'), repo, '--json'], { encoding: 'utf8' });
 const saida = JSON.parse(r.stdout);
 const achados = saida.repos[0].achados;
@@ -88,6 +104,15 @@ assert.deepStrictEqual(porArquivo('ok.py'), [], `falso positivo em ok.py: ${JSON
 assert.strictEqual(porArquivo('foto.png').length, 0, 'binario e pulado');
 assert.strictEqual(porArquivo('limpo.js').length, 0, 'arquivo limpo e sem mudanca nao aparece');
 
+assert.deepStrictEqual(porArquivo('settings.py').map((a) => a.linha), [1, 2, 3, 4],
+  `nome composto com underscore achado nas 4 linhas: ${JSON.stringify(porArquivo('settings.py'))}`);
+assert.strictEqual(porArquivo('curto.py').length, 1, 'senha curta achada');
+assert.ok(!achados.some((a) => /Ax9k|Hunter2|cr3t0value|nFEMIK/.test(a.trecho)),
+  `a mascara nao pode imprimir o valor: ${JSON.stringify(achados.map((a) => a.trecho))}`);
+assert.strictEqual(porArquivo('certs/ca.pem').length, 0, '.pem so com certificado publico nao e segredo');
+assert.ok(porArquivo('certs/server.key').some((a) => a.motivo === 'chave privada'),
+  'chave privada dentro de .key continua achada');
+
 // repo limpo: exit 0
 const base2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cpv-segredos-'));
 execFileSync('git', ['-C', base2, 'init', '-q'], { stdio: 'ignore' });
@@ -96,4 +121,13 @@ fs.rmSync(base2, { recursive: true, force: true });
 assert.strictEqual(r2.status, 0, 'exit 0 sem achado');
 assert.ok(r2.stdout.includes('LIMPO'), 'saida diz LIMPO');
 
-console.log('ok: segredos por nome e conteudo com a linha; falsos positivos fora; so o que entra no commit; exit 1/0');
+// pasta que nao e repositorio git: falha fechada, nunca "limpo"
+const base3 = fs.mkdtempSync(path.join(os.tmpdir(), 'cpv-segredos-'));
+const r3 = spawnSync(process.execPath, [path.join(__dirname, 'segredos.js'), base3], { encoding: 'utf8' });
+fs.rmSync(base3, { recursive: true, force: true });
+assert.strictEqual(r3.status, 2, 'exit 2 quando o repositorio nao pode ser lido');
+assert.ok(r3.stdout.includes('NAO VERIFICADO'), 'saida diz NAO VERIFICADO');
+assert.ok(!r3.stdout.includes('LIMPO'), 'nao verificado nunca e LIMPO');
+
+console.log('ok: segredos por nome, conteudo e nome composto; mascara sem valor; cert publico fora; '
+  + 'falsos positivos fora; so o que entra no commit; exit 1/0/2');

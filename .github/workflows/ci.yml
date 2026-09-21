@@ -28,14 +28,16 @@ jobs:
         run: |
           node hooks/vault-rules.js SessionStart | grep -q '<vault-obsidian>'
           node hooks/vault-rules.js SubagentStart | python -c "import json,sys; d=json.load(sys.stdin); assert d['hookSpecificOutput']['additionalContext']"
-          test -z "$(CLAUDE_PLUGIN_OPTION_VAULT= node hooks/vault-rules.js SessionStart)"
+          test -z "$(OBSIDIAN_VAULT=/qualquer CLAUDE_PLUGIN_OPTION_VAULT= node hooks/vault-rules.js SessionStart)"
 
       - name: Servidor do vault
+        shell: bash
         run: |
           python -m py_compile skills/obsidian-docs/scripts/servidor_vault.py skills/obsidian-docs/scripts/validar_vault.py
           python skills/obsidian-docs/scripts/teste_servidor_vault.py
 
       - name: Descobridor e varredor do /cpv
+        shell: bash
         run: |
           node skills/cpv/scripts/teste-repos-da-leva.js
           node skills/cpv/scripts/teste-segredos.js

@@ -50,10 +50,12 @@ function arquivosDeConfig() {
 
 // null = nao deu para saber (injeta); true/false = o cliente disse.
 function vaultConfigurado() {
-  if ((process.env.OBSIDIAN_VAULT || '').trim()) return true;
-  // Chave presente e vazia = o cliente deixou a pasta em branco de proposito.
+  // A opcao do plugin decide PRIMEIRO: ela e a resposta explicita deste cliente.
+  // Chave presente e vazia = o cliente deixou a pasta em branco de proposito, e
+  // um OBSIDIAN_VAULT esquecido no perfil (rota CLI antiga) nao pode desfazer isso.
   const opcao = process.env.CLAUDE_PLUGIN_OPTION_VAULT;
   if (opcao !== undefined) return opcao.trim() !== '';
+  if ((process.env.OBSIDIAN_VAULT || '').trim()) return true;
   let resposta = null;
   for (const arquivo of arquivosDeConfig()) {
     let cfgs;

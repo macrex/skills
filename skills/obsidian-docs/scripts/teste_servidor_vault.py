@@ -197,12 +197,26 @@ def testes_validar():
         f.write("# Solta\n\nsem frontmatter, fora do hub\n")
     with open(os.path.join(sv.VAULT, "pagamentos", "Analises", "torta.md"), "w", encoding="utf-8") as f:
         f.write("---\nprojeto: pagamentos\ntipo: relatorio\nstatus: ativo\n---\n# Torta\n\n[[Nao existe]]\n")
+    # [[Specs/...]] e link valido no Obsidian: o E4 nao pode acusar caminho
+    with open(os.path.join(sv.VAULT, "pagamentos", "Analises", "comcaminho.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: pagamentos\ntipo: analise\nstatus: ativo\ndata: 2026-01-10\n---\n"
+                "# Com caminho\n\n[[Specs/2026-01-10 Cobrança recorrente]]\n")
     erros, avisos, totais = sv.validar_vault()
+    confere(not any(c == "E4" and "Cobrança recorrente" in m for c, _, m in erros),
+            "wikilink com caminho nao e E4")
     codigos = sorted({c for c, _, _ in erros})
     confere(codigos == ["E1", "E2", "E3", "E4", "E5"], f"linter acha E1..E5: {codigos}")
     confere(any(c == "E2" and "'data'" in m for c, _, m in erros), "campo data ausente e E2")
     confere(any(c == "E3" and "relatorio" in m for c, _, m in erros), "tipo fora do vocabulario e E3")
     confere(totais["projetos"] == 2, "totais contam os projetos")
+    # duas notas com o MESMO nome em projetos diferentes sao duas notas
+    antes = sv.validar_vault()[2]["notas"]
+    with open(os.path.join(sv.VAULT, "pagamentos", "Analises", "Homonima.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: pagamentos\ntipo: analise\nstatus: ativo\ndata: 2026-01-10\n---\n# H\n\n[[pagamentos]]\n")
+    os.makedirs(os.path.join(sv.VAULT, "pagamentos-repo", "Analises"), exist_ok=True)
+    with open(os.path.join(sv.VAULT, "pagamentos-repo", "Analises", "Homonima.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: pagamentos-repo\ntipo: analise\nstatus: ativo\ndata: 2026-01-10\n---\n# H\n\n[[pagamentos-repo]]\n")
+    confere(sv.validar_vault()[2]["notas"] == antes + 2, "homonimas de projetos diferentes contam as duas")
     so_fm = sv.validar(tipo="frontmatter")
     confere("E4" not in so_fm and "E1" in so_fm, "filtro tipo=frontmatter")
     so_proj = sv.validar(projeto="pagamentos-repo")
@@ -230,8 +244,12 @@ def testes_git():
     for i in range(3):
         saida = sv.salvar_nota("loja", "spec", f"Lote {i}", "c", resumo="r", lote=True)
         confere("pendente (lote)" in saida, f"lote=true nao commita ({i})")
-    saida = sv.atualizar_nota("2026-02-01 Nota bug" if False else "Segunda", status="resolvido", lote=True)
+    saida = sv.atualizar_nota("Segunda", status="resolvido", lote=True)
     confere("pendente (lote)" in saida, "atualizar_nota lote=true nao commita")
+    # outra sessao grava no vault enquanto o lote esta aberto: o `add -A` levaria junto
+    intruso = "de-outra-sessao.md"
+    with open(os.path.join(vault, intruso), "w", encoding="utf-8") as f:
+        f.write("nao e do lote\n")
     antes = subprocess.run(["git", "-C", vault, "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout.strip()
     try:
         sv.sincronizar_lote("")
@@ -244,6 +262,9 @@ def testes_git():
     confere(saida.startswith("5 arquivo(s) no lote"), f"sincronizar conta os arquivos do lote: {saida}")
     log = subprocess.run(["git", "-C", vault, "log", "-1", "--format=%s"], capture_output=True, text=True).stdout.strip()
     confere(log == "loja: lote de 3 specs", "mensagem do lote e a passada")
+    confere(intruso in subprocess.run(["git", "-C", vault, "status", "--porcelain"],
+                                      capture_output=True, text=True).stdout,
+            "arquivo de outra sessao NAO entra no commit do lote")
     confere("0 arquivo(s) no lote" in sv.sincronizar_lote("nada"), "lote vazio diz que nao ha o que commitar")
 
 
@@ -258,6 +279,7 @@ def main():
         testes_cache()
         shutil.rmtree(sv.VAULT)
         os.makedirs(sv.VAULT)
+        sv._CACHE.clear()  # mesmo caminho, vault novo: o cache da fase 1 nao vale
         sv.SEM_GIT = False
         if shutil.which("git"):
             testes_git()

@@ -408,6 +408,8 @@ def escrever(caminho, texto):
     os.makedirs(os.path.dirname(caminho), exist_ok=True)
     with open(caminho, "w", encoding="utf-8", newline="\n") as f:
         f.write(texto)
+    if _LOTE is not None:
+        _LOTE.append(caminho)
 
 
 def lista_tags(tags):
@@ -479,11 +481,29 @@ def puxar():
         git("pull", "--rebase", "--autostash")  # offline ou sem upstream: segue local
 
 
-def sincronizar(mensagem):
+# Lote aberto: None = nenhum; lista = caminhos que o lote ja escreveu. Serve a
+# duas coisas — puxar UMA vez (senao o lote inteiro e construido sobre uma arvore
+# velha, e a checagem de duplicata nao ve a nota que outra maquina ja empurrou) e
+# commitar SO o que o lote tocou (senao o `add -A` do fim leva junto o que outra
+# sessao gravou no vault durante os minutos em que o lote ficou aberto).
+_LOTE = None
+
+
+def abrir_lote():
+    global _LOTE
+    if _LOTE is None:
+        puxar()
+        _LOTE = []
+
+
+def sincronizar(mensagem, caminhos=None):
     """commit -> pull --rebase -> push. Falha vira texto; a nota ja esta gravada."""
     if not vault_com_git():
         return "sem git (vault nao e repositorio, ou --sem-git)"
-    git("add", "-A")
+    if caminhos:
+        git("add", "--", *caminhos)
+    else:
+        git("add", "-A")
     rc, saida = git("commit", "-q", "-m", mensagem)
     if rc != 0:
         return "nada a commitar" if "nothing to commit" in saida else f"commit falhou: {saida[-300:]}"
@@ -557,7 +577,9 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
             pasta = f"Specs/Tickets - {nome_de_nota(artefato)}"
     rel = "/".join(p for p in (projeto, pasta, nome + ".md") if p)
     caminho = os.path.join(VAULT, *rel.split("/"))
-    if not lote:
+    if lote:
+        abrir_lote()
+    else:
         puxar()
     if os.path.exists(caminho) and not sobrescrever:
         raise ErroUso(f"ja existe: {rel}. Mudar o conteudo: atualizar_nota; "
@@ -604,7 +626,9 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
                    lote=False):
     if corpo is None and status is None and tags is None and not sucessora and not resumo:
         raise ErroUso("informe ao menos um de: corpo, status, tags, sucessora, resumo")
-    if not lote:
+    if lote:
+        abrir_lote()
+    else:
         puxar()
     todas = notas()
     alvo, candidatos = achar(nota, todas)
@@ -672,15 +696,22 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
 
 
 def sincronizar_lote(mensagem=""):
-    """Fecha um lote: tudo que esta pendente no vault vira um commit so."""
+    """Fecha um lote: o que ESTE lote escreveu vira um commit so."""
+    global _LOTE
     mensagem = " ".join(str(mensagem or "").split())
     if not mensagem:
         raise ErroUso("mensagem do commit e obrigatoria (ex.: 'pagamentos: migracao de 12 notas')")
+    caminhos, _LOTE = sorted(set(_LOTE or [])), None
     if not vault_com_git():
         return "sem git (vault nao e repositorio, ou --sem-git): as notas ja estao em disco"
-    pendentes = git("status", "--porcelain")[1]
-    n = len([l for l in pendentes.splitlines() if l.strip()])
-    return f"{n} arquivo(s) no lote. Git: " + sincronizar(mensagem)
+    if not caminhos:
+        return "0 arquivo(s) no lote. Git: nada a commitar"
+    saida = sincronizar(mensagem, caminhos)
+    if "falhou" in saida:
+        # Sem isto a migracao inteira fica so na maquina local e a unica pista e
+        # uma frase no meio de uma linha de status.
+        saida = "FALHOU, o vault NAO foi atualizado no remoto (as notas estao em disco): " + saida
+    return f"{len(caminhos)} arquivo(s) no lote. Git: " + saida
 
 
 # ---------- linter ----------
@@ -717,39 +748,41 @@ def validar_vault(projeto=None, tipo=None):
         if alvos:
             com_saida.add(n["nome"])
         for alvo in alvos:
-            links_para[alvo].append(n["rel"])
-    # .base e .canvas sao linkaveis no Obsidian sem serem notas
-    alvos_validos = set(por_nome)
-    for raiz, dirs, arqs in os.walk(VAULT):
-        dirs[:] = [d for d in dirs if d not in IGNORAR]
-        for a in arqs:
-            if os.path.splitext(a)[1].lower() in (".base", ".canvas"):
-                alvos_validos.add(a)
-                alvos_validos.add(os.path.splitext(a)[0])
+            # [[Specs/2026-01-10 X]] e link valido: o alvo e o nome do arquivo
+            links_para[alvo.rsplit("/", 1)[-1]].append(n["rel"])
     if not projeto:  # com filtro de projeto, links para fora dele nao sao erro
+        # .base e .canvas sao linkaveis no Obsidian sem serem notas. A varredura
+        # so serve ao E4, entao fica aqui dentro: com filtro ela seria descartada.
+        alvos_validos = set(por_nome)
+        for raiz, dirs, arqs in os.walk(VAULT):
+            dirs[:] = [d for d in dirs if d not in IGNORAR]
+            for a in arqs:
+                if os.path.splitext(a)[1].lower() in (".base", ".canvas"):
+                    alvos_validos.add(a)
+                    alvos_validos.add(os.path.splitext(a)[0])
         for alvo, origens in sorted(links_para.items()):
             if alvo not in alvos_validos:
                 erros.append(("E4", origens[0], f"wikilink quebrado: [[{alvo}]]"))
     for proj, nomes in sorted(projetos.items()):
-        if proj not in por_nome:
+        hub = next((n for n in todas if n["rel"] == f"{proj}/{proj}.md"), None)
+        if hub is None:
             avisos.append(("A3", proj + "/", "projeto sem hub"))
             continue
-        hub = next(n for n in todas if n["rel"] == por_nome[proj])
         citados = links_de(hub["texto"])
         for nome in nomes:
             if nome != proj and nome not in citados:
                 erros.append(("E5", f"{proj}/{nome}.md", "nao listada no hub"))
-    for nome, rel in sorted(por_nome.items()):
-        if nome not in links_para and nome != "Home":
-            avisos.append(("A1", rel, "orfa: ninguem linka para ela"))
-        if nome not in com_saida:
-            avisos.append(("A2", rel, "sem wikilink de saida"))
+    for n in sorted(todas, key=lambda x: x["rel"]):
+        if n["nome"] not in links_para and n["nome"] != "Home":
+            avisos.append(("A1", n["rel"], "orfa: ninguem linka para ela"))
+        if n["nome"] not in com_saida:
+            avisos.append(("A2", n["rel"], "sem wikilink de saida"))
     filtro = {"frontmatter": ("E1", "E2", "E3"), "links": ("E4", "A2"),
               "orfas": ("A1",), "hub": ("E5", "A3")}.get(normalizar(tipo) if tipo else None)
     if filtro:
         erros = [e for e in erros if e[0] in filtro]
         avisos = [a for a in avisos if a[0] in filtro]
-    return erros, avisos, {"notas": len(por_nome), "projetos": len(projetos)}
+    return erros, avisos, {"notas": len(todas), "projetos": len(projetos)}
 
 
 def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False):

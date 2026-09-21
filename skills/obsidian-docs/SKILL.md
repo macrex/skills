@@ -17,6 +17,8 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
+# Versao: 14.2
+
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções — pasta por tipo, nome com data, frontmatter, link e
 entrada no hub, `Home.md`, commit → `pull --rebase` → push. Você decide **o quê** documentar

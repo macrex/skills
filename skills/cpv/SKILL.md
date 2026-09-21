@@ -116,17 +116,28 @@ procura segredo pelo nome (`.env`, `*.pem`, `id_rsa`, `credentials.json`…) e p
 conteúdo (chave privada, chave AWS, tokens GitHub/Slack/Anthropic, URL com senha,
 atribuição de `password`/`senha`/`api_key`/`token` com valor literal):
 
+O caminho é resolvido por **existência do arquivo**, nunca por `||` no código de
+saída: o varredor sai 1 quando **acha** segredo, e uma cadeia `a || b || echo` leria
+esse 1 como "script ausente", seguiria para o próximo elo e terminaria imprimindo
+`VARREDOR AUSENTE` com exit 0 — anulando o achado justamente quando ele existe.
+
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/segredos.js" <raiz> 2>/dev/null || node "$HOME/.claude/skills/cpv/scripts/segredos.js" <raiz> 2>&1 || node "$HOME/.agents/skills/cpv/scripts/segredos.js" <raiz> 2>&1 || echo "VARREDOR AUSENTE"
+V="${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/segredos.js"
+[ -f "$V" ] || V="$HOME/.claude/skills/cpv/scripts/segredos.js"
+[ -f "$V" ] || V="$HOME/.agents/skills/cpv/scripts/segredos.js"
+if [ -f "$V" ]; then node "$V" <raiz>; echo "varredor exit: $?"; else echo "VARREDOR AUSENTE"; fi
 ```
 
-`SEGREDO` na saída (exit 1) → **pule o repositório** e mostre as linhas
-`arquivo:linha  motivo` que ele imprimiu. Não relativize um achado: o trecho sai
-mascarado de propósito, e se for falso positivo o usuário decide, não você. Um
-`.env` empurrado não se desfaz com um commit a mais.
+**Só siga com `LIMPO` e exit 0.** Qualquer outra saída para o repositório:
 
-`VARREDOR AUSENTE` → faça a varredura à mão pelos mesmos padrões e diga no
-relatório que o script não rodou.
+- `SEGREDO` (exit 1) → **pule o repositório** e mostre as linhas
+  `arquivo:linha  motivo` que ele imprimiu. Não relativize um achado: o trecho sai
+  mascarado de propósito, e se for falso positivo o usuário decide, não você. Um
+  `.env` empurrado não se desfaz com um commit a mais.
+- `NAO VERIFICADO` (exit 2) → o git não respondeu e **nenhum arquivo foi lido**;
+  isso não é o mesmo que estar limpo. Pule o repositório e diga por quê.
+- `VARREDOR AUSENTE` → faça a varredura à mão pelos mesmos padrões e diga no
+  relatório que o script não rodou.
 
 Assuma que não há segunda barreira: os guards do harness podem não estar instalados
 nesta máquina e o modo pode ser `bypassPermissions`. É por isso que a varredura é
