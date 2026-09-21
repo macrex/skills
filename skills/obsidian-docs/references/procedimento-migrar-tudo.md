@@ -37,6 +37,12 @@ modelo barato e fixo:
   Sonnet comprovadamente não der conta.
 - **Outras plataformas**: o modelo rápido/barato equivalente da plataforma.
 
+**Sem ferramenta de sub-agente na sessão** (é o caso do Pi): o inventário roda
+**inline, em sequência**, um projeto por vez, no próprio agente, com as mesmas
+regras de classificação e a mesma tabela de saída. A regra de modelo acima vale
+só onde há sub-agente. Nada mais muda: o gate do passo 3 e a migração sequencial
+do passo 4 continuam iguais.
+
 ### 3. GATE único (obrigatório)
 
 Mostrar o inventário agregado: por projeto, contagem por tipo + tabela dos
@@ -50,12 +56,14 @@ nada é copiado.
 abertos ao mesmo tempo viram um commit com notas de projetos misturados.
 Para cada projeto confirmado, na ordem: subagent `vault-migrador` em **modo
 migração** com a lista confirmada (mesma regra de modelo do passo 2, nunca o
-modelo da sessão). Ele aplica o fluxo do modo `migrar`: `visao_geral` (hub
+modelo da sessão) — ou, sem ferramenta de sub-agente, o próprio agente, inline.
+O fluxo do modo `migrar` é o mesmo nos dois casos: `visao_geral` (hub
 existente ganha), uma `salvar_nota` por arquivo com `lote=true` (data do 1º
 commit, conteúdo original, resumo, wikilinks), **um** `sincronizar` fechando
 o lote do projeto, `validar projeto=<projeto>` e a checagem graphify
 (`graphify-out/` no `.gitignore`, fora do index). O agente só devolve depois
-do `sincronizar`: a linha `GIT:` do retorno é a saída dele.
+do `sincronizar`: a linha `GIT:` do retorno é a saída dele. Inline, a regra vira a
+mesma em primeira pessoa: só passe ao próximo projeto depois do `sincronizar` deste.
 
 **O repo do projeto NUNCA é tocado**: migração é cópia, nunca recorte. Sem
 `git rm`, sem apagar, sem commit no projeto.

@@ -9,9 +9,10 @@ assim que eu recomendo instalar:
 ```
 
 São duas linhas e acabou: as três skills, o servidor MCP `vault-docs` já conectado e o
-agent `vault-migrador`, sem nenhum passo manual. Detalhes e a rota alternativa (o
+agent `vault-migrador`, sem nenhum passo manual. Detalhes e as outras duas rotas — o
 [CLI `skills`](https://skills.sh), para Cursor, Codex e qualquer agente que leia a
-[spec Agent Skills](https://agentskills.io/specification)) estão em [Instalar](#instalar).
+[spec Agent Skills](https://agentskills.io/specification), e o [Pi](https://pi.dev), que
+tem a sua — estão em [Instalar](#instalar).
 
 As três giram em torno de uma ideia só: **o trabalho termina quando está
 registrado**, não quando o código compila. A `/faz` leva um pedido até código
@@ -35,7 +36,7 @@ desempenho a uma leva longa.
 
 ## Instalar
 
-Duas rotas, e você **escolhe uma**, não as duas — o porquê está no fim desta seção.
+Três rotas, e você **escolhe uma** — o porquê está no fim desta seção.
 
 ### Rota plugin (Claude Code) — recomendada
 
@@ -158,7 +159,39 @@ cp ~/.claude/skills/obsidian-docs/assets/vault-migrador.md ~/.claude/agents/
 
 Sem ele a migração em lote ainda roda, com `general-purpose` no lugar.
 
-### Escolha uma rota, não as duas
+### Rota Pi (`pi install`) — para quem usa o [Pi](https://pi.dev)
+
+O Pi não tem MCP nem hooks: por decisão de projeto ele oferece extensões em TypeScript,
+carregadas sem compilação, e skills no padrão Agent Skills. Então aqui a instalação é uma linha
+só, e quem faz o papel do MCP e do hook é uma extensão que vem no próprio repositório:
+
+```bash
+pi install https://github.com/macrex/skills
+```
+
+Chegam as três skills e a extensão `vault-docs`, que sobe o mesmo `servidor_vault.py` das outras
+duas rotas e injeta as regras do vault no system prompt de cada rodada. **Aponte o vault pela
+variável de ambiente** — é ela, e só ela, que liga a extensão:
+
+```bash
+export OBSIDIAN_VAULT=~/obsidian/projetos       # Windows: setx OBSIDIAN_VAULT D:\obsidian\projetos
+```
+
+Sem a variável a extensão fica calada: nenhuma ferramenta de vault, nenhuma regra, e um aviso
+único ao abrir a sessão dizendo o que falta. Com ela, as ferramentas aparecem com os mesmos nomes
+da rota CLI — `mcp__vault-docs__*` —, e o bloco `<vault-obsidian>` entra como seção do system
+prompt, sem você escrever nada em `AGENTS.md`.
+
+**O que a rota Pi exige na máquina:** Node 22.19 ou mais novo, que é o que o próprio Pi exige, e
+`python3` no PATH. **Ressalva no Windows:** se o seu launcher for `python` e não `python3`, a
+extensão tenta os dois, nessa ordem, e fica com o que responder — não há nada a configurar.
+
+**O que ela não entrega:** a `/faz` carrega como skill, mas o fluxo dela depende do `/goal` e do
+plugin `mattpocock-skills`, os dois do Claude Code, e ali ela não vai até o fim. O agent
+`vault-migrador` também não vem, porque o Pi não tem sub-agentes nativos — por isso o modo
+`migrar tudo` da `/obsidian-docs` roda inline e em sequência neste harness.
+
+### Escolha uma rota só
 
 Skill de escopo pessoal **ganha** de skill de plugin no nome nu. Quem tem
 `~/.claude/skills/faz` e instala o plugin continua rodando a cópia antiga ao digitar `/faz`: o
@@ -180,7 +213,11 @@ some da lista, mas continua subindo um segundo processo do mesmo servidor. E o
 que o plugin traz: você acaba com `vault-migrador` e `macrex-skills:vault-migrador` na lista,
 apontando para cópias que podem divergir.
 
-**Linter do vault**, nas duas rotas: a ferramenta `validar` do MCP checa o vault inteiro —
+No Pi o efeito é outro e igualmente silencioso: instalar o pacote pelo `pi install` e também
+pelo `npx skills add -a pi` deixa as três skills duplicadas, o Pi avisa e fica com a primeira que
+achou — e a primeira pode ser a cópia velha. Escolha uma das duas ali também.
+
+**Linter do vault**, nas três rotas: a ferramenta `validar` do MCP checa o vault inteiro —
 frontmatter, vocabulário, links quebrados, notas fora do hub, órfãs — e o mesmo linter roda na
 linha de comando, de onde a skill está instalada, sem copiar nada:
 
@@ -199,6 +236,7 @@ Tudo roda em repositórios e vaults temporários, sem tocar nos seus, e é o que
 ```bash
 python scripts/validar_repo.py                                   # manifestos, caminhos e frontmatter das skills
 python skills/obsidian-docs/scripts/teste_servidor_vault.py      # o servidor do vault, ferramenta a ferramenta
+node --experimental-strip-types extensions/teste-vault-docs.mjs  # a extensão do Pi, pela factory que ele carrega
 node skills/cpv/scripts/teste-repos-da-leva.js                   # o descobridor da leva
 node skills/cpv/scripts/teste-segredos.js                        # o varredor de segredos
 ```
@@ -275,8 +313,9 @@ vault e nunca no repo, incluindo as specs do superpowers; registrar a evolução
 migração é cópia e nunca recorte; acesso só pelas ferramentas do MCP; as duas fontes (vault
 contra grafo) com as regras do graphify; e os dois prefixos de ferramenta.
 
-Na **rota CLI** não há plugin para carregar hook, então ali o bloco continua sendo manual — e
-este é o texto equivalente, para a sua instalação ficar igual à do plugin:
+Na **rota CLI** não há plugin para carregar hook, então ali o bloco continua sendo manual (na
+**rota Pi** ele volta a ser automático: a extensão `vault-docs` injeta o mesmo texto como seção
+do system prompt) — e este é o texto equivalente, para a sua instalação ficar igual à do plugin:
 
 ```markdown
 - O vault é a memória dos projetos: ANTES de mexer no código, leia o hub
@@ -352,7 +391,8 @@ Cada uma funciona sozinha, mas duas puxam algo de fora:
 - **`obsidian-docs`** e a parte de documentação da **`cpv`** precisam do MCP
   `vault-docs` — e ele não vem de fora: mora dentro da própria skill, em
   `skills/obsidian-docs/scripts/servidor_vault.py`, e sobe declarado pelo plugin (rota
-  plugin) ou registrado pelo `--instalar` (rota CLI). Python 3.9+, sem nenhuma dependência.
+  plugin), registrado pelo `--instalar` (rota CLI) ou como processo filho da extensão
+  `vault-docs` (rota Pi). Python 3.9+, sem nenhuma dependência.
   Sem o servidor, a `cpv` roda com `sem-vault` e fecha só o git.
 
 ## Adaptar para você

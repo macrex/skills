@@ -8,6 +8,8 @@ allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vau
 
 # /cpv — fecha a leva
 
+# Versao: 1.0
+
 **Este comando só vale digitado pelo usuário.** Nenhum agente, skill ou workflow
 o invoca: o `disable-model-invocation: true` acima existe para isso. Invocar
 `/cpv` É o pedido expresso de commit e push — de *desta* leva, e só dela. Um
@@ -25,10 +27,17 @@ uma a uma no cabeçalho.
 ## Contexto
 
 Antes de qualquer outra coisa, rode o descobridor e use a saída dele como o
-Contexto que o resto deste arquivo cita:
+Contexto que o resto deste arquivo cita. O primeiro candidato é a pasta **desta
+skill**, que todo harness anuncia ao carregá-la — é o que faz os scripts serem
+achados fora dos caminhos do Claude Code; troque `<pasta desta skill>` por ela:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/repos-da-leva.js" 2>/dev/null || node "$HOME/.claude/skills/cpv/scripts/repos-da-leva.js" 2>&1 || node "$HOME/.agents/skills/cpv/scripts/repos-da-leva.js" 2>&1 || node "$HOME/.claude/scripts/repos-da-leva.js" 2>&1 || echo "DESCOBRIDOR AUSENTE"
+D="<pasta desta skill>/scripts/repos-da-leva.js"
+[ -f "$D" ] || D="${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/repos-da-leva.js"
+[ -f "$D" ] || D="$HOME/.claude/skills/cpv/scripts/repos-da-leva.js"
+[ -f "$D" ] || D="$HOME/.agents/skills/cpv/scripts/repos-da-leva.js"
+[ -f "$D" ] || D="$HOME/.claude/scripts/repos-da-leva.js"
+if [ -f "$D" ]; then node "$D"; else echo "DESCOBRIDOR AUSENTE"; fi
 ```
 
 ## A leva não é o `cwd` — é o que ela mexeu
@@ -122,7 +131,8 @@ esse 1 como "script ausente", seguiria para o próximo elo e terminaria imprimin
 `VARREDOR AUSENTE` com exit 0 — anulando o achado justamente quando ele existe.
 
 ```bash
-V="${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/segredos.js"
+V="<pasta desta skill>/scripts/segredos.js"
+[ -f "$V" ] || V="${CLAUDE_PLUGIN_ROOT}/skills/cpv/scripts/segredos.js"
 [ -f "$V" ] || V="$HOME/.claude/skills/cpv/scripts/segredos.js"
 [ -f "$V" ] || V="$HOME/.agents/skills/cpv/scripts/segredos.js"
 if [ -f "$V" ]; then node "$V" <raiz>; echo "varredor exit: $?"; else echo "VARREDOR AUSENTE"; fi

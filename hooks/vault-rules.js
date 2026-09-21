@@ -74,12 +74,20 @@ function vaultConfigurado() {
   return resposta;
 }
 
-if (vaultConfigurado() === false) process.exit(0);
+// REGRAS tem um dono so: a extensao do Pi (extensions/vault-docs.ts) importa este
+// modulo para injetar no Pi o mesmo texto que o hook injeta no Claude Code. Por isso
+// o gate e a escrita em stdout so rodam quando este arquivo E o programa; importado,
+// ele exporta o texto e nao faz mais nada.
+module.exports = { REGRAS };
 
-// SessionStart aceita stdout cru; SubagentStart descarta o que nao vier no envelope.
-const evento = process.argv[2];
-process.stdout.write(
-  evento === 'SubagentStart'
-    ? JSON.stringify({ hookSpecificOutput: { hookEventName: evento, additionalContext: REGRAS } })
-    : REGRAS
-);
+if (require.main === module) {
+  if (vaultConfigurado() === false) process.exit(0);
+
+  // SessionStart aceita stdout cru; SubagentStart descarta o que nao vier no envelope.
+  const evento = process.argv[2];
+  process.stdout.write(
+    evento === 'SubagentStart'
+      ? JSON.stringify({ hookSpecificOutput: { hookEventName: evento, additionalContext: REGRAS } })
+      : REGRAS
+  );
+}

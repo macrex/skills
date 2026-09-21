@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
@@ -29,12 +29,18 @@ jobs:
           node hooks/vault-rules.js SessionStart | grep -q '<vault-obsidian>'
           node hooks/vault-rules.js SubagentStart | python -c "import json,sys; d=json.load(sys.stdin); assert d['hookSpecificOutput']['additionalContext']"
           test -z "$(OBSIDIAN_VAULT=/qualquer CLAUDE_PLUGIN_OPTION_VAULT= node hooks/vault-rules.js SessionStart)"
+          saida=$(CLAUDE_PLUGIN_OPTION_VAULT= node -e 'const {REGRAS}=require("./hooks/vault-rules.js"); if(!REGRAS.startsWith("<vault-obsidian>")||!REGRAS.endsWith("</vault-obsidian>")) { console.error("REGRAS ausente ou truncado"); process.exit(1); } console.error("import ok");' 2>&1)
+          test "$saida" = "import ok"
 
       - name: Servidor do vault
         shell: bash
         run: |
           python -m py_compile skills/obsidian-docs/scripts/servidor_vault.py skills/obsidian-docs/scripts/validar_vault.py
           python skills/obsidian-docs/scripts/teste_servidor_vault.py
+
+      - name: Extensao do Pi (vault-docs)
+        shell: bash
+        run: node --experimental-strip-types extensions/teste-vault-docs.mjs
 
       - name: Descobridor e varredor do /cpv
         shell: bash
