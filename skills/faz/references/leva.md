@@ -48,8 +48,8 @@ ausente não pede o `/setup-matt-pocock-skills`.
 | to-spec | `/mattpocock-skills:to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
 | to-tickets | `/mattpocock-skills:to-tickets <spec>`; a tabela é mostrada, não perguntada | um ticket por fatia vertical |
 | implement | `/mattpocock-skills:implement`, cumprida **no modo que o usuário escolher na terceira parada** (logo abaixo). Ela manda commitar; aqui a leva fica na working tree | código, suíte verde por ticket |
-| code-review | `/mattpocock-skills:code-review`. A leva inteira está na working tree e não há commit, então o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) são `Agent` que você mesmo dispara | dois relatórios, lado a lado |
-| correções | sem skill: um `Agent` recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
+| code-review | `/mattpocock-skills:code-review`. A leva inteira está na working tree e não há commit, então o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) são `Agent` que você mesmo dispara, no `<modelo da revisão>` da linha (`model` omitido quando é o da sessão) | dois relatórios, lado a lado |
+| correções | sem skill: um `Agent`, no mesmo `<modelo da revisão>`, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
 | qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
 | fechamento | nota de evolução no tracker | o que mudou, o que a revisão pegou, o que não foi verificado |
 
@@ -85,10 +85,10 @@ não vira workflow, vira inline com o humano vendo, porque portão que não repr
 não garante nada. Escolha um modo e diga **em uma linha qual parâmetro decidiu**.
 
 Pergunte com `AskUserQuestion`: os três, o seu marcado, e a linha do parâmetro
-que decidiu. Diga que o `<modelo>` da linha vale para os agentes de sub-agents e
-de workflow — no inline quem executa é a sessão. Se o usuário trocar, é decisão
-dele: nomeie a garantia de que ele está abrindo mão, uma linha, e siga sem
-reabrir.
+que decidiu. Diga que o `<modelo do implement>` da linha vale para os agentes de
+sub-agents e de workflow — no inline quem executa é a sessão. Se o usuário
+trocar, é decisão dele: nomeie a garantia de que ele está abrindo mão, uma
+linha, e siga sem reabrir.
 
 **O que cada modo cumpre igual.** O preâmbulo — o `PREAMBULO` de
 `workflow-tickets.md`, ao lado deste arquivo: TDD nos seams acordados,
@@ -98,8 +98,9 @@ muda quem os executa:
 
 - **inline**: você, ticket a ticket, na ordem. O portão roda antes de passar ao
   próximo; dois vermelhos param a leva no mesmo ponto em que parariam a cadeia.
-- **sub-agents**: um `Agent` por ticket, disparados **um de cada vez** — nunca em
-  paralelo, é a mesma working tree. O prompt de cada um é o preâmbulo mais as
+- **sub-agents**: um `Agent` por ticket, no `<modelo do implement>` da linha
+  (`model` omitido quando é o da sessão), disparados **um de cada vez** — nunca
+  em paralelo, é a mesma working tree. O prompt de cada um é o preâmbulo mais as
   notas dos anteriores, e o portão é você lendo o que ele devolve.
 - **workflow**: o esqueleto de `workflow-tickets.md`, sem mudanças.
 

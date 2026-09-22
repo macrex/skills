@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.3
+# Versao: 3.4
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o
@@ -81,8 +81,8 @@ usuário** — é a única confirmação de conteúdo da leva inteira.
 
 ### Grave o entendimento, que é o único insumo da sessão seguinte
 
-Dado o sim, o entendimento vira **um documento**, antes da pergunta do modelo e
-antes da linha. A leva roda noutra sessão, que não terá este histórico: o que não
+Dado o sim, o entendimento vira **um documento**, antes da pergunta dos modelos
+e antes da linha. A leva roda noutra sessão, que não terá este histórico: o que não
 estiver escrito não chega lá.
 
 O tracker é o do projeto, não desta skill, e a nota nasce onde as notas dele
@@ -101,18 +101,26 @@ fatos do código que as sustentam (com caminho e linha).
 Guarde como ela é endereçável — o título da nota, ou o caminho do arquivo: a
 linha que você entrega cita isso.
 
-### Pergunte o modelo, e entregue a linha
+### Pergunte os dois modelos, e entregue a linha
 
-Uma pergunta só (`AskUserQuestion`): **o modelo dos agentes desta leva** — o da
-sessão (recomendado) ou outro, que o usuário nomeia. Ele vale para os agentes de
-sub-agents, de workflow, do `code-review` e das correções; se a implementação
-acabar rodando inline, quem executa ali é a própria sessão.
+Uma chamada só de `AskUserQuestion`, com duas perguntas, cada uma respondida por
+**o da sessão** (recomendado) ou outro, que o usuário nomeia:
 
-Então imprima o aviso e a linha para ele colar, com duas coisas substituídas, e
-pare. `<documento>` é como a nota é endereçável; `<modelo>`, a resposta da
-pergunta — literalmente `da sessão` quando for essa, que na outra ponta
-significa `model` omitido nos agentes, e o nome do modelo quando o usuário
-nomeou outro. O pedido original não vai na linha: já está no documento.
+1. **o modelo do implement** — os agentes de sub-agents e de workflow, um por
+   ticket, e os reparos deles; se a implementação acabar rodando inline, quem
+   executa ali é a própria sessão e a resposta não se aplica;
+2. **o modelo da revisão** — os dois sub-agentes do `code-review` (Standards e
+   Spec) e o agente das correções.
+
+Os dois podem ser diferentes; é para isso que são duas perguntas. `to-spec` e
+`to-tickets` não abrem agentes: rodam na sessão, no modelo dela.
+
+Então imprima o aviso e a linha para ele colar, com três coisas substituídas, e
+pare. `<documento>` é como a nota é endereçável; `<modelo do implement>` e
+`<modelo da revisão>`, as duas respostas — literalmente `da sessão` quando for
+essa, que na outra ponta significa `model` omitido nos agentes, e o nome do
+modelo quando o usuário nomeou outro. O pedido original não vai na linha: já
+está no documento.
 
 A linha é um `/goal`: a condição dele é a leva inteira, e o Claude Code segura a
 sessão até ela valer — é o laço que leva a leva até o fim sem o usuário empurrar.
@@ -130,12 +138,12 @@ Confira antes de imprimir: em `~/.claude.json`,
 fechado comigo, e o insumo desta leva. A leva está fechada quando
 /mattpocock-skills:to-spec expandiu esse documento in-place,
 /mattpocock-skills:to-tickets publicou os tickets, /mattpocock-skills:implement
-rodou no modo que eu escolhi — antes de executá-lo me proponha os três modos
-(inline, sub-agents, workflow) e a sua recomendação —,
-/mattpocock-skills:code-review revisou em dois eixos com agentes no modelo
-<modelo>, todas as correções foram aplicadas com o mesmo modelo, o teste de
-qualidade passou e você me garantiu que está tudo funcionando — sem commitar
-nada.
+rodou no modo que eu escolhi, com os agentes dele (se houver) no modelo
+<modelo do implement> — antes de executá-lo me proponha os três modos (inline,
+sub-agents, workflow) e a sua recomendação —, /mattpocock-skills:code-review
+revisou em dois eixos com agentes no modelo <modelo da revisão>, todas as
+correções foram aplicadas com esse mesmo modelo, o teste de qualidade passou e
+você me garantiu que está tudo funcionando — sem commitar nada.
 ```
 
 É essa linha que autoriza esta skill e as três reservadas ao usuário —
