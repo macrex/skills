@@ -26,15 +26,13 @@ runtime enfileira o excedente). Cada um devolve a tabela compacta
 (nunca README/CLAUDE.md/SKILL.md/LICENSE/configs). Projetos sem nada a
 migrar voltam "limpo".
 
-**REGRA DE MODELO (obrigatória):** os subagents NUNCA herdam o modelo da
-sessão principal — trabalho mecânico não justifica o custo. Use sempre um
-modelo barato e fixo:
-- **Claude Code**: o agent type `vault-migrador` já traz `model: sonnet`;
-  use SEMPRE `subagent_type: vault-migrador`. Sem o agent type instalado →
-  copie `assets/vault-migrador.md` da skill `obsidian-docs` para
-  `~/.claude/agents/`, ou use `general-purpose` com `model: sonnet`
-  explícito. Jamais spawn sem model definido. Modelo maior só se o
-  Sonnet comprovadamente não der conta.
+**Regra de modelo.** Inventariar e copiar é trabalho mecânico: os subagents
+rodam num modelo barato e fixo, não no da sessão principal.
+- **Claude Code**: `subagent_type: vault-migrador`, que já traz `model: sonnet`.
+  Sem o agent type instalado, copie `assets/vault-migrador.md` da skill
+  `obsidian-docs` para `~/.claude/agents/`, ou use `general-purpose` com
+  `model: sonnet` explícito (sem `model`, ele herda o da sessão). Modelo
+  maior só se o Sonnet comprovadamente não der conta.
 - **Outras plataformas**: o modelo rápido/barato equivalente da plataforma.
 
 **Sem ferramenta de sub-agente na sessão** (é o caso do Pi): o inventário roda

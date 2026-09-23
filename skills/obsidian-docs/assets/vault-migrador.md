@@ -17,7 +17,7 @@ O chamador passa: (a) `modo: inventario` ou `modo: migracao`, (b) path absoluto 
 ## Modo inventário (read-only — NUNCA mova, edite ou delete nada)
 
 1. Varra o projeto (`Glob **/*.md` + anotações `.txt`) e classifique cada candidato pela tabela da skill (`spec|plano → Specs`, `bug → Bugs`, `evolucao → Evolucoes`, `arquitetura|adr → Arquitetura`, `analise → Analises`). Conjunto de tickets derivados de um mesmo artefato vai para `Specs/Tickets - <nome do artefato>/`, nunca solto em `Specs/`.
-2. Aplique a lista NUNCA-migrar da skill (README, CLAUDE.md, AGENTS.md, SKILL.md, LICENSE, CHANGELOG, configs, `.github/`). Na dúvida, marque `duvida` com 1 linha de motivo.
+2. Aplique a lista NUNCA-migrar da skill (README, CLAUDE.md, AGENTS.md, GEMINI.md, SKILL.md, LICENSE, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, configs, `.github/`, qualquer `.md` que ferramenta leia em path fixo). Na dúvida, marque `duvida` com 1 linha de motivo.
 3. Cheque graphify, se o projeto usa: `graphify-out/` existe? está no `.gitignore`? `git ls-files graphify-out` vazio? Reporte.
 
 ## Modo migração (só com lista confirmada)

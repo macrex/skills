@@ -1096,7 +1096,8 @@ P_STATUS = {"type": "string",
                            "ou obsoleto."}
 P_NOTA = {"type": "string",
           "description": "Caminho relativo ao vault (projeto/Specs/2026-01-02 "
-                         "X.md) ou nome da nota como em wikilink (2026-01-02 X)."}
+                         "X.md) ou nome da nota como em wikilink (2026-01-02 X); trecho "
+                         "do nome, sem acento nem maiuscula, tambem serve."}
 
 P_PROJ = {"type": "string", "description": "Nome do projeto (pasta no vault)."}
 P_LOTE = {"type": "boolean",
@@ -1199,7 +1200,8 @@ FERRAMENTAS = [
          "corpo": {"type": "string", "description": "Novo corpo completo em markdown."},
          "status": {"type": "string",
                     "description": "rascunho | ativo | resolvido | obsoleto"},
-         "tags": {"type": "array", "items": {"type": "string"}},
+         "tags": {"type": "array", "items": {"type": "string"},
+                  "description": "Substitui a lista inteira de tags; [] limpa."},
          "sucessora": {"type": "string",
                        "description": "Nome da nota que substitui esta (sem .md)."},
          "resumo": {"type": "string", "description": "Nova linha de resumo no hub."},

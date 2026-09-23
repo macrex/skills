@@ -17,7 +17,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 14.3
+# Versao: 14.4
 
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções — pasta por tipo, nome com data, frontmatter, link e
@@ -151,7 +151,10 @@ silenciosamente.
 **REGRA DURA — migração é CÓPIA, nunca recorte.** PROIBIDO apagar qualquer arquivo do repo do
 projeto. A nota nasce no vault e o original fica onde está. Nada de `git rm`, nada de mover,
 nada de commit `docs: migrados para o vault Obsidian` — esse commit não pode ser gerado em
-projeto nenhum.
+projeto nenhum. Achou um (`git log --all --oneline --grep "migrados para o vault Obsidian"`)?
+Não empurrado, `git reset HEAD~1` (mixed: o conteúdo, inclusive a mudança útil que ele carregava,
+como `graphify-out/` no `.gitignore`, fica na working tree); já empurrado, avise o usuário e pare
+— reescrever histórico publicado é decisão dele.
 
 Motivo: remoção automática já apagou centenas de arquivos em dezenas de repos, incluindo
 arquivos que só pareciam documentação mas eram parte funcional do código — um
