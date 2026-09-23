@@ -381,7 +381,8 @@ TIPOS = {"spec", "plano", "bug", "evolucao", "arquitetura", "adr", "analise", "m
 STATUS = {"rascunho", "ativo", "resolvido", "obsoleto"}
 PASTAS = {"spec": "Specs", "plano": "Specs", "bug": "Bugs", "evolucao": "Evolucoes",
           "arquitetura": "Arquitetura", "adr": "Arquitetura", "analise": "Analises"}
-NOME_PROIBIDO_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+# Alem do que o SO proibe, `# ^ [ ]`: no nome, eles quebram o wikilink que aponta a nota.
+NOME_PROIBIDO_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f#^\[\]]')
 SUBSTITUIDA_RE = re.compile(r"^Substituída por \[\[[^\]]*\]\]\.\n+")
 PREFIXO_DATA_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")
 

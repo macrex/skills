@@ -108,6 +108,10 @@ def testes():
     except sv.ErroUso as e:
         confere("so vale para tipo spec ou plano" in str(e), "artefato so em spec/plano")
 
+    # --- caractere que quebra wikilink no Obsidian nao entra no nome ---
+    saida = sv.salvar_nota("pagamentos", "analise", "O PR #1 [x] ^y", "c", resumo="r", data="2026-02-04")
+    confere("pagamentos/Analises/2026-02-04 O PR 1 x y.md" in saida, "titulo com # [ ] ^ vira nome linkavel")
+
     # --- wikilink quebrado e avisado; hub parecido e avisado ---
     saida = sv.salvar_nota("pagamentos", "analise", "Com link", "Veja [[Nao existe]].", resumo="r", data="2026-02-03")
     confere("[[Nao existe]]" in saida and "Wikilinks sem nota" in saida, "wikilink quebrado e avisado")
