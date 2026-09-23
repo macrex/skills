@@ -38,6 +38,8 @@ deixe em branco. As skills atendem por `/faz`, `/obsidian-docs`, `/cpv` e por `/
 - **Windows:** o plugin chama `python3`. Se o seu launcher é só `python`, ponha um `python3` no
   PATH ou registre o MCP pela rota CLI abaixo.
 - **Auto-update nasce desligado:** `/plugin`, aba **Marketplaces**, `macrex`, **Enable auto-update**.
+  Ele só baixa uma versão nova quando a `version` do `.claude-plugin/plugin.json` sobe: mudança
+  publicada sem esse bump não chega a quem usa o plugin.
 - **Tinha a rota CLI antes?** Remova-a, ou `~/.claude/skills/faz` continua ganhando do plugin no `/faz`:
 
   ```bash
