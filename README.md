@@ -16,7 +16,7 @@ Skills para agentes de IA:\
 `/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
 [Matt Pocock](https://github.com/mattpocock/skills) e de um `/goal`: nativo no Claude Code e no
 Codex, extensão no Pi; no Antigravity, responda `continue` se a sessão parar antes do fim. No Codex
-as skills atendem por `$faz`, `$obsidian-docs` e `$cpv`.
+as skills atendem por `$macrex-skills:faz`, `$macrex-skills:obsidian-docs` e `$macrex-skills:cpv`.
 
 ## Instalar
 
@@ -53,28 +53,33 @@ habilita o modo sub-agents.
 ### Codex
 
 ```bash
-npx skills@latest add macrex/skills -g -a codex
-npx skills@latest add mattpocock/skills -g -a codex
-codex mcp add vault-docs -- python ~/.agents/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
+git clone https://github.com/macrex/skills ~/.codex/skills/macrex
+git clone https://github.com/mattpocock/skills ~/.codex/skills/mattpocock
+codex mcp add vault-docs -- python ~/.codex/skills/macrex/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
 ```
 
-Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes".
+Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes". Para atualizar, `git pull` nas duas
+pastas.
 
-### Antigravity (CLI `agy` e IDE)
+### Antigravity (CLI `agy`)
 
 ```bash
-npx skills@latest add macrex/skills -g -a antigravity
-npx skills@latest add mattpocock/skills -g -a antigravity
-ln -s ~/.agents/skills/* ~/.gemini/antigravity-cli/skills/    # o CLI lê só esta pasta
-agy mcp add vault-docs -- python ~/.agents/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
+git clone https://github.com/macrex/skills ~/.gemini/antigravity-cli/macrex
+git clone https://github.com/mattpocock/skills ~/.gemini/antigravity-cli/mattpocock
+cp -r ~/.gemini/antigravity-cli/macrex/skills/* ~/.gemini/antigravity-cli/mattpocock/skills/*/*/ ~/.gemini/antigravity-cli/skills/
+agy mcp add vault-docs -- python ~/.gemini/antigravity-cli/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
 ```
 
-Regras do vault no `AGENTS.md` ou no `~/.gemini/GEMINI.md`: passo 3 de "Outros agentes".
+O CLI só lê skill que está direto em `~/.gemini/antigravity-cli/skills/`, daí a cópia. Regras do
+vault no `AGENTS.md`: passo 3 de "Outros agentes". Para atualizar, `git pull` nos dois clones e
+repita o `cp`.
 
 ### Outros agentes (Cursor, Gemini CLI, Copilot, OpenCode, Windsurf...)
 
 1. Skills: `npx skills@latest add macrex/skills -g -a cursor` (ou `gemini-cli`, `github-copilot`,
-   `opencode`, `windsurf`, `'*'`).
+   `opencode`, `windsurf`, `'*'`). Se também usa o plugin no Claude Code, clone na pasta de skills
+   do agente, como no Codex: o `npx` grava em `~/.agents/skills`, que o Claude Code também lê, e
+   cada skill aparece duas vezes.
 2. MCP `vault-docs`, no config de MCP do agente, como servidor stdio:
    `python <pasta da skill obsidian-docs>/scripts/servidor_vault.py --vault ~/obsidian/projetos`.
 3. Regras do vault, no `AGENTS.md` ou `CLAUDE.md`:

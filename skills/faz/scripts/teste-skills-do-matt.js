@@ -5,7 +5,8 @@
 //      veio do plugin leva o prefixo `mattpocock-skills:`;
 //   2. no Pi, o pacote instalado por `pi install` e `~/.agents/skills` contam, e
 //      `~/.claude/skills` nao;
-//   3. em "outro" (Codex, Antigravity), `~/.codex/skills` conta;
+//   3. em "outro" (Codex, Antigravity), `~/.codex/skills` conta, inclusive o clone do
+//      repositorio do Matt dentro dela, e a pasta do CLI do Antigravity tambem;
 //   4. exit 1 enquanto falta alguma, 0 com as seis.
 //
 //   node scripts/teste-skills-do-matt.js
@@ -34,6 +35,8 @@ const pluginToSpec = skill('.claude', 'plugins', 'cache', 'oficial', 'mattpocock
 const piCodeReview = skill('.pi', 'agent', 'git', 'github.com', 'mattpocock', 'skills', 'skills', 'engineering', 'code-review');
 const agentsImplement = skill('.agents', 'skills', 'implement');
 const codexGrilling = skill('.codex', 'skills', 'grilling');
+const codexClone = skill('.codex', 'skills', 'mattpocock', 'skills', 'engineering', 'to-tickets');
+const agyToSpec = skill('.gemini', 'antigravity-cli', 'skills', 'to-spec');
 
 function roda(env) {
   const r = spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--json'], {
@@ -67,9 +70,11 @@ assert.deepStrictEqual(pi.faltam, ['grilling', 'domain-modeling', 'to-spec', 'to
 const outro = roda({});
 assert.strictEqual(outro.harness, 'outro');
 assert.strictEqual(outro.por.grilling.caminho, codexGrilling);
-assert.strictEqual(outro.por['to-spec'].caminho, null, 'Codex nao le o cache do plugin');
+assert.strictEqual(outro.por['to-tickets'].caminho, codexClone, 'clone do Matt dentro de ~/.codex/skills conta');
+assert.strictEqual(outro.por['to-spec'].caminho, agyToSpec, 'pasta do CLI do Antigravity conta');
+assert.strictEqual(outro.por['domain-modeling'].caminho, null, 'Codex nao le o cache do plugin');
 
-for (const s of ['grilling', 'domain-modeling', 'to-spec', 'to-tickets', 'code-review']) skill('.agents', 'skills', s);
+for (const s of ['grilling', 'domain-modeling', 'code-review']) skill('.agents', 'skills', s);
 const completo = roda({});
 assert.strictEqual(completo.status, 0, 'com as seis, exit 0');
 assert.deepStrictEqual(completo.faltam, []);

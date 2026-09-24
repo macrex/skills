@@ -10,8 +10,8 @@
 //
 // O harness sai do ambiente que a ferramenta de shell dele exporta: CLAUDECODE no
 // Claude Code, PI_SESSION_ID no Pi. Codex e Antigravity nao exportam nada que os
-// distinga e caem em "outro", que olha so as raizes do padrao Agent Skills — as
-// duas leem ~/.agents/skills, que e onde `npx skills add` instala.
+// distinga e caem em "outro", que olha as pastas privadas dos dois e as do padrao
+// Agent Skills.
 
 const fs = require('fs');
 const os = require('os');
@@ -39,12 +39,14 @@ function raizes(harness, casa) {
       ['.agents/skills', ''],
       [h('.pi', 'agent', 'git', 'github.com', 'mattpocock', 'skills', 'skills', '*'), ''],
     ],
+    // O Codex le SKILL.md em subpasta: o README manda clonar o repositorio do Matt em
+    // ~/.codex/skills, e as skills ficam em <clone>/skills/<categoria>/. O CLI do
+    // Antigravity so le skill direto na pasta dele, e o README manda copiar.
     outro: [
       ['.agents/skills', ''],
       [h('.agents', 'skills'), ''],
       [h('.codex', 'skills'), ''],
-      [h('.gemini', 'config', 'skills'), ''],
-      [h('.gemini', 'antigravity', 'skills'), ''],
+      [h('.codex', 'skills', '*', 'skills', '*'), ''],
       [h('.gemini', 'antigravity-cli', 'skills'), ''],
     ],
   }[harness];

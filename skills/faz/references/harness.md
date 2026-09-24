@@ -54,11 +54,11 @@ cumpri-lo **é** invocá-la.
 
 ## Codex
 
-- **Reconhecer:** `apply_patch` e `exec`; skills chegam por `$nome` (na linha da leva os nomes vão
-  com `/`, como nos demais). Texto sem caminho: a pasta desta skill é `faz` em `~/.agents/skills`
-  ou `~/.codex/skills`.
-- **Skills do Matt:** `npx skills@latest add mattpocock/skills -g -a codex` (`~/.agents/skills`,
-  com link em `~/.codex/skills`).
+- **Reconhecer:** `apply_patch` e `exec`; skills chegam por `$nome`, e o Codex prefixa o nome com
+  o do plugin do clone (`$macrex-skills:faz`, `$mattpocock-skills:grilling`); na linha da leva os
+  nomes vão com `/`, como nos demais. Texto sem caminho: a pasta desta skill está em
+  `~/.codex/skills/` (no clone, `macrex/skills/faz`).
+- **Skills do Matt:** `git clone https://github.com/mattpocock/skills ~/.codex/skills/mattpocock`.
 - **Invocar uma skill:** o Codex ignora `disable-model-invocation`; esta skill e o `/cpv` ficam
   fora da lista pelo `agents/openai.yaml` de cada uma, e o arquivo está lá.
 - **Perguntar:** em texto, e encerre o turno; se o `/goal` mandar continuar, repita a pergunta
@@ -69,18 +69,16 @@ cumpri-lo **é** invocá-la.
   `/goal leia <caminho absoluto do SKILL.md desta skill> e cumpra leva <documento>`; se o seu
   Codex pedir o objetivo entre aspas, ponha-as.
 
-## Antigravity (CLI `agy` e IDE)
+## Antigravity (CLI `agy`)
 
-- **Reconhecer:** system prompt do Antigravity; skills chegam por `/nome` no CLI e pelo nome no
-  IDE, e o texto vem sem o caminho: a pasta desta skill é `~/.gemini/antigravity-cli/skills/faz`
-  no CLI e `faz` em `~/.agents/skills` ou `~/.gemini/config/skills` no IDE.
-- **Skills do Matt:** `npx skills@latest add mattpocock/skills -g -a antigravity`
-  (`~/.agents/skills`, que o IDE lê). O CLI só lê `~/.gemini/antigravity-cli/skills/`:
-  `ln -s ~/.agents/skills/* ~/.gemini/antigravity-cli/skills/`.
+- **Reconhecer:** system prompt do Antigravity; skills chegam por `/nome`, e o texto vem sem o
+  caminho: a pasta desta skill é `~/.gemini/antigravity-cli/skills/faz`.
+- **Skills do Matt:** o CLI só lê skill direto em `~/.gemini/antigravity-cli/skills/`:
+  `git clone https://github.com/mattpocock/skills ~/.gemini/antigravity-cli/mattpocock` e
+  `cp -r ~/.gemini/antigravity-cli/mattpocock/skills/*/*/ ~/.gemini/antigravity-cli/skills/`.
 - **Invocar uma skill:** o Antigravity não documenta `disable-model-invocation`: as reservadas
   aparecem na sua lista, e continuam valendo só quando o usuário as nomeia.
 - **Perguntar:** em texto, e encerre o turno.
 - **Sub-agente:** nenhum; tudo roda na sessão.
-- **Segurar a sessão:** não há loop. Abertura: `/faz leva <documento>` (no IDE, `faz leva
-  <documento>`), e o aviso diz que, se a sessão parar antes de a leva fechar, o usuário responde
-  `continue` e ela retoma de onde parou.
+- **Segurar a sessão:** não há loop. Abertura: `/faz leva <documento>`, e o aviso diz que, se a
+  sessão parar antes de a leva fechar, o usuário responde `continue` e ela retoma de onde parou.

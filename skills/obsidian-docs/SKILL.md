@@ -17,7 +17,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 15.2
+# Versao: 15.3
 
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções (pasta por tipo, nome com data, frontmatter, link e
@@ -44,8 +44,8 @@ Então:
 - **Pi**: as ferramentas vêm da extensão `vault-docs` do pacote; não há MCP para registrar, e
   `claude mcp list` e `--instalar` não existem aqui. Faltam por `OBSIDIAN_VAULT` vazia ou pacote
   fora do `pi list`; diga qual.
-- **Codex** e **Antigravity** (CLI `agy`; IDE e CLI compartilham `~/.gemini/config/mcp_config.json`,
-  que com BOM quebra o `agy mcp`): registre com
+- **Codex** e **Antigravity** (CLI `agy`; um `mcp_config.json` com BOM quebra o `agy mcp`):
+  registre com
   `<codex|agy> mcp add vault-docs -- python <pasta desta skill>/scripts/servidor_vault.py --vault <pasta de projetos do vault>`
   (`python3` fora do Windows) e peça o reinício.
 
