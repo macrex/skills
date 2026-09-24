@@ -55,7 +55,7 @@ cumpri-lo **é** invocá-la.
 ## Codex
 
 - **Reconhecer:** `apply_patch` e `exec`; skills chegam por `$nome` (na linha da leva os nomes vão
-  com `/`, como nos demais).
+  com `/`, como nos demais). Texto sem caminho: a pasta desta skill é `~/.agents/skills/faz`.
 - **Skills do Matt:** `npx skills@latest add mattpocock/skills -g -a codex` (`~/.agents/skills`,
   com link em `~/.codex/skills`).
 - **Invocar uma skill:** o Codex ignora `disable-model-invocation`; esta skill e o `/cpv` ficam
@@ -71,7 +71,8 @@ cumpri-lo **é** invocá-la.
 ## Antigravity (CLI `agy` e IDE)
 
 - **Reconhecer:** system prompt do Antigravity; skills chegam por `/nome` no CLI e pelo nome no
-  IDE.
+  IDE, e o texto vem sem o caminho: a pasta desta skill é `~/.gemini/antigravity-cli/skills/faz`
+  no CLI e `~/.agents/skills/faz` no IDE.
 - **Skills do Matt:** `npx skills@latest add mattpocock/skills -g -a antigravity`
   (`~/.agents/skills`, que o IDE lê). O CLI só lê `~/.gemini/antigravity-cli/skills/`:
   `ln -s ~/.agents/skills/* ~/.gemini/antigravity-cli/skills/`.
