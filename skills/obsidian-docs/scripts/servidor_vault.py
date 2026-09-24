@@ -32,7 +32,8 @@ Ferramentas:
   mapa_codigo     mapa do codigo (graphify-out do repo, ponteiro Repo: do hub)
   consultar_codigo pergunta ao grafo via CLI graphify (query/explain/path)
   gerar_mapa      regrava a nota Mapa do Codigo preservando a Leitura curada
-  validar         linter: frontmatter, vocabulario, wikilinks quebrados, hub, orfas
+  validar         linter: frontmatter, vocabulario, wikilinks quebrados, hub, orfas;
+                  padrao de nota (A4-A9) contado, e listado com tipo=padrao
   sincronizar     fecha um lote: commit -> pull --rebase -> push de tudo que esta pendente
 
 Vault que e repositorio git: cada gravacao faz commit -> pull --rebase -> push
@@ -734,9 +735,15 @@ def escrever(caminho, texto):
 
 
 def lista_tags(tags):
+    """kebab-case sem acento, como a skill pede: `Cobrança Recorrente` -> cobranca-recorrente."""
     if isinstance(tags, str):
         tags = tags.split(",")
-    return [nome_seguro(t) for t in (tags or []) if str(t).strip()]
+    saida = []
+    for t in tags or []:
+        t = re.sub(r"[\s_]+", "-", normalizar(nome_seguro(t))).strip("-")
+        if t and t not in saida:
+            saida.append(t)
+    return saida
 
 
 def bloco_frontmatter(projeto, tipo, status, data, tags):
@@ -873,6 +880,75 @@ def garantir_hub(projeto, descricao, repo):
 
 LOTE_PENDENTE = "pendente (lote): chame sincronizar ao fim do lote"
 
+# ---------- padrao de nota ----------
+# Medido no vault real: 257 de 310 evolucoes sem as tres secoes, 218 resumos de hub
+# acima de 200 caracteres, 72 nomes acima de 90. O padrao avisa ao salvar e e a
+# familia `padrao` do validar; nunca recusa.
+
+SECOES_PADRAO = {
+    "evolucao": ("O que mudou", "Verificação", "Pendências"),
+    "bug": ("Sintoma", "Causa", "Correção"),
+    "spec": ("Objetivo", "Fora de escopo"),
+    "plano": ("Objetivo", "Fora de escopo"),
+    "adr": ("Contexto", "Decisão", "Consequências"),
+    "analise": ("Achados", "Recomendação"),
+}
+# Titulos que o vault ja usa e valem pela secao do padrao.
+SINONIMOS = {
+    "pendencias": ("em aberto", "proximos passos"),
+    "verificacao": ("como foi verificado", "testes"),
+    "causa": ("causa raiz", "hipotese"),
+    "correcao": ("correcao aplicada", "solucao"),
+    "objetivo": ("problema", "o que construir", "goal"),
+    "achados": ("numeros", "resultado", "conclusao", "tl;dr"),
+    "recomendacao": ("proximos passos", "conclusao"),
+}
+TETO_TITULO, TETO_RESUMO, TETO_TAGS = 80, 200, 3
+PADRAO = ("A4", "A5", "A6", "A7", "A8", "A9")  # codigos do validar que o padrao usa
+
+
+def secoes_faltando(tipo, corpo):
+    """Secoes do padrao do tipo que o corpo nao tem; [] quando o tipo nao tem padrao."""
+    pedidas = SECOES_PADRAO.get(tipo, ())
+    if not pedidas:
+        return []
+    tem = [normalizar(t) for nivel, t, _, _ in secoes_de(corpo)[0]]
+
+    def bate(chave):
+        return any(chave in t or any(s in t for s in SINONIMOS.get(chave, ())) for t in tem)
+
+    return [s for s in pedidas if not bate(normalizar(s))]
+
+
+def avisos_padrao(tipo, titulo, resumo, tags, corpo, ticket=False):
+    avisos = []
+    if len(titulo) > TETO_TITULO:
+        avisos.append(f"titulo com {len(titulo)} caracteres (padrao: ate {TETO_TITULO}); o nome "
+                      "da nota aparece em hub, buscar e conexoes")
+    if len(resumo) > TETO_RESUMO:
+        avisos.append(f"resumo com {len(resumo)} caracteres (padrao: ate {TETO_RESUMO}, uma "
+                      "frase); buscar e contexto_projeto cortam nesse tamanho")
+    if len(tags) > TETO_TAGS:
+        avisos.append(f"{len(tags)} tags (padrao: 1 a {TETO_TAGS})")
+    if not ticket:
+        faltam = secoes_faltando(tipo, corpo)
+        if faltam:
+            avisos.append("secoes do padrao ausentes: " + ", ".join(f"## {s}" for s in faltam))
+    return avisos
+
+
+def linkadas_abertas(texto, todas, idx):
+    """Specs, planos e bugs ainda ativos ou rascunho que o texto linka: a evolucao
+    que os fecha deve marca-los resolvido."""
+    por_rel = {n["rel"]: n for n in todas}
+    abertas = []
+    for link in sorted(links_de(texto)):
+        n = por_rel.get(idx["por_nome"].get(nome_alvo(link)))
+        if (n and valores(n["fm"].get("tipo"))[0] in ("spec", "plano", "bug")
+                and valores(n["fm"].get("status"))[0] in ("ativo", "rascunho")):
+            abertas.append(n["nome"])
+    return abertas
+
 
 def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ativo",
                 tags=None, data=None, artefato=None, descricao_projeto=None, repo=None,
@@ -935,13 +1011,22 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
         if parecidos:
             linhas.append("Aviso: ja existiam hubs parecidos — confira se nao era um deles: "
                           + ", ".join(parecidos))
-    nomes = {n["nome"] for n in notas()}
+    atuais = notas()
+    nomes = {n["nome"] for n in atuais}
     quebrados = sorted(l for l in links_de(texto) if l not in nomes)
     if quebrados:
         linhas.append("Wikilinks sem nota no vault (corrija ou crie a nota): "
                       + ", ".join(f"[[{l}]]" for l in quebrados))
     if aviso:
         linhas.append(aviso)
+    if tipo != "mapa":
+        linhas += ["Padrao: " + a for a in avisos_padrao(tipo, titulo, resumo, lista_tags(tags),
+                                                         str(corpo), ticket=bool(artefato))]
+        if tipo == "evolucao":
+            abertas = linkadas_abertas(texto, atuais, indice(atuais))
+            if abertas:
+                linhas.append("Linkadas ainda ativas: " + ", ".join(f"[[{a}]]" for a in abertas)
+                              + " — se a leva as concluiu, atualizar_nota status=resolvido")
     linhas.append("Git: " + (LOTE_PENDENTE if lote else
                              sincronizar(f"{projeto}: {nome if tipo == 'mapa' else titulo}")))
     return "\n".join(linhas)
@@ -1098,15 +1183,56 @@ def validar_vault(projeto=None, tipo=None):
             avisos.append(("A1", n["rel"], "orfa: ninguem linka para ela"))
         if n["nome"] not in com_saida:
             avisos.append(("A2", n["rel"], "sem wikilink de saida"))
+        avisos += avisos_padrao_da_nota(n)
     filtro = {"frontmatter": ("E1", "E2", "E3"), "links": ("E4", "A2"),
-              "orfas": ("A1",), "hub": ("E5", "A3")}.get(normalizar(tipo) if tipo else None)
+              "orfas": ("A1",), "hub": ("E5", "A3"),
+              "padrao": PADRAO}.get(normalizar(tipo) if tipo else None)
     if filtro:
         erros = [e for e in erros if e[0] in filtro]
         avisos = [a for a in avisos if a[0] in filtro]
     return erros, avisos, {"notas": len(todas), "projetos": len(projetos)}
 
 
-def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False):
+def avisos_padrao_da_nota(n):
+    """A4-A9: o padrao de nota, medido sobre o que ja esta no vault."""
+    saida = []
+    if eh_hub(n):
+        sem = longos = 0
+        for m in filter(None, map(HUB_LINHA_RE.match, CODEBLOCK_RE.sub("", n["texto"]).split("\n"))):
+            r = m.group(2).strip()
+            if not r:
+                sem += 1
+            elif len(r) > TETO_RESUMO:
+                longos += 1
+        if sem:
+            saida.append(("A4", n["rel"], f"{sem} entrada(s) sem resumo"))
+        if longos:
+            saida.append(("A9", n["rel"], f"{longos} resumo(s) acima de {TETO_RESUMO} caracteres"))
+        return saida
+    if not n["projeto"]:
+        return saida
+    if len(n["texto"]) > TETO_NOTA:
+        saida.append(("A5", n["rel"], f"nota grande: {len(n['texto'])} caracteres (teto {TETO_NOTA}); "
+                                      "ler_nota devolve o esboco"))
+    t = valores(n["fm"].get("tipo"))[0]
+    if "/Tickets - " not in n["rel"]:
+        faltam = secoes_faltando(t, corpo_de(n))
+        if faltam:
+            saida.append(("A6", n["rel"], "sem as secoes do padrao: " + ", ".join(faltam)))
+    n_tags = len(lista_tags(str(n["fm"].get("tags", "")).strip("[]")))
+    if n_tags > TETO_TAGS:
+        saida.append(("A7", n["rel"], f"{n_tags} tags (padrao: ate {TETO_TAGS})"))
+    if len(n["nome"]) > TETO_TITULO + 11:  # 11 = data e espaco
+        saida.append(("A8", n["rel"], f"nome com {len(n['nome'])} caracteres (padrao: ate "
+                                      f"{TETO_TITULO} no titulo)"))
+    return saida
+
+
+def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False, ocultar=()):
+    """`ocultar`: codigos que entram so contados, no fim — o padrao de nota, que num
+    vault antigo sao centenas de linhas, so e listado quando pedido."""
+    ocultos = Counter(c for c, _, _ in avisos if c in ocultar)
+    avisos = [a for a in avisos if a[0] not in ocultar]
     linhas = []
     if not so_placar:
         linhas += [f"ERRO  {c} {onde}: {msg}" for c, onde, msg in erros]
@@ -1118,11 +1244,15 @@ def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False):
     linhas += [f"Notas: {totais['notas']} | Projetos: {totais['projetos']}",
                f"Erros: {len(erros)} | Avisos: {len(avisos)}"]
     linhas += [f"  {c}: {contagem[c]}" for c in sorted(contagem)]
+    if ocultos:
+        linhas.append("Padrao de nota (validar tipo=padrao lista): "
+                      + ", ".join(f"{c}: {ocultos[c]}" for c in sorted(ocultos)))
     return "\n".join(linhas)
 
 
 def validar(projeto=None, tipo=None):
-    return relatorio_validacao(*validar_vault(projeto, tipo))
+    erros, avisos, totais = validar_vault(projeto, tipo)
+    return relatorio_validacao(erros, avisos, totais, ocultar=() if tipo else PADRAO)
 
 
 # ---------- graphify (grafo de codigo do repo, via ponteiro Repo: do hub) ----------
@@ -1553,12 +1683,14 @@ FERRAMENTAS = [
     {"name": "validar",
      "description": "Linter do vault: sem frontmatter (E1), campo ausente (E2), tipo/status "
                     "fora do vocabulario (E3), wikilink quebrado (E4), nota fora do hub (E5); "
-                    "avisos: orfa (A1), sem link de saida (A2), projeto sem hub (A3). Rode ao "
-                    "fechar uma leva.",
+                    "avisos: orfa (A1), sem link de saida (A2), projeto sem hub (A3). O padrao "
+                    "de nota (A4 hub sem resumo, A5 nota grande, A6 secoes ausentes, A7 tags, "
+                    "A8 nome longo, A9 resumo longo) entra so contado; tipo=padrao lista. Rode "
+                    "ao fechar uma leva.",
      "inputSchema": esquema({
          "projeto": P_PROJETO,
          "tipo": {"type": "string",
-                  "description": "So uma checagem: frontmatter | links | orfas | hub."},
+                  "description": "So uma checagem: frontmatter | links | orfas | hub | padrao."},
      }),
      "fn": validar},
     {"name": "mapa_codigo",
@@ -1662,7 +1794,7 @@ def atender(msg):
         responder(id_, {
             "protocolVersion": versao if versao in PROTOCOLOS else PROTOCOLO_PADRAO,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "obsidian-docs", "version": "2.2.0"},
+            "serverInfo": {"name": "obsidian-docs", "version": "2.3.0"},
             "instructions": INSTRUCOES,
         })
         if VAULT is not None:  # le e normaliza o vault antes da primeira ferramenta

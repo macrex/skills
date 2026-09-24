@@ -17,7 +17,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 15.0
+# Versao: 15.1
 
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções (pasta por tipo, nome com data, frontmatter, link e
@@ -102,10 +102,32 @@ O que cada ferramenta aceita está na descrição dela no MCP.
   `sincronizar mensagem=<...>` fecha tudo num commit. **Obrigatório fechar**: sem `sincronizar` a
   nota fica só na máquina local. Nota avulsa não usa lote.
 
+## Padrão de nota
+
+O servidor confere ao salvar (avisa, nunca recusa) e `validar tipo=padrao` lista no vault:
+
+- **Título** até 80 caracteres, sem data dentro dele nem sufixo de tipo como `(Plano)`: a data já
+  está no nome e o tipo no frontmatter. O nome aparece em hub, `buscar` e `conexoes`.
+- **Resumo** até 200 caracteres, uma frase que diz o que a nota decide ou entrega; hash de commit
+  vai no corpo. É o que `buscar` e `contexto_projeto` mostram.
+- **Tags** 1 a 3; o servidor normaliza para kebab-case sem acento.
+- **Corpo**: um parágrafo de abertura em prosa e as seções do tipo — `evolucao`: `## O que mudou`,
+  `## Verificação`, `## Pendências`; `bug`: `## Sintoma`, `## Causa`, `## Correção`;
+  `spec`/`plano`: `## Objetivo`, `## Fora de escopo` (mais o que a spec pedir); `adr`:
+  `## Contexto`, `## Decisão`, `## Consequências`; `analise`: `## Achados`, `## Recomendação`.
+  Tickets, `arquitetura` e `mapa` ficam de fora.
+- **Links e ciclo**: a evolução linka a spec, o plano ou o bug que fechou, e eles vão a
+  `status=resolvido` na mesma leva (o servidor lista os que continuam ativos ao salvar). Toda nota
+  linka ao menos uma relacionada além do hub quando ela existe.
+- **Tamanho**: acima de 40.000 caracteres `ler_nota` devolve só o esboço. Spec ou plano desse
+  tamanho vira spec curta mais tickets (`artefato=`), ou anexos em notas próprias.
+
 ## Validar
 
 `validar` é o linter do vault (o mesmo de `scripts/validar_vault.py`): frontmatter (E1–E3),
 wikilink quebrado (E4), nota fora do hub (E5), órfã e sem link (A1, A2), projeto sem hub (A3).
+O padrão de nota (A4 entrada de hub sem resumo, A5 nota grande, A6 seções ausentes, A7 tags
+demais, A8 nome longo, A9 resumo longo) só aparece contado; `validar tipo=padrao` lista.
 Rode `validar projeto=<projeto>` ao fechar uma leva e após migração; erro se corrige na hora
 (`atualizar_nota`, ou criar a nota que o link espera), não se relata.
 

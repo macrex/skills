@@ -20,6 +20,9 @@ Checagens:
   A1 (aviso) nota orfa: ninguem linka para ela
   A2 (aviso) nota sem nenhum wikilink de saida
   A3 (aviso) projeto sem hub
+  Padrao de nota, so contado por padrao e listado com --tipo padrao:
+  A4 entrada de hub sem resumo, A5 nota acima do teto, A6 secoes do padrao
+  ausentes, A7 mais de 3 tags, A8 nome longo, A9 resumo do hub longo
 """
 import argparse
 import os
@@ -47,7 +50,8 @@ def main():
     sv.VAULT = caminho
 
     erros, avisos, totais = sv.validar_vault(args.projeto, args.tipo)
-    print(sv.relatorio_validacao(erros, avisos, totais, so_placar=args.resumo))
+    print(sv.relatorio_validacao(erros, avisos, totais, so_placar=args.resumo,
+                                 ocultar=() if args.tipo else sv.PADRAO))
     sys.exit(1 if erros else 0)
 
 

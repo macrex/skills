@@ -185,6 +185,26 @@ def testes():
     except sv.ErroUso as e:
         confere("nao tem hub" in str(e) and "pagamentos" in str(e), "projeto sem hub e recusado, com os parecidos")
 
+    # --- padrao de nota: avisa ao salvar, nunca recusa ---
+    saida = sv.salvar_nota("pagamentos", "evolucao", "Fecha a cobranca " + "x" * 70,
+                           "Fechou [[2026-01-10 Cobrança recorrente]].", resumo="r " * 120,
+                           tags=["Cobrança Recorrente", "b", "c", "d"], data="2026-02-08")
+    confere("Salva:" in saida and "Padrao: titulo com 87 caracteres" in saida
+            and "Padrao: resumo com 239 caracteres" in saida and "Padrao: 4 tags" in saida,
+            "salvar_nota avisa titulo, resumo e tags fora do padrao, e salva mesmo assim")
+    confere("Padrao: secoes do padrao ausentes: ## O que mudou, ## Verificação, ## Pendências" in saida,
+            "evolucao sem as tres secoes e avisada")
+    confere("Linkadas ainda ativas: [[2026-01-10 Cobrança recorrente]]" in saida and "status=resolvido" in saida,
+            "evolucao que linka spec ativa sugere marca-la resolvida")
+    nota = le("pagamentos/Evolucoes/2026-02-08 Fecha a cobranca " + "x" * 70 + ".md")
+    confere("tags: [cobranca-recorrente, b, c, d]" in nota, "tags viram kebab-case sem acento")
+    saida = sv.salvar_nota("pagamentos", "bug", "Bug no padrao", "Abertura.\n\n## Sintoma\n\ns\n\n## Causa raiz\n\nc\n\n## Correção\n\nc\n",
+                           resumo="bug no padrao", data="2026-02-09")
+    confere("Padrao:" not in saida, "sinonimo de secao (Causa raiz) conta como a secao do padrao")
+    saida = sv.salvar_nota("pagamentos", "plano", "T2 Ticket sem secoes", "c", resumo="r",
+                           artefato="2026-01-10 Cobrança recorrente", data="2026-02-09")
+    confere("secoes do padrao" not in saida, "ticket fica fora da checagem de secoes")
+
     # --- atualizar_nota ---
     saida = sv.atualizar_nota("2026-02-01 Nota bug", status="resolvido", resumo="bug fechado", tags=["a", "b"])
     nota = le("pagamentos/Bugs/2026-02-01 Nota bug.md")
@@ -257,7 +277,18 @@ def testes_validar():
     # o unico erro e o [[Nao existe]] que testes() gravou de proposito; e nenhuma
     # nota e orfa, porque o servidor lista todas no hub
     confere("Erros: 1" in rel and "E4" in rel and "Avisos: 0" in rel,
-            f"vault gravado pelo servidor so tem o E4 deliberado: {rel.splitlines()[-3:]}")
+            f"vault gravado pelo servidor so tem o E4 deliberado: {rel.splitlines()[-4:]}")
+    confere("Padrao de nota" in rel and "A5: 1" in rel and "A6:" in rel and "A7: 1" in rel and "A8: 1" in rel
+            and "aviso A5" not in rel, "o padrao de nota entra so contado no relatorio comum")
+    pad = sv.validar(tipo="padrao")
+    confere("aviso A5" in pad and "Enorme" in pad and "aviso A6" in pad and "sem as secoes do padrao" in pad
+            and "E4" not in pad and "Erros: 0" in pad, "validar tipo=padrao lista o padrao e so ele")
+    with open(os.path.join(sv.VAULT, "pagamentos", "pagamentos.md"), "a", encoding="utf-8") as f:
+        f.write("- [[2026-02-01 Nota adr]]\n- [[2026-02-01 Nota analise]] — " + "longo " * 50 + "\n")
+    pad = sv.validar(tipo="padrao")
+    # 2 resumos longos: o desta linha e o da evolucao de 239 caracteres que testes() gravou
+    confere("A4 pagamentos/pagamentos.md: 1 entrada(s) sem resumo" in pad
+            and "A9 pagamentos/pagamentos.md: 2 resumo(s)" in pad, "hub: entrada sem resumo e A4, resumo longo e A9")
     # quebra de proposito, por fora do servidor, e o linter tem que ver
     with open(os.path.join(sv.VAULT, "pagamentos", "Analises", "solta.md"), "w", encoding="utf-8") as f:
         f.write("# Solta\n\nsem frontmatter, fora do hub\n")
