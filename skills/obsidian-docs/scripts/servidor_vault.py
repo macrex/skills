@@ -429,14 +429,18 @@ def visao_geral():
             projetos[n["projeto"]].append(n)
     linhas = [f"Vault: {VAULT}",
               f"{len(projetos)} projeto(s), {len(todas)} nota(s)", ""]
+    so_hub = []
     for proj in sorted(projetos):
         ns = projetos[proj]
-        tipos = defaultdict(int)
-        for n in ns:
-            tipos[n["fm"].get("tipo") or "?"] += 1
+        if len(ns) == 1 and eh_hub(ns[0]):
+            so_hub.append(proj)  # projeto sem nota: uma linha para todos, no fim
+            continue
+        tipos = Counter(n["fm"].get("tipo") or "?" for n in ns)
         det = ", ".join(f"{t}: {c}" for t, c in sorted(tipos.items()))
         hub = "" if any(n["nome"] == proj for n in ns) else " | SEM HUB"
         linhas.append(f"- {proj} — {len(ns)} nota(s) ({det}){hub}")
+    if so_hub:
+        linhas.append(f"- {len(so_hub)} projeto(s) so com hub, sem notas: " + ", ".join(so_hub))
     recentes = sorted(todas, key=data_de, reverse=True)[:6]
     linhas += ["", "Recentes:"]
     linhas += [f"- {data_de(n)}  {n['rel']}" for n in recentes]
@@ -1058,8 +1062,8 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
     cabeca, resto = texto[:fim + 4], texto[fim + 4:]
     projeto = alvo["projeto"] or alvo["fm"].get("projeto", "")
     mudou = []
-    if corpo is not None:
-        resto = "\n" + com_cabecalho(corpo, PREFIXO_DATA_RE.sub("", alvo["nome"]), projeto) + "\n"
+    if corpo is not None:  # a cabeca termina em `---`: a linha em branco vem daqui
+        resto = "\n\n" + com_cabecalho(corpo, PREFIXO_DATA_RE.sub("", alvo["nome"]), projeto) + "\n"
         mudou.append("corpo")
     if sucessora:
         alvo_suc, cands_suc = achar(sucessora, todas)   # mesma resolucao da nota-alvo

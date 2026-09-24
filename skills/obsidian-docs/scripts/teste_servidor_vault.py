@@ -212,8 +212,8 @@ def testes():
     confere("- [[2026-02-01 Nota bug]] — bug fechado" in le("pagamentos/pagamentos.md"), "atualizar_nota troca o resumo no hub")
     sv.atualizar_nota("2026-02-01 Nota bug", corpo="Corpo novo.")
     nota = le("pagamentos/Bugs/2026-02-01 Nota bug.md")
-    confere("Corpo novo." in nota and "# Nota bug" in nota and "status: resolvido" in nota,
-            "corpo novo preserva frontmatter e recebe o titulo")
+    confere("Corpo novo." in nota and "\n---\n\n# Nota bug" in nota and "status: resolvido" in nota,
+            "corpo novo preserva frontmatter, a linha em branco e recebe o titulo")
     sv.atualizar_nota("2026-02-01 Nota evolucao", sucessora="2026-02-01 Nota bug")
     nota = le("pagamentos/Evolucoes/2026-02-01 Nota evolucao.md")
     confere("status: obsoleto" in nota and "Substituída por [[2026-02-01 Nota bug]]." in nota, "sucessora marca obsoleta e linka")
@@ -322,6 +322,13 @@ def testes_validar():
     confere("solta.md" not in so_proj, "filtro por projeto")
     confere("Erros:" in sv.relatorio_validacao([], [], totais, so_placar=True)
             and "Nada" not in sv.relatorio_validacao([], [], totais, so_placar=True), "so_placar imprime so o placar")
+    # projeto so com hub nao ganha linha propria na visao geral
+    os.makedirs(os.path.join(sv.VAULT, "vazio"), exist_ok=True)
+    with open(os.path.join(sv.VAULT, "vazio", "vazio.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: vazio\ntipo: hub\nstatus: ativo\ndata: 2026-01-01\ntags: [hub]\n---\n\n# vazio\n\nNada. Hub global: [[Home]].\n")
+    vg = sv.visao_geral()
+    confere("- 1 projeto(s) so com hub, sem notas: vazio" in vg and "- vazio —" not in vg and "- pagamentos —" in vg,
+            "visao_geral agrupa os projetos sem notas numa linha")
 
 
 def testes_reorganizar():
