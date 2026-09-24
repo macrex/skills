@@ -22,7 +22,7 @@ import criarExtensao from './vault-docs.ts';
 
 const PREFIXO = 'mcp__vault-docs__';
 const FERRAMENTAS = [
-  'visao_geral', 'buscar', 'listar_notas', 'ler_nota', 'conexoes', 'salvar_nota',
+  'visao_geral', 'contexto_projeto', 'buscar', 'listar_notas', 'ler_nota', 'conexoes', 'salvar_nota',
   'atualizar_nota', 'sincronizar', 'validar', 'mapa_codigo', 'consultar_codigo', 'gerar_mapa',
 ];
 
@@ -102,7 +102,7 @@ await criarExtensao(pi);
 assert.deepEqual(
   [...pi.ferramentas.keys()].sort(),
   FERRAMENTAS.map((nome) => PREFIXO + nome).sort(),
-  'as 12 ferramentas do servidor entram com o prefixo da rota CLI',
+  'as 13 ferramentas do servidor entram com o prefixo da rota CLI',
 );
 assert.equal(pi.avisos.length, 0, 'com vault valido a extensao nao avisa nada');
 const salvar = pi.ferramentas.get(PREFIXO + 'salvar_nota');
@@ -110,7 +110,7 @@ assert.equal(salvar.label, 'salvar_nota', 'o label e o nome nu da ferramenta');
 assert.ok(salvar.description.length > 0, 'a descricao vem do servidor');
 assert.equal(salvar.parameters.type, 'object', 'o esquema vem do servidor, cru');
 assert.ok(salvar.parameters.properties.projeto, 'o esquema do servidor chega inteiro');
-console.log('ok: 12 ferramentas mcp__vault-docs__*, com descricao e esquema do servidor');
+console.log('ok: 13 ferramentas mcp__vault-docs__*, com descricao e esquema do servidor');
 
 // ---------- 3. chamada com argumentos, ida e volta ----------
 

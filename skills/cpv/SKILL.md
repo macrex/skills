@@ -8,28 +8,25 @@ allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vau
 
 # /cpv — fecha a leva
 
-# Versao: 1.0
+# Versao: 1.1
 
-**Este comando só vale digitado pelo usuário.** Nenhum agente, skill ou workflow
-o invoca: o `disable-model-invocation: true` acima existe para isso. Invocar
-`/cpv` É o pedido expresso de commit e push — de *desta* leva, e só dela. Um
-agente que o disparasse por conveniência cometeria o commit-sem-pedido que a
-regra dura proíbe, e este arquivo estaria dando cobertura retroativa a ele.
+**Este comando só vale digitado pelo usuário.** Nenhum agente, skill ou workflow o invoca
+(`disable-model-invocation: true`). Invocar `/cpv` É o pedido expresso de commit e push — de
+*desta* leva, e só dela; um agente que o disparasse por conveniência cometeria o commit-sem-pedido
+que a regra dura proíbe.
 
 Sem argumento faz tudo. `sem-vault` para nos passos de git.
 
-O `allowed-tools` do cabeçalho pré-aprova o MCP do vault pelos dois prefixos nus
-(`mcp__vault-docs` e `mcp__plugin_macrex-skills_vault-docs`). A documentação do Claude Code só
-mostra a sintaxe `Bash(...)` ali; o prefixo de servidor é comportamento observado. Se um dia as
-ferramentas do vault voltarem a pedir permissão dentro do `/cpv`, é isso que mudou: liste-as
-uma a uma no cabeçalho.
+O `allowed-tools` pré-aprova o MCP do vault pelos dois prefixos nus (`mcp__vault-docs` e
+`mcp__plugin_macrex-skills_vault-docs`); a documentação do Claude Code só mostra a sintaxe
+`Bash(...)`, o prefixo de servidor é comportamento observado. Se as ferramentas do vault voltarem
+a pedir permissão dentro do `/cpv`, é isso que mudou: liste-as uma a uma no cabeçalho.
 
 ## Contexto
 
-Antes de qualquer outra coisa, rode o descobridor e use a saída dele como o
-Contexto que o resto deste arquivo cita. O primeiro candidato é a pasta **desta
-skill**, que todo harness anuncia ao carregá-la — é o que faz os scripts serem
-achados fora dos caminhos do Claude Code; troque `<pasta desta skill>` por ela:
+Antes de qualquer outra coisa, rode o descobridor e use a saída como o Contexto que o resto cita.
+O primeiro candidato é a pasta **desta skill**, que todo harness anuncia ao carregá-la; troque
+`<pasta desta skill>` por ela:
 
 ```bash
 D="<pasta desta skill>/scripts/repos-da-leva.js"
@@ -42,45 +39,36 @@ if [ -f "$D" ]; then node "$D"; else echo "DESCOBRIDOR AUSENTE"; fi
 
 ## A leva não é o `cwd` — é o que ela mexeu
 
-O bloco acima lista os repositórios **desta sessão**. A leva é o conjunto do que ela
-tocou, não o repo do `cwd`: fechar só este deixaria a mudança feita em outro repositório
-(o de skills, um script do harness) sem commit e sem nota.
+A lista traz os repositórios **desta sessão**: a leva é o conjunto do que ela tocou, não o repo
+do `cwd` — fechar só este deixaria mudança feita noutro repositório (o de skills, um script do
+harness) sem commit e sem nota. A marca em cada linha diz a fonte:
 
-Duas fontes alimentam a lista, e a marca em cada linha diz qual foi:
+- **`sessao`** — o transcript registrou a sessão escrevendo ali; é o que sabe o que ESTA leva
+  tocou, inclusive fora do `cwd`.
+- **`varredura`** — repo com mudança pendente sob o `cwd` (até 2 níveis). Entra como alvo **só**
+  quando contém o `cwd`; os outros vão para `NAO INCLUIDOS` (numa pasta-pai a varredura acha
+  dezenas de repos sujos de trabalho antigo).
 
-- **`sessao`** — o transcript registrou a sessão escrevendo ali. É a fonte que
-  sabe o que ESTA leva tocou, inclusive fora do `cwd`.
-- **`varredura`** — repo com mudança pendente sob o `cwd` (até 2 níveis). Ela
-  entra como alvo **só** quando é o repo que contém o `cwd`; os outros vão para
-  `NAO INCLUIDOS` — numa pasta-pai a varredura acha dezenas de repos sujos de trabalho
-  antigo, e tratá-los como leva seria um `git add -A` em cada um.
+**Processe TODOS os de `REPOSITORIOS DA LEVA`**, um por vez, na ordem. Não eleja "o principal".
+Repo marcado `NADA A COMMITAR (so o vault)` já foi commitado e empurrado antes: vá direto ao
+passo 5.
 
-**Processe TODOS os listados em `REPOSITORIOS DA LEVA`**, um por vez, na ordem em
-que aparecem. Não eleja "o principal": a leva é o conjunto. Repo marcado
-`NADA A COMMITAR (so o vault)` já foi commitado e empurrado antes — pule direto
-ao passo 5, que é o que faltava.
+**`NAO INCLUIDOS` é lista de leitura, não de trabalho.** Repositórios sujos que esta sessão não
+tocou: não estagie, não commite, não empurre — nem "de passagem", nem porque a mudança parece
+relacionada. Só entram se o usuário mandar por escrito, nesta conversa.
 
-**`NAO INCLUIDOS` é lista de leitura, não de trabalho.** São repositórios sujos
-que esta sessão não tocou. Não estagie, não commite, não empurre nenhum deles —
-nem "de passagem", nem porque a mudança parece relacionada. Eles existem no
-relatório para o usuário saber que estão lá, e só entram se ele mandar por
-escrito, nesta conversa.
+Nada em `REPOSITORIOS DA LEVA` → **pare** e diga isso. `DESCOBRIDOR AUSENTE` → modo antigo:
+`git rev-parse --show-toplevel` a partir do `cwd`, feche só esse repo e avise no relatório que a
+descoberta não rodou.
 
-Nada em `REPOSITORIOS DA LEVA` → **pare** e diga isso. `DESCOBRIDOR AUSENTE` (a
-máquina não tem o `scripts/repos-da-leva.js` da skill) → caia no modo antigo, com
-`git rev-parse --show-toplevel` a partir do `cwd`, feche só esse repo e avise no
-relatório que a descoberta não rodou.
-
-O **vault** (`obsidian/projetos`) nunca entra na lista de commit: a skill
-`obsidian-docs` já o commita e empurra sozinha, e é a única exceção da regra
-dura de git.
+O **vault** (`obsidian/projetos`) nunca entra na lista de commit: a skill `obsidian-docs` o
+commita e empurra sozinha, única exceção da regra dura de git.
 
 ## Antes de tudo: quando parar
 
-Confira por repositório, nesta ordem. Qualquer um destes **pula aquele
-repositório** — reporte o que encontrou e siga para o próximo; um repo travado
-não cancela os outros. Nunca `pull --rebase` para resolver, nunca `--no-verify`,
-nunca inicializar repositório.
+Confira por repositório, nesta ordem. Qualquer um destes **pula aquele repositório** (reporte e
+siga para o próximo; um repo travado não cancela os outros). Nunca `pull --rebase` para resolver,
+nunca `--no-verify`, nunca inicializar repositório.
 
 | Situação | Como detectar |
 |---|---|
@@ -89,46 +77,33 @@ nunca inicializar repositório.
 | Merge ou rebase em andamento | `.git/MERGE_HEAD`, `.git/rebase-merge` ou `.git/rebase-apply` existe |
 | Sem remoto | a linha traz `(sem remoto)` — o commit local fica feito, e diga isso |
 | Submódulo sujo | `git -C <raiz> submodule status` com `+` — o super-repo gravaria um ponteiro que o push não leva |
-| Segredo no que seria commitado | veja o passo 1 |
+| Segredo no que seria commitado | passo 1 |
 
-Só uma coisa para o comando inteiro: a lista vazia.
+Só a lista vazia para o comando inteiro.
 
 ## Working tree limpo não para o comando
 
-`0 pendente(s)` quer dizer só uma coisa: não há o que commitar naquele repo.
-**Nunca** force um commit vazio. Mas `/cpv` fecha a **leva**, e commit é meio, não
-fim — a leva pode ter sido commitada minutos antes, por você, por outra sessão ou
-por um `/cpv` que parou no meio. Parar aí deixa o trabalho fechado no git e
-invisível no vault, que é justamente o que o passo 5 existe para impedir.
+`0 pendente(s)` = não há o que commitar naquele repo; **nunca** force um commit vazio. Mas `/cpv`
+fecha a **leva**, e commit é meio: ela pode ter sido commitada minutos antes (por você, outra
+sessão ou um `/cpv` que parou no meio), e parar aí deixa o trabalho fechado no git e invisível no
+vault. Por isso o descobridor mantém na lista o repo limpo que **a sessão tocou**, e só esse.
 
-Por isso o descobridor mantém na lista o repo limpo que **a sessão tocou**, e só
-esse: limpo, em dia e sem marca `sessao` ele nem aparece.
-
-Repo limpo, então:
-
-1. Pule os passos 1 a 3 — não há o que estagiar nem mensagem a escrever.
-2. `ahead` maior que zero (ou `git status` dizendo *ahead*) → dê o push. É o passo
-   4 valendo por si: o pedido expresso cobre empurrar a leva, não só criá-la.
-3. Vá para o passo 5. Diga no relatório que o commit já existia, com o hash — o
-   usuário precisa saber que a leva registrada não nasceu deste comando.
+Repo limpo: pule os passos 1 a 3; `ahead` maior que zero → dê o push (o pedido expresso cobre
+empurrar a leva); vá ao passo 5 e diga no relatório que o commit já existia, com o hash.
 
 ## Passos (repita para cada repositório da lista)
 
-Todo comando de git leva `-C <raiz do repo>`: o `cwd` da sessão pode não estar
-dentro dele — e, na leva que motivou este comando, não estava em nenhum.
+Todo comando de git leva `-C <raiz do repo>`: o `cwd` pode não estar dentro dele.
 
 ### 1. Segredos
 
-Antes de estagiar qualquer coisa, rode o varredor sobre o repositório — ele lê
-exatamente o que o `add -A` levaria (modificados e novos fora do `.gitignore`) e
-procura segredo pelo nome (`.env`, `*.pem`, `id_rsa`, `credentials.json`…) e pelo
-conteúdo (chave privada, chave AWS, tokens GitHub/Slack/Anthropic, URL com senha,
-atribuição de `password`/`senha`/`api_key`/`token` com valor literal):
-
-O caminho é resolvido por **existência do arquivo**, nunca por `||` no código de
-saída: o varredor sai 1 quando **acha** segredo, e uma cadeia `a || b || echo` leria
-esse 1 como "script ausente", seguiria para o próximo elo e terminaria imprimindo
-`VARREDOR AUSENTE` com exit 0 — anulando o achado justamente quando ele existe.
+Antes de estagiar, rode o varredor: ele lê exatamente o que o `add -A` levaria (modificados e
+novos fora do `.gitignore`) e procura segredo pelo nome (`.env`, `*.pem`, `id_rsa`,
+`credentials.json`…) e pelo conteúdo (chave privada, chave AWS, tokens GitHub/Slack/Anthropic, URL
+com senha, `password`/`senha`/`api_key`/`token` com valor literal). O caminho é resolvido por
+**existência do arquivo**, nunca por `||` no código de saída: o varredor sai 1 quando **acha**
+segredo, e uma cadeia `a || b || echo` leria esse 1 como "script ausente" e imprimiria
+`VARREDOR AUSENTE` com exit 0, anulando o achado.
 
 ```bash
 V="<pasta desta skill>/scripts/segredos.js"
@@ -138,47 +113,36 @@ V="<pasta desta skill>/scripts/segredos.js"
 if [ -f "$V" ]; then node "$V" <raiz>; echo "varredor exit: $?"; else echo "VARREDOR AUSENTE"; fi
 ```
 
-**Só siga com `LIMPO` e exit 0.** Qualquer outra saída para o repositório:
+**Só siga com `LIMPO` e exit 0.** Qualquer outra saída:
 
-- `SEGREDO` (exit 1) → **pule o repositório** e mostre as linhas
-  `arquivo:linha  motivo` que ele imprimiu. Não relativize um achado: o trecho sai
-  mascarado de propósito, e se for falso positivo o usuário decide, não você. Um
-  `.env` empurrado não se desfaz com um commit a mais.
-- `NAO VERIFICADO` (exit 2) → o git não respondeu e **nenhum arquivo foi lido**;
-  isso não é o mesmo que estar limpo. Pule o repositório e diga por quê.
-- `VARREDOR AUSENTE` → faça a varredura à mão pelos mesmos padrões e diga no
-  relatório que o script não rodou.
+- `SEGREDO` (exit 1) → **pule o repositório** e mostre as linhas `arquivo:linha  motivo`. Não
+  relativize um achado: o trecho sai mascarado de propósito; falso positivo é o usuário quem decide.
+  Um `.env` empurrado não se desfaz com um commit a mais.
+- `NAO VERIFICADO` (exit 2) → o git não respondeu e **nenhum arquivo foi lido**; não é estar limpo.
+  Pule o repositório e diga por quê.
+- `VARREDOR AUSENTE` → varra à mão pelos mesmos padrões e diga no relatório que o script não rodou.
 
-Assuma que não há segunda barreira: os guards do harness podem não estar instalados
-nesta máquina e o modo pode ser `bypassPermissions`. É por isso que a varredura é
-um script, e não a sua atenção.
+Assuma que não há segunda barreira: os guards do harness podem não estar nesta máquina e o modo
+pode ser `bypassPermissions`. É por isso que a varredura é um script, não a sua atenção.
 
 ### 2. Estagiar
 
-`git -C <raiz> add -A`. O comando fecha a leva inteira: um index já preparado é
-absorvido, e arquivo novo entra — `git commit -a` deixaria untracked de fora em
-silêncio.
-
-Antes disso, olhe a lista de pendentes daquele repo no Contexto. Arquivo que
-**não é da leva** (sujeira anterior, mudança de outro assunto) → não invente:
-mostre ao usuário e pergunte antes de estagiar. `add -A` é do repositório
-inteiro, e a lista é a única chance de ver isso antes.
+`git -C <raiz> add -A`: fecha a leva inteira — index já preparado é absorvido e arquivo novo
+entra (`git commit -a` deixaria untracked de fora em silêncio). Antes, olhe a lista de pendentes
+daquele repo no Contexto: arquivo que **não é da leva** (sujeira anterior, outro assunto) → não
+invente, mostre ao usuário e pergunte antes de estagiar.
 
 ### 3. A mensagem
 
-Leia `git -C <raiz> log --format='%s' -20` e escreva **no estilo daquele
-repositório** — idioma, prefixo convencional (ou a falta dele), tamanho, tom.
-Repositórios diferentes têm estilos diferentes, e cada mensagem segue o do seu.
-Não imponha um padrão que o repo não usa.
-
+Leia `git -C <raiz> log --format='%s' -20` e escreva **no estilo daquele repositório** (idioma,
+prefixo convencional ou a falta dele, tamanho, tom); não imponha um padrão que o repo não usa.
 Regras que não dependem do repo:
 
 - Assunto no imperativo, uma linha, sem ponto final.
-- Corpo só quando explica algo que o diff não mostra (o porquê, a armadilha
-  evitada, o que foi tentado antes).
+- Corpo só quando explica o que o diff não mostra (o porquê, a armadilha evitada, o que foi
+  tentado antes).
 - **Zero trailers.** Nada de `Co-Authored-By`, `Generated with`, menção a
-  Claude/Anthropic/assistente. A autoria é só do usuário — não passe `--author`,
-  deixe o git usar a config dele.
+  Claude/Anthropic/assistente. A autoria é só do usuário: não passe `--author`.
 
 ### 4. Commit e push
 
@@ -187,41 +151,34 @@ git -C <raiz> commit -m "<mensagem>"
 git -C <raiz> push            # sem upstream: git -C <raiz> push -u origin <branch>
 ```
 
-Hook de pre-commit falhou → **pule o repositório** e mostre a saída dele. Push
-rejeitado (non-fast-forward) → **pule**: o commit está feito, e como integrar é
-decisão do usuário.
+Hook de pre-commit falhou → **pule o repositório** e mostre a saída. Push rejeitado
+(non-fast-forward) → **pule**: o commit está feito, e como integrar é decisão do usuário.
 
 ### 5. O vault
 
-Pule este passo se o argumento for `sem-vault`.
+Pule se o argumento for `sem-vault`.
 
-Invoque a skill **`obsidian-docs`** e registre a leva em `Evolucoes/`. Duas coisas
-são dela, não suas:
+Invoque a skill **`obsidian-docs`** e registre a leva em `Evolucoes/`. Duas coisas são dela:
 
-- **Qual é o projeto no vault.** Hub existente ganha; projeto nunca é duplicado;
-  em dúvida, pergunte. Não deduza pelo nome da pasta — repo `pagamentos-repo`
-  pertence ao hub `pagamentos` que já existe. Confira pelo MCP `vault-docs`:
-  `ler_nota <projeto>` acha o hub; não achou → `visao_geral` lista os que existem.
-  Nunca `Read`/`Grep` direto no vault para consultar.
-- **O fluxo de escrita.** A skill grava com `salvar_nota` (ou `atualizar_nota`)
-  do MCP `vault-docs`, que já faz frontmatter, pasta por tipo, entrada no hub e o
-  `commit → pull --rebase → push` do vault — a única exceção da regra de git,
-  restrita ao vault e executada pelo servidor, nunca por você. Passe `arquivos`
-  com a lista de pendentes daquele repo (a mesma do Contexto): o servidor anexa
-  "Componentes tocados" a partir do grafo do graphify, quando o projeto tem um.
+- **Qual é o projeto no vault.** Hub existente ganha; projeto nunca é duplicado; em dúvida,
+  pergunte. Não deduza pelo nome da pasta: repo `pagamentos-repo` pertence ao hub `pagamentos` que
+  já existe. Confira pelo MCP: `contexto_projeto <projeto>` acha o hub (e traz a última evolução);
+  não achou → `visao_geral`. Nunca `Read`/`Grep` direto no vault.
+- **O fluxo de escrita.** `salvar_nota` (ou `atualizar_nota`) do MCP faz frontmatter, pasta por
+  tipo, entrada no hub e o `commit → pull --rebase → push` do vault — única exceção da regra de
+  git, executada pelo servidor, nunca por você. Passe `arquivos` com a lista de pendentes daquele
+  repo (a do Contexto): o servidor anexa "Componentes tocados" quando o projeto tem grafo.
 
-**Uma nota por leva e por projeto.** Dois repositórios na mesma leva são dois
-projetos no vault e duas notas — cada uma no hub do seu projeto, e uma linkando a
-outra quando a mudança de um explica a do outro. Se os arquivos tocados e o tema
-forem os mesmos da nota mais recente de `Evolucoes/` daquele projeto
-(`listar_notas projeto=<projeto> tipo=evolucao limite=1`, depois `ler_nota`), atualize
-aquela nota in-place, mantendo o nome e a data originais do arquivo (eles marcam
-quando a leva começou). Assunto diferente → nota nova. O `git log` já é o log de
+**Uma nota por leva e por projeto.** Dois repositórios na mesma leva são dois projetos e duas
+notas, cada uma no seu hub, uma linkando a outra quando a mudança de um explica a do outro. Mesmos
+arquivos e tema da nota mais recente de `Evolucoes/` (`listar_notas projeto=<projeto>
+tipo=evolucao limite=1`, depois `ler_nota`) → atualize aquela in-place, mantendo nome e data do
+arquivo (marcam quando a leva começou). Assunto diferente → nota nova. O `git log` é o log de
 commits; o vault é a memória do projeto.
 
-Já escreveu a nota desta leva antes do `/cpv` (é comum: a skill `obsidian-docs`
-roda ao fechar o trabalho)? Não crie outra — confira que ela está no hub
-(`ler_nota <projeto>`) e diga no relatório que já existia, com o caminho.
+Já escreveu a nota desta leva antes do `/cpv` (comum: a `obsidian-docs` roda ao fechar o
+trabalho)? Não crie outra: confira que ela está no hub (`contexto_projeto <projeto>` mostra a
+última evolução) e diga no relatório que já existia, com o caminho.
 
 ### 6. Relatório
 
@@ -229,17 +186,12 @@ Três linhas **por repositório**:
 
 - o que foi commitado (hash curto e assunto), ou o commit que **já existia**
 - push: para onde, ou por que não
-- vault: nota criada, atualizada ou já existente, com o caminho — ou "pulado".
-  Com o MCP na sessão, feche com `validar projeto=<projeto>`: erro no linter entra
-  na linha (é o vault que ficou inconsistente, não a leva)
+- vault: nota criada, atualizada ou já existente, com o caminho — ou "pulado". Com o MCP na
+  sessão, feche com `validar projeto=<projeto>`: erro do linter entra na linha (é o vault que
+  ficou inconsistente, não a leva)
 
-A linha de fechamento **só existe quando tem conteúdo**: algum repositório
-**pulado** (bateu numa condição de parada) ou `NAO INCLUIDOS` não vazio. Nesse
-caso ela é obrigatória, com o motivo e a contagem — repo que a descoberta viu e o
-comando não fechou tem que aparecer, porque silêncio sobre ele lê como "não havia
-mais nada", e é assim que uma mudança fica esquecida no working tree por dias.
-
-Nada pulado e `NAO INCLUIDOS` vazio → **não escreva a linha**. "Nenhum pulado,
-nenhum não incluído" não informa nada: é o caso normal, e o usuário já lê isso na
-ausência da linha. O vault também nunca entra nela — ele é ignorado por definição,
-não por acidente desta leva.
+A linha de fechamento **só existe quando tem conteúdo**: repositório **pulado** (condição de
+parada) ou `NAO INCLUIDOS` não vazio — aí é obrigatória, com motivo e contagem, porque silêncio
+sobre um repo que a descoberta viu lê como "não havia mais nada", e é assim que uma mudança fica
+esquecida no working tree por dias. Nada pulado e `NAO INCLUIDOS` vazio → **não escreva a linha**:
+é o caso normal. O vault nunca entra nela — é ignorado por definição.

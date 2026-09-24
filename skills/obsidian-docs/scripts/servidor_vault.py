@@ -19,10 +19,14 @@ skills) ou de `--vault`. Caminho nunca e inventado.
 
 Ferramentas:
   visao_geral     panorama: projetos, contagem por tipo, notas recentes
-  buscar          full-text sem acento/caixa, filtros projeto/tipo/status
+  contexto_projeto arranque num projeto com teto fixo: hub resumido, notas recentes
+                  por secao com resumo, ultima evolucao
+  buscar          full-text sem acento/caixa, filtros projeto/tipo/status; cada
+                  resultado traz o resumo da nota no hub
   listar_notas    metadados das notas, mais recentes primeiro
-  ler_nota        conteudo integral (caminho relativo ou nome de wikilink)
-  conexoes        wikilinks de saida e backlinks (navegacao no grafo)
+  ler_nota        conteudo integral, uma secao (secao=) ou cortado (max_chars=)
+  conexoes        notas relacionadas com resumo: wikilinks de saida e backlinks,
+                  fora os links estruturais (hub e Home)
   salvar_nota     cria a nota com tudo que a convencao exige (e hub/Home novos)
   atualizar_nota  corpo, status, tags, sucessora (obsoleta) ou resumo no hub
   mapa_codigo     mapa do codigo (graphify-out do repo, ponteiro Repo: do hub)
@@ -34,8 +38,11 @@ Ferramentas:
 Vault que e repositorio git: cada gravacao faz commit -> pull --rebase -> push
 (desligue com `--sem-git` no registro). Gravacao em lote: salvar_nota e
 atualizar_nota com lote=true so escrevem em disco, e `sincronizar` fecha o lote
-num commit so. Leitura em cache: cada arquivo e relido apenas quando mtime ou
-tamanho mudam. Autoteste: scripts/teste_servidor_vault.py
+num commit so. Leitura em cache: cada arquivo e relido, normalizado e tem os
+wikilinks extraidos apenas quando mtime ou tamanho mudam; backlinks e resumos
+dos hubs sao indices derivados, refeitos so quando alguma nota muda; o vault e
+pre-aquecido numa thread logo apos o initialize. Autoteste:
+scripts/teste_servidor_vault.py
 """
 import argparse
 import json
@@ -44,6 +51,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 from collections import Counter, defaultdict
@@ -67,8 +75,10 @@ class ErroUso(Exception):
 INSTRUCOES = (
     "Vault Obsidian com a documentacao dos projetos (specs, planos, ADRs, bugs, "
     "evolucoes, analises). Estrutura: Home.md -> <projeto>/<projeto>.md (hub) -> "
-    "Specs/, Arquitetura/, Bugs/, Evolucoes/, Analises/. Ler: visao_geral, buscar, "
-    "listar_notas, ler_nota, conexoes. Gravar: salvar_nota (nota nova; faz pasta, "
+    "Specs/, Arquitetura/, Bugs/, Evolucoes/, Analises/. Ler: visao_geral, "
+    "contexto_projeto (arranque num projeto, com teto: use no lugar do hub inteiro), "
+    "buscar, listar_notas, ler_nota (secao= quando so uma parte importa), conexoes "
+    "(relacionadas com resumo). Gravar: salvar_nota (nota nova; faz pasta, "
     "nome, frontmatter, hub, Home e git) e atualizar_nota (nota existente). "
     "Codigo: mapa_codigo (antes de mexer no projeto), consultar_codigo (arquitetura), "
     "gerar_mapa (apos o graphify); salvar_nota aceita arquivos= para citar componentes. "
@@ -88,13 +98,27 @@ ERRO_VAULT = (
 # ---------- leitura do vault ----------
 
 # caminho -> (mtime_ns, tamanho, nota). O os.walk roda a cada chamada (e barato);
-# o que custa e ler e parsear cada arquivo, e isso so acontece quando ele mudou.
+# o que custa e ler, parsear e normalizar cada arquivo, e isso so acontece quando
+# ele mudou. _VERSAO sobe a cada mudanca no conjunto de notas: e o que diz aos
+# indices derivados (backlinks, resumos dos hubs) quando se refazer.
 _CACHE = {}
+_VERSAO = 0
+# O pre-aquecimento (apos o initialize) roda numa thread; a primeira chamada de
+# ferramenta espera nele em vez de repetir a varredura por cima.
+_TRANCA = threading.RLock()
 
 
 def notas():
-    """Todas as notas .md do vault, com frontmatter ja separado."""
-    lista, vivos = [], set()
+    """Todas as notas .md do vault, com frontmatter ja separado e, calculados uma
+    vez por versao do arquivo, o texto e o nome normalizados e os wikilinks.
+    Antes, buscar e conexoes refaziam isso em todas as notas a cada chamada."""
+    with _TRANCA:
+        return _notas()
+
+
+def _notas():
+    global _VERSAO
+    lista, vivos, mudou = [], set(), False
     for raiz, dirs, arqs in os.walk(VAULT):
         dirs[:] = sorted(d for d in dirs if d not in IGNORAR)
         for a in sorted(arqs):
@@ -114,22 +138,33 @@ def notas():
                 with open(caminho, encoding="utf-8") as f:
                     texto = f.read()
             except (OSError, UnicodeDecodeError):
-                _CACHE.pop(caminho, None)
+                if _CACHE.pop(caminho, None) is not None:
+                    mudou = True
                 continue
             rel = os.path.relpath(caminho, VAULT).replace(os.sep, "/")
             partes = rel.split("/")
+            nome = os.path.splitext(a)[0]
             nota = {
                 "rel": rel,
-                "nome": os.path.splitext(a)[0],
+                "nome": nome,
                 "projeto": partes[0] if len(partes) > 1 else None,
                 "fm": frontmatter(texto) or {},
                 "texto": texto,
                 "mtime": st.st_mtime,
+                "norm": normalizar(texto),
+                "nome_norm": normalizar(nome),
+                "rel_norm": normalizar(rel[:-3]),
+                "projeto_norm": normalizar(partes[0]) if len(partes) > 1 else None,
+                "links": links_de(texto),
             }
             _CACHE[caminho] = (st.st_mtime_ns, st.st_size, nota)
             lista.append(nota)
+            mudou = True
     for caminho in [c for c in _CACHE if c not in vivos]:
         del _CACHE[caminho]
+        mudou = True
+    if mudou:
+        _VERSAO += 1
     return lista
 
 
@@ -173,11 +208,123 @@ def links_de(texto):
     return {a.strip() for a in WIKILINK_RE.findall(sem_codigo(texto)) if a.strip()}
 
 
+# ---------- indices derivados ----------
+
+# `- [[nome]] — resumo` (o servidor escreve com travessao; hub a mao usa `-` ou `:`)
+HUB_LINHA_RE = re.compile(r"^[-*] \[\[([^\]\[|#]+)(?:[|#][^\]]*)?\]\][ \t]*(?:[—–:-][ \t]*)?(.*)$")
+HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
+# Refeito so quando _VERSAO muda: backlinks e resumos custavam uma varredura do
+# vault inteiro por chamada de conexoes.
+_INDICE = {"versao": None}
+
+
+def nome_alvo(link):
+    """[[Specs/2026-01-10 X]] aponta para a nota `2026-01-10 X`: o alvo e o nome."""
+    return link.rsplit("/", 1)[-1].strip()
+
+
+def eh_hub(n):
+    return (n["fm"].get("tipo") == "hub" or n["rel"] == "Home.md"
+            or bool(n["projeto"] and n["rel"] == f"{n['projeto']}/{n['projeto']}.md"))
+
+
+def hub_de(n):
+    """rel do hub que lista a nota: o do projeto; Home para um hub."""
+    if eh_hub(n):
+        return "Home.md"
+    return f"{n['projeto']}/{n['projeto']}.md" if n["projeto"] else None
+
+
+def resumos_do_hub(texto):
+    """nome da nota -> resumo, das linhas `- [[nome]] — resumo` de um hub."""
+    saida = {}
+    for linha in CODEBLOCK_RE.sub("", texto).split("\n"):
+        m = HUB_LINHA_RE.match(linha)
+        if m and m.group(2).strip():
+            saida.setdefault(nome_alvo(m.group(1)), m.group(2).strip())
+    return saida
+
+
+def indice(todas):
+    """Sobre a lista que notas() acabou de devolver: por_nome (nome -> rel, a
+    primeira ganha), backlinks (nome -> [rel]) e resumos (rel do hub -> {nome: resumo})."""
+    global _INDICE
+    if _INDICE["versao"] == _VERSAO:
+        return _INDICE
+    por_nome, backlinks, resumos = {}, defaultdict(list), {}
+    for n in todas:
+        por_nome.setdefault(n["nome"], n["rel"])
+        for alvo in {nome_alvo(l) for l in n["links"]}:
+            backlinks[alvo].append(n["rel"])
+        if eh_hub(n):
+            resumos[n["rel"]] = resumos_do_hub(n["texto"])
+    _INDICE = {"versao": _VERSAO, "por_nome": por_nome,
+               "backlinks": dict(backlinks), "resumos": resumos}
+    return _INDICE
+
+
+def resumo_de(n, idx):
+    """A linha curada que o hub guarda sobre a nota; None se ela nao esta listada."""
+    return idx["resumos"].get(hub_de(n), {}).get(n["nome"])
+
+
+def secoes_de(corpo):
+    """([(nivel, titulo, linha_ini, linha_fim)], linhas): cabecalhos fora de blocos
+    de codigo; a secao vai ate o proximo cabecalho de nivel igual ou superior."""
+    linhas = corpo.split("\n")
+    cabecalhos, em_codigo = [], False
+    for i, l in enumerate(linhas):
+        if l.lstrip().startswith("```"):
+            em_codigo = not em_codigo
+            continue
+        if em_codigo:
+            continue
+        m = HEADING_RE.match(l)
+        if m:
+            cabecalhos.append((len(m.group(1)), m.group(2).strip(), i))
+    secoes = []
+    for k, (nivel, titulo, ini) in enumerate(cabecalhos):
+        fim = next((c[2] for c in cabecalhos[k + 1:] if c[0] <= nivel), len(linhas))
+        secoes.append((nivel, titulo, ini, fim))
+    return secoes, linhas
+
+
+def paragrafo_de_abertura(corpo, teto=400):
+    """Primeiro paragrafo de prosa: pula titulo, `Projeto: [[x]]`, `Substituida por`,
+    listas, tabelas e codigo. E o que uma evolucao promete abrir com."""
+    for bloco in re.split(r"\n[ \t]*\n", corpo):
+        b = " ".join(bloco.split())
+        if not b or b.startswith(("#", "Projeto: [[", "Substituída por", "Repo:", "- ", "* ",
+                                  "|", "```", ">", "![")):
+            continue
+        return b if len(b) <= teto else b[:teto].rsplit(" ", 1)[0] + "…"
+    return ""
+
+
+def cortar(texto, max_chars):
+    """Corta no fim de linha antes de max_chars e diz quanto ficou de fora."""
+    try:
+        teto = int(max_chars)
+    except (TypeError, ValueError):
+        return texto
+    if teto < 200 or len(texto) <= teto:
+        return texto
+    corte = texto.rfind("\n", 0, teto)
+    corte = corte if corte > teto // 2 else teto
+    return (texto[:corte] + f"\n… (cortado em {corte} de {len(texto)} caracteres; "
+            "ler_nota sem max_chars, ou com secao=, para o resto)")
+
+
 # ---------- busca ----------
 
+# Marcas combinantes (categoria Mn) do plano basico, tiradas por regex em C: a
+# versao caractere a caractere em Python custava 4x mais no vault inteiro.
+MARCAS_RE = re.compile("[" + "".join(re.escape(chr(c)) for c in range(0x10000)
+                                     if unicodedata.category(chr(c)) == "Mn") + "]")
+
+
 def normalizar(s):
-    s = unicodedata.normalize("NFD", str(s))
-    return "".join(c for c in s if unicodedata.category(c) != "Mn").casefold()
+    return MARCAS_RE.sub("", unicodedata.normalize("NFD", str(s))).casefold()
 
 
 def norm_com_mapa(s):
@@ -216,7 +363,7 @@ def filtrar(todas, projeto=None, tipo=None, status=None):
     sel = todas
     if projeto:
         p = normalizar(projeto)
-        sel = [n for n in sel if n["projeto"] and normalizar(n["projeto"]) == p]
+        sel = [n for n in sel if n["projeto_norm"] == p]
     if tipo:
         t = normalizar(tipo)
         sel = [n for n in sel if t in valores(n["fm"].get("tipo"))]
@@ -256,9 +403,8 @@ def achar(ref, todas):
     for grupo in (
         [n for n in todas if n["rel"] == ref or n["rel"] == base + ".md"
          or n["nome"] == base],
-        [n for n in todas if normalizar(n["nome"]) == nr
-         or normalizar(n["rel"][:-3]) == nr],
-        [n for n in todas if nr in normalizar(n["nome"])],
+        [n for n in todas if n["nome_norm"] == nr or n["rel_norm"] == nr],
+        [n for n in todas if nr in n["nome_norm"]],
     ):
         if len(grupo) == 1:
             return grupo[0], None
@@ -293,14 +439,20 @@ def visao_geral():
     return "\n".join(linhas)
 
 
+def curto(s, teto=200):
+    s = " ".join(str(s).split())
+    return s if len(s) <= teto else s[:teto].rsplit(" ", 1)[0] + "…"
+
+
 def buscar(consulta="", projeto=None, tipo=None, status=None, limite=None):
     termos = [normalizar(t) for t in str(consulta).split() if t]
     if not termos:
         return "Informe a consulta (um ou mais termos; todos precisam aparecer)."
     limite = inteiro(limite, 10, 30)
+    todas = notas()
     achadas = []
-    for n in filtrar(notas(), projeto, tipo, status):
-        titulo, corpo = normalizar(n["nome"]), normalizar(n["texto"])
+    for n in filtrar(todas, projeto, tipo, status):
+        titulo, corpo = n["nome_norm"], n["norm"]
         if not all(t in titulo or t in corpo for t in termos):
             continue
         pontos = sum(5 for t in termos if t in titulo)
@@ -311,13 +463,19 @@ def buscar(consulta="", projeto=None, tipo=None, status=None, limite=None):
         return (f'Nenhuma nota para "{consulta}"{filtros}. Tente menos termos, '
                 "sem filtros, ou visao_geral para ver o que existe.")
     achadas.sort(key=lambda par: (-par[0], par[1]["rel"]))
+    idx = indice(todas)
     linhas = [f'{len(achadas)} nota(s) para "{consulta}"{filtros}'
               + (f", mostrando {limite}:" if len(achadas) > limite else ":")]
     for _, n in achadas[:limite]:
         linhas.append(f"\n- {n['rel']}\n  {linha_meta(n)}")
-        t = trecho(corpo_de(n), termos)
-        if t:
-            linhas.append(f'  "{t}"')
+        # a linha curada do hub diz o que a nota E; o trecho so diz onde o termo caiu
+        resumo = resumo_de(n, idx)
+        if resumo:
+            linhas.append(f"  {curto(resumo)}")
+        else:
+            t = trecho(corpo_de(n), termos)
+            if t:
+                linhas.append(f'  "{t}"')
     return "\n".join(linhas)
 
 
@@ -335,44 +493,206 @@ def listar_notas(projeto=None, tipo=None, status=None, limite=None):
     return "\n".join(linhas)
 
 
-def ler_nota(nota=""):
-    todas = notas()
+def resolver(nota, todas):
+    """(nota, None) ou (None, orientacao). Nas leituras a orientacao volta como
+    resultado, nao como erro — de proposito: nota ausente nao e falha da chamada."""
     alvo, candidatos = achar(nota, todas)
     if alvo:
-        return f"Caminho: {alvo['rel']}\n\n{alvo['texto']}"
+        return alvo, None
     if candidatos:
         linhas = [f'Mais de uma nota bate com "{nota}" — repita com o caminho:']
         linhas += [f"- {n['rel']}" for n in candidatos[:10]]
         if len(candidatos) > 10:
             linhas.append(f"… e mais {len(candidatos) - 10}")
-        return "\n".join(linhas)
-    return (f'Nota nao encontrada: "{nota}". Aceito caminho relativo ao vault '
-            "ou o nome como em wikilink; use buscar ou listar_notas para achar.")
+        return None, "\n".join(linhas)
+    return None, (f'Nota nao encontrada: "{nota}". Aceito caminho relativo ao vault '
+                  "ou o nome como em wikilink; use buscar ou listar_notas para achar.")
+
+
+TETO_NOTA = 40000  # caracteres: acima disto, ler integral custa mais de 10 mil tokens
+
+
+def esboco(alvo):
+    """Nota grande: abertura e cabecalhos com o tamanho de cada secao, para escolher."""
+    corpo = corpo_de(alvo)
+    secoes, linhas = secoes_de(corpo)
+    saida = [f"Caminho: {alvo['rel']}",
+             f"Nota grande ({len(alvo['texto'])} caracteres): escolha secao=<titulo>, "
+             "corte com max_chars=N ou peca integral=true.", ""]
+    abertura = paragrafo_de_abertura(corpo)
+    if abertura:
+        saida += [abertura, ""]
+    secoes = [s for s in secoes if s[0] > 1]  # o `# titulo` e a nota inteira
+    saida.append("Secoes:" if secoes else "Sem cabecalhos alem do titulo.")
+    saida += [f"- {'#' * nivel} {titulo} ({sum(len(l) + 1 for l in linhas[ini:fim])} caracteres)"
+              for nivel, titulo, ini, fim in secoes]
+    return "\n".join(saida)
+
+
+def ler_nota(nota="", secao=None, max_chars=None, integral=False):
+    alvo, erro = resolver(nota, notas())
+    if erro:
+        return erro
+    pedido = normalizar(str(secao or "").lstrip("#").strip())
+    if not pedido:
+        if len(alvo["texto"]) > TETO_NOTA and not integral and max_chars is None:
+            return esboco(alvo)
+        return f"Caminho: {alvo['rel']}\n\n" + cortar(alvo["texto"], max_chars)
+    secoes, linhas = secoes_de(corpo_de(alvo))
+    for grupo in ([s for s in secoes if normalizar(s[1]) == pedido],
+                  [s for s in secoes if normalizar(s[1]).startswith(pedido)],
+                  [s for s in secoes if pedido in normalizar(s[1])]):
+        if len(grupo) == 1:
+            nivel, titulo, ini, fim = grupo[0]
+            bloco = "\n".join(linhas[ini:fim]).rstrip("\n")
+            return (f"Caminho: {alvo['rel']}\nSecao: {'#' * nivel} {titulo}\n\n"
+                    + cortar(bloco, max_chars))
+        if grupo:
+            return (f'Mais de uma secao bate com "{secao}" em {alvo["rel"]}; repita com o '
+                    "titulo exato: " + "; ".join(f"{'#' * n} {t}" for n, t, _, _ in grupo))
+    disponiveis = ", ".join(f"{'#' * n} {t}" for n, t, _, _ in secoes) or "nenhuma"
+    return f'Secao "{secao}" nao existe em {alvo["rel"]}. Secoes: {disponiveis}'
 
 
 def conexoes(nota=""):
     todas = notas()
-    alvo, candidatos = achar(nota, todas)
-    if not alvo:
-        if candidatos:
-            linhas = [f'Mais de uma nota bate com "{nota}" — repita com o caminho:']
-            linhas += [f"- {n['rel']}" for n in candidatos[:10]]
-            return "\n".join(linhas)
-        return f'Nota nao encontrada: "{nota}". Use buscar ou listar_notas.'
-    por_nome = {}
-    for n in todas:
-        por_nome.setdefault(n["nome"], n["rel"])
-    saida = sorted(links_de(alvo["texto"]))
-    entrada = sorted(n["rel"] for n in todas
-                     if n is not alvo and alvo["nome"] in links_de(n["texto"]))
-    linhas = [f"Nota: {alvo['rel']}", "", f"Saida ({len(saida)}):"]
-    for alvo_link in saida:
-        onde = por_nome.get(alvo_link)
-        linhas.append(f"- [[{alvo_link}]]" + (f" → {onde}" if onde
-                                              else " (sem arquivo no vault)"))
-    linhas += ["", f"Backlinks ({len(entrada)}):"]
-    linhas += [f"- {rel}" for rel in entrada]
+    alvo, erro = resolver(nota, todas)
+    if erro:
+        return erro
+    idx = indice(todas)
+    por_nome, por_rel = idx["por_nome"], {n["rel"]: n for n in todas}
+    proj, hub_rel, hub = alvo["projeto"], hub_de(alvo), eh_hub(alvo)
+
+    def estrutural(rel):
+        """Link que a convencao gera sozinha: nota <-> hub do projeto, hub <-> Home."""
+        if rel in ("Home.md", hub_rel):
+            return True
+        outra = por_rel.get(rel)
+        return bool(hub and outra and (outra["projeto"] == proj or (proj is None and eh_hub(outra))))
+
+    def linha(rel):
+        r = resumo_de(por_rel[rel], idx)
+        return f"- {rel}" + (f" — {curto(r)}" if r else "")
+
+    saida, quebrados, proprias = [], [], 0
+    for link in sorted(alvo["links"]):
+        rel = por_nome.get(nome_alvo(link))
+        if rel is None:
+            quebrados.append(link)
+        elif estrutural(rel):
+            if rel not in ("Home.md", hub_rel):
+                proprias += 1  # nota do proprio projeto, listada por este hub
+        elif rel != alvo["rel"]:
+            saida.append(rel)
+    backlinks = idx["backlinks"].get(alvo["nome"], [])
+    entrada = [r for r in sorted(backlinks) if r != alvo["rel"] and not estrutural(r)]
+    linhas = [f"Nota: {alvo['rel']}"]
+    if hub and proj:
+        linhas.append(f"Hub de {proj}: {proprias} nota(s) do projeto listadas "
+                      f"(contexto_projeto {proj} para ve-las)")
+    elif not hub and hub_rel:
+        linhas.append(f"Hub: [[{proj}]] (" + ("lista esta nota" if hub_rel in backlinks
+                                               else "NAO lista esta nota: validar aponta") + ")")
+    linhas.append(f"Relacionadas de saida ({len(saida) + len(quebrados)}):"
+                  if saida or quebrados else "Relacionadas de saida: nenhuma alem de hub/Home")
+    linhas += [linha(r) for r in saida]
+    linhas += [f"- [[{l}]] (sem arquivo no vault)" for l in quebrados]
+    linhas.append(f"Backlinks ({len(entrada)}):" if entrada else "Backlinks: nenhum alem de hub/Home")
+    linhas += [linha(r) for r in entrada]
     return "\n".join(linhas)
+
+
+TETO_CONTEXTO = 3000
+PENDENCIAS = ("pendencias", "em aberto", "proximos passos")
+
+
+def secao_por_nome(corpo, nomes, teto):
+    """(titulo, bloco ate teto caracteres) da primeira secao com um destes titulos."""
+    secoes, linhas = secoes_de(corpo)
+    for nivel, titulo, ini, fim in secoes:
+        if normalizar(titulo) in nomes:
+            bloco = "\n".join(l for l in linhas[ini + 1:fim] if l.strip())
+            if len(bloco) > teto:
+                bloco = bloco[:teto].rsplit("\n", 1)[0] + "\n…"
+            return titulo, bloco
+    return None
+
+
+def contexto_projeto(projeto="", por_secao=None):
+    """Arranque num projeto com teto fixo: o que o hook pedia em tres leituras."""
+    por_secao = inteiro(por_secao, 3, 10)
+    todas = notas()
+    p = normalizar(str(projeto).strip())
+    hub = next((n for n in todas if n["projeto"] and n["projeto_norm"] == p
+                and n["rel"] == f"{n['projeto']}/{n['projeto']}.md"), None)
+    if hub is None:
+        hubs = sorted({n["projeto"] for n in todas
+                       if n["projeto"] and n["rel"] == f"{n['projeto']}/{n['projeto']}.md"})
+        parecidos = [h for h in hubs if p and (p in normalizar(h) or normalizar(h) in p)]
+        raise ErroUso(f'projeto "{projeto}" nao tem hub no vault.'
+                      + (f" Parecidos: {', '.join(parecidos)}." if parecidos else "")
+                      + " visao_geral lista os que existem.")
+    proj = hub["projeto"]
+    idx = indice(todas)
+    resumos = idx["resumos"].get(hub["rel"], {})
+    por_rel = {n["rel"]: n for n in todas}
+    do_projeto = [n for n in todas if n["projeto"] == proj and n is not hub]
+    por_nome = {n["nome"]: n for n in do_projeto}
+    corpo = corpo_de(hub)
+    tipos = Counter(valores(n["fm"].get("tipo"))[0] or "?" for n in do_projeto)
+    status = Counter(valores(n["fm"].get("status"))[0] or "?" for n in do_projeto)
+    saida = [f"Projeto: {proj} ({hub['rel']})"]
+    descricao = paragrafo_de_abertura(REPO_RE.sub("", corpo), 300)
+    if descricao:
+        saida.append(descricao)
+    m = REPO_RE.search(hub["texto"])
+    if m:
+        saida.append(f"Repo: {caminho_da_linha(m.group(1))}")
+    saida.append(f"Notas: {len(do_projeto)} ("
+                 + ", ".join(f"{t}: {c}" for t, c in tipos.most_common()) + ") | status: "
+                 + ", ".join(f"{s}: {c}" for s, c in status.most_common()))
+    mapa = f"Mapa do Codigo {proj}"
+    if mapa in por_nome:
+        saida.append(f"Mapa: [[{mapa}]] (mapa_codigo {proj} le o grafo atual; "
+                     "ler_nota secao='Leitura curada' traz so a parte curada)")
+    evolucoes = sorted((n for n in do_projeto if "evolucao" in valores(n["fm"].get("tipo"))),
+                       key=data_de, reverse=True)
+    if evolucoes:  # antes das secoes: se o teto cortar, cai o fim do indice, nao isto
+        ult = evolucoes[0]
+        r = resumos.get(ult["nome"])
+        saida += ["", f"Ultima evolucao: [[{ult['nome']}]] ({data_de(ult)}, "
+                      f"{ult['fm'].get('status', '-')})" + (f" — {curto(r)}" if r else "")]
+        corpo_ult = corpo_de(ult)
+        abertura = paragrafo_de_abertura(corpo_ult)
+        if abertura:
+            saida.append("  " + abertura)
+        pend = secao_por_nome(corpo_ult, PENDENCIAS, 600)
+        if pend:
+            saida.append(f"  {pend[0]}:")
+            saida += ["  " + l for l in pend[1].split("\n")]
+    secoes, linhas = secoes_de(corpo)
+    for nivel, titulo, ini, fim in secoes:
+        if nivel != 2:
+            continue
+        nomes = [nome_alvo(mm.group(1)) for mm in map(HUB_LINHA_RE.match, linhas[ini + 1:fim]) if mm]
+        if not nomes:
+            continue
+        ns = [n for n in (por_nome.get(x) or por_rel.get(idx["por_nome"].get(x)) for x in nomes) if n]
+        ns.sort(key=data_de, reverse=True)
+        mostrar = ns[:por_secao]
+        saida += ["", f"{titulo} ({len(nomes)}"
+                      + (f", {len(mostrar)} mais recentes" if len(nomes) > len(mostrar) else "") + "):"]
+        for n in mostrar:
+            r = resumos.get(n["nome"])
+            saida.append(f"- [[{n['nome']}]]" + (f" — {curto(r)}" if r else ""))
+        if len(ns) < len(nomes):
+            saida.append(f"- ({len(nomes) - len(ns)} entrada(s) do hub sem nota no vault; validar aponta)")
+    texto = "\n".join(saida)
+    if len(texto) > TETO_CONTEXTO:
+        corte = texto.rfind("\n", 0, TETO_CONTEXTO)
+        texto = texto[:corte] + (f"\n… (cortado em {TETO_CONTEXTO} caracteres; listar_notas "
+                                 f"projeto={proj} tipo=<tipo> lista uma secao inteira)")
+    return texto
 
 
 # ---------- escrita ----------
@@ -464,10 +784,14 @@ def inserir_na_secao(texto, secao, linha, ordenar=False):
     return "\n".join(linhas) + "\n"
 
 
-def git(*args):
-    r = subprocess.run(["git", "-C", VAULT, *args], capture_output=True,
+def git_em(pasta, *args):
+    r = subprocess.run(["git", "-C", pasta, *args], capture_output=True,
                        text=True, encoding="utf-8", errors="replace")
     return r.returncode, (r.stdout + r.stderr).strip()
+
+
+def git(*args):
+    return git_em(VAULT, *args)
 
 
 def vault_com_git():
@@ -632,12 +956,9 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
     else:
         puxar()
     todas = notas()
-    alvo, candidatos = achar(nota, todas)
-    if not alvo:
-        if candidatos:
-            raise ErroUso(f'mais de uma nota bate com "{nota}" — repita com o caminho: '
-                          + "; ".join(n["rel"] for n in candidatos[:10]))
-        raise ErroUso(f'nota nao encontrada: "{nota}". Use buscar ou listar_notas para achar.')
+    alvo, erro = resolver(nota, todas)
+    if erro:
+        raise ErroUso(erro)  # na escrita, nota ausente E falha da chamada
     if alvo["fm"].get("tipo") == "hub":
         raise ErroUso("hub e indice mantido pelo servidor: grave notas (salvar_nota) ou "
                       "mude o resumo de uma nota (atualizar_nota resumo=...)")
@@ -745,12 +1066,11 @@ def validar_vault(projeto=None, tipo=None):
                 v = fm.get(campo)
                 if v and not all(x in validos for x in valores(v)):
                     erros.append(("E3", n["rel"], f"{campo} invalido: '{v}'"))
-        alvos = links_de(n["texto"])
-        if alvos:
+        if n["links"]:
             com_saida.add(n["nome"])
-        for alvo in alvos:
+        for alvo in n["links"]:
             # [[Specs/2026-01-10 X]] e link valido: o alvo e o nome do arquivo
-            links_para[alvo.rsplit("/", 1)[-1]].append(n["rel"])
+            links_para[nome_alvo(alvo)].append(n["rel"])
     if not projeto:  # com filtro de projeto, links para fora dele nao sao erro
         # .base e .canvas sao linkaveis no Obsidian sem serem notas. A varredura
         # so serve ao E4, entao fica aqui dentro: com filtro ela seria descartada.
@@ -769,7 +1089,7 @@ def validar_vault(projeto=None, tipo=None):
         if hub is None:
             avisos.append(("A3", proj + "/", "projeto sem hub"))
             continue
-        citados = links_de(hub["texto"])
+        citados = hub["links"]
         for nome in nomes:
             if nome != proj and nome not in citados:
                 erros.append(("E5", f"{proj}/{nome}.md", "nao listada no hub"))
@@ -817,12 +1137,6 @@ def caminho_da_linha(linha):
     m = CAMINHO_RE.search(linha)
     return m.group(0).rstrip(".,;)") if m else linha.strip("`* ")
 TETO_SAIDA = 8000
-
-
-def git_em(pasta, *args):
-    r = subprocess.run(["git", "-C", pasta, *args], capture_output=True,
-                       text=True, encoding="utf-8", errors="replace")
-    return r.returncode, (r.stdout + r.stderr).strip()
 
 
 def registrar_repo(texto_hub, repo):
@@ -1110,14 +1424,25 @@ P_REPO = {"type": "string",
 
 FERRAMENTAS = [
     {"name": "visao_geral",
-     "description": "Panorama do vault de documentacao: projetos, contagem de "
-                    "notas por tipo e notas recentes. Bom primeiro passo.",
+     "description": "Panorama do vault: projetos, contagem de notas por tipo e notas "
+                    "recentes. Para entrar num projeto, contexto_projeto.",
      "inputSchema": esquema({}),
      "fn": visao_geral},
+    {"name": "contexto_projeto",
+     "description": "Arranque num projeto, com teto fixo: descricao e Repo do hub, "
+                    "contagem por tipo e status, a ultima evolucao (abertura e pendencias) "
+                    "e as notas mais recentes de cada secao do hub com o resumo. Use no "
+                    "lugar de ler o hub inteiro; depois ler_nota so na nota que interessar.",
+     "inputSchema": esquema({
+         "projeto": P_PROJ,
+         "por_secao": {"type": "integer",
+                       "description": "Notas por secao do hub (padrao 3, teto 10)."},
+     }, "projeto"),
+     "fn": contexto_projeto},
     {"name": "buscar",
-     "description": "Busca full-text nas notas do vault, ignorando acentos e "
-                    "maiusculas; varios termos separados por espaco = todos "
-                    "precisam aparecer. Retorna caminho, metadados e trecho.",
+     "description": "Busca full-text nas notas, ignorando acentos e maiusculas; varios "
+                    "termos = todos precisam aparecer. Cada resultado traz caminho, "
+                    "metadados e o resumo da nota no hub (ou um trecho, se nao esta no hub).",
      "inputSchema": esquema({
          "consulta": {"type": "string",
                       "description": "Termos de busca (obrigatorio)."},
@@ -1136,73 +1461,80 @@ FERRAMENTAS = [
      }),
      "fn": listar_notas},
     {"name": "ler_nota",
-     "description": "Le o conteudo integral de uma nota do vault.",
-     "inputSchema": esquema({"nota": P_NOTA}, "nota"),
+     "description": "Le uma nota: integral, so uma secao (secao=) ou cortada (max_chars=). "
+                    "Secao inexistente devolve a lista de secoes. Nota acima de "
+                    f"{TETO_NOTA} caracteres devolve o esboco (abertura e secoes com "
+                    "tamanho) em vez do texto; integral=true le mesmo assim.",
+     "inputSchema": esquema({
+         "nota": P_NOTA,
+         "secao": {"type": "string",
+                   "description": "Titulo de um cabecalho da nota (sem #; acento e caixa "
+                                  "nao importam; prefixo serve)."},
+         "max_chars": {"type": "integer",
+                       "description": "Corta o texto neste tamanho (minimo 200)."},
+         "integral": {"type": "boolean",
+                      "description": "true = nota grande vem inteira (padrao false)."},
+     }, "nota"),
      "fn": ler_nota},
     {"name": "conexoes",
-     "description": "Wikilinks de saida e backlinks de uma nota — navegacao "
-                    "pelo grafo do vault.",
+     "description": "Notas relacionadas a uma nota, com o resumo de cada uma: wikilinks "
+                    "de saida e backlinks, fora os que a convencao gera sozinha (hub e "
+                    "Home). Um salto de expansao a partir do que buscar achou.",
      "inputSchema": esquema({"nota": P_NOTA}, "nota"),
      "fn": conexoes},
     {"name": "salvar_nota",
-     "description": "Cria uma nota nova no vault com tudo que a convencao exige: "
-                    "pasta por tipo, nome `YYYY-MM-DD titulo`, frontmatter, `# titulo` e "
-                    "link do hub no corpo, entrada no hub (hub e Home criados se o "
-                    "projeto for novo) e commit+push se o vault for git. Ticket de um "
-                    "artefato: passe `artefato`. tipo=mapa regrava `Mapa do Codigo "
-                    "<projeto>` na raiz do projeto. Nota que ja existe: atualizar_nota.",
+     "description": "Cria uma nota nova com tudo que a convencao exige: pasta por tipo, nome "
+                    "`YYYY-MM-DD titulo`, frontmatter, `# titulo` e link do hub no corpo, "
+                    "entrada no hub (hub e Home criados se o projeto for novo), commit+push. "
+                    "Ticket: passe `artefato`. tipo=mapa regrava `Mapa do Codigo <projeto>`. "
+                    "Nota que ja existe: atualizar_nota.",
      "inputSchema": esquema({
          "projeto": {"type": "string",
-                     "description": "Nome do projeto = pasta do repo git (minusculo, "
-                                    "sem acento). Hub existente sempre ganha."},
+                     "description": "Pasta do repo git (minusculo, sem acento). Hub "
+                                    "existente sempre ganha."},
          "tipo": {"type": "string",
                   "description": "spec | plano | bug | evolucao | arquitetura | adr | "
                                  "analise | mapa"},
-         "titulo": {"type": "string", "description": "Titulo curto; vira o nome do "
-                                                     "arquivo (ignorado para mapa)."},
+         "titulo": {"type": "string", "description": "Curto; vira o nome do arquivo."},
          "corpo": {"type": "string",
-                   "description": "Markdown da nota. `# titulo` e `Projeto: [[projeto]]` "
-                                  "sao adicionados se faltarem. Linke notas relacionadas "
-                                  "por [[nome da nota]]."},
+                   "description": "Markdown. `# titulo` e `Projeto: [[projeto]]` entram se "
+                                  "faltarem. Linke relacionadas por [[nome da nota]]."},
          "resumo": {"type": "string",
-                    "description": "1 linha: vira a entrada da nota no hub (obrigatorio, "
-                                   "exceto mapa)."},
+                    "description": "1 linha: a entrada no hub (obrigatorio, exceto mapa)."},
          "status": {"type": "string",
                     "description": "rascunho | ativo (padrao) | resolvido | obsoleto"},
          "tags": {"type": "array", "items": {"type": "string"},
-                  "description": "1-3 tags kebab-case sem acento (opcional)."},
+                  "description": "1-3, kebab-case sem acento (opcional)."},
          "data": {"type": "string",
-                  "description": "YYYY-MM-DD (padrao: hoje). Migracao: data do 1o commit."},
+                  "description": "YYYY-MM-DD (padrao: hoje; migracao: data do 1o commit)."},
          "artefato": {"type": "string",
-                      "description": "Nome da nota (sem .md) que originou este ticket: "
-                                     "grava em Specs/Tickets - <artefato>/."},
+                      "description": "Nota (sem .md) que originou este ticket: grava em "
+                                     "Specs/Tickets - <artefato>/."},
          "descricao_projeto": {"type": "string",
-                               "description": "So para projeto NOVO: 1 linha para o hub "
-                                              "e o Home."},
+                               "description": "So projeto NOVO: 1 linha para o hub e o Home."},
          "repo": {"type": "string",
-                  "description": "Caminho local do repositorio: usado ao criar o hub e como "
-                                 "ponteiro do graphify (registrado no hub se faltar)."},
+                  "description": "Caminho local do repositorio (hub novo, e ponteiro do "
+                                 "graphify; registrado no hub se faltar)."},
          "sobrescrever": {"type": "boolean",
-                          "description": "Regrava se a nota ja existir (padrao false)."},
+                          "description": "Regrava se ja existir (padrao false)."},
          "arquivos": {"type": "array", "items": {"type": "string"},
-                      "description": "Caminhos (relativos ao repo) tocados pela leva: o "
-                                     "servidor anexa a secao Componentes tocados a partir "
-                                     "do grafo do graphify (evolucao, bug, spec de mudanca)."},
+                      "description": "Caminhos tocados pela leva, relativos ao repo: o servidor "
+                                     "anexa Componentes tocados a partir do grafo (evolucao, "
+                                     "bug, spec de mudanca)."},
          "lote": P_LOTE,
      }, "projeto", "tipo", "titulo", "corpo"),
      "fn": salvar_nota},
     {"name": "atualizar_nota",
-     "description": "Altera uma nota existente, in-place: `corpo` (substitui o texto "
-                    "apos o frontmatter), `status`, `tags`, `sucessora` (marca obsoleta e "
-                    "linka a nota que a substitui) e `resumo` (linha da nota no hub). "
-                    "Commit+push se o vault for git.",
+     "description": "Altera uma nota existente, in-place: `corpo` (texto apos o frontmatter), "
+                    "`status`, `tags`, `sucessora` (marca obsoleta e linka a substituta) e "
+                    "`resumo` (linha no hub). Commit+push.",
      "inputSchema": esquema({
          "nota": P_NOTA,
          "corpo": {"type": "string", "description": "Novo corpo completo em markdown."},
          "status": {"type": "string",
                     "description": "rascunho | ativo | resolvido | obsoleto"},
          "tags": {"type": "array", "items": {"type": "string"},
-                  "description": "Substitui a lista inteira de tags; [] limpa."},
+                  "description": "Substitui a lista inteira; [] limpa."},
          "sucessora": {"type": "string",
                        "description": "Nome da nota que substitui esta (sem .md)."},
          "resumo": {"type": "string", "description": "Nova linha de resumo no hub."},
@@ -1210,19 +1542,19 @@ FERRAMENTAS = [
      }, "nota"),
      "fn": atualizar_nota},
     {"name": "sincronizar",
-     "description": "Fecha um lote de gravacoes feitas com lote=true: commit unico -> "
-                    "pull --rebase -> push do vault. Obrigatorio ao fim de toda migracao "
-                    "ou serie de tickets; sem isso as notas ficam so no disco local.",
+     "description": "Fecha um lote (gravacoes com lote=true): commit unico -> pull --rebase "
+                    "-> push. Obrigatorio ao fim de migracao ou serie de tickets; sem isso "
+                    "as notas ficam so no disco local.",
      "inputSchema": esquema({
          "mensagem": {"type": "string",
                       "description": "Mensagem do commit (ex.: 'pagamentos: migracao de 12 notas')."},
      }, "mensagem"),
      "fn": sincronizar_lote},
     {"name": "validar",
-     "description": "Linter do vault: nota sem frontmatter (E1), campo ausente (E2), tipo ou "
-                    "status fora do vocabulario (E3), wikilink quebrado (E4), nota fora do hub "
-                    "(E5); avisos de orfa (A1), sem link de saida (A2) e projeto sem hub (A3). "
-                    "Rode ao fechar uma leva.",
+     "description": "Linter do vault: sem frontmatter (E1), campo ausente (E2), tipo/status "
+                    "fora do vocabulario (E3), wikilink quebrado (E4), nota fora do hub (E5); "
+                    "avisos: orfa (A1), sem link de saida (A2), projeto sem hub (A3). Rode ao "
+                    "fechar uma leva.",
      "inputSchema": esquema({
          "projeto": P_PROJETO,
          "tipo": {"type": "string",
@@ -1230,9 +1562,9 @@ FERRAMENTAS = [
      }),
      "fn": validar},
     {"name": "mapa_codigo",
-     "description": "Mapa do codigo do projeto a partir do graphify-out do repo (ponteiro "
-                    "Repo: do hub): frescor do grafo, god nodes, as 20 maiores comunidades e "
-                    "destaques do GRAPH_REPORT. Leia antes de mexer no codigo.",
+     "description": "Mapa do codigo a partir do graphify-out do repo (ponteiro Repo: do hub): "
+                    "frescor do grafo, god nodes, as 20 maiores comunidades e destaques do "
+                    "GRAPH_REPORT. Leia antes de mexer no codigo.",
      "inputSchema": esquema({"projeto": P_PROJ, "repo": P_REPO}, "projeto"),
      "fn": mapa_codigo},
     {"name": "consultar_codigo",
@@ -1248,9 +1580,9 @@ FERRAMENTAS = [
      }, "projeto"),
      "fn": consultar_codigo},
     {"name": "gerar_mapa",
-     "description": "Regrava a nota `Mapa do Codigo <projeto>` a partir do graphify-out "
-                    "(god nodes, todas as comunidades, GRAPH_REPORT) preservando a secao Leitura "
-                    "curada; passe `leitura` para atualiza-la. Chame apos cada rodada do graphify.",
+     "description": "Regrava a nota `Mapa do Codigo <projeto>` a partir do graphify-out (god "
+                    "nodes, comunidades, GRAPH_REPORT) preservando a secao Leitura curada; "
+                    "passe `leitura` para atualiza-la. Apos cada rodada do graphify.",
      "inputSchema": esquema({
          "projeto": P_PROJ,
          "leitura": {"type": "string", "description": "Sua leitura curada (dominios, o que "
@@ -1330,9 +1662,11 @@ def atender(msg):
         responder(id_, {
             "protocolVersion": versao if versao in PROTOCOLOS else PROTOCOLO_PADRAO,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "obsidian-docs", "version": "2.1.0"},
+            "serverInfo": {"name": "obsidian-docs", "version": "2.2.0"},
             "instructions": INSTRUCOES,
         })
+        if VAULT is not None:  # le e normaliza o vault antes da primeira ferramenta
+            threading.Thread(target=notas, daemon=True).start()
     elif metodo == "ping":
         responder(id_, {})
     elif metodo == "tools/list":

@@ -121,14 +121,69 @@ def testes():
     # --- leitura e busca ---
     confere("Texto" not in sv.ler_nota("2026-01-10 Cobrança recorrente") and "Regravada." in sv.ler_nota("Cobrança recorrente"),
             "ler_nota resolve por nome e por trecho")
-    confere("pagamentos/Specs/2026-01-10 Cobrança recorrente.md" in sv.buscar("cobranca"), "busca ignora acento")
+    busca = sv.buscar("cobranca")
+    confere("pagamentos/Specs/2026-01-10 Cobrança recorrente.md" in busca, "busca ignora acento")
+    confere("\n  spec da cobranca" in busca, "busca mostra o resumo do hub no lugar do trecho")
     confere("Nenhuma nota" in sv.buscar("zzz"), "busca sem resultado diz isso")
     lista = sv.listar_notas(projeto="pagamentos", tipo="evolucao")
     confere("1 de 1 nota(s)" in lista and "Nota evolucao" in lista, "listar_notas filtra por projeto e tipo")
     con = sv.conexoes("2026-02-03 Com link")
-    confere("[[Nao existe]] (sem arquivo no vault)" in con and "[[pagamentos]] → pagamentos/pagamentos.md" in con,
-            "conexoes mostra saida resolvida e nao resolvida")
+    confere("[[Nao existe]] (sem arquivo no vault)" in con and "Hub: [[pagamentos]] (lista esta nota)" in con
+            and "Backlinks: nenhum alem de hub/Home" in con,
+            "conexoes: hub vira uma linha, link quebrado aparece, backlink do hub nao conta")
+    sv.salvar_nota("pagamentos", "analise", "Vizinha", "Deriva de [[2026-02-03 Com link]].",
+                   resumo="analise vizinha", data="2026-02-05")
+    con = sv.conexoes("2026-02-03 Com link")
+    confere("Backlinks (1):" in con and "- pagamentos/Analises/2026-02-05 Vizinha.md — analise vizinha" in con,
+            "conexoes: backlink novo aparece com o resumo (indice refeito apos a gravacao)")
+    con = sv.conexoes("2026-02-05 Vizinha")
+    confere("Relacionadas de saida (1):" in con and "- pagamentos/Analises/2026-02-03 Com link.md — r" in con,
+            "conexoes: saida relacionada com resumo, hub fora da lista")
+    con = sv.conexoes("pagamentos")
+    confere(con.startswith("Nota: pagamentos/pagamentos.md\nHub de pagamentos:") and "Relacionadas de saida: nenhuma" in con,
+            "conexoes num hub: as notas do projeto viram contagem")
+    confere("Nota nao encontrada" in sv.conexoes("nada disso") and "Mais de uma nota" in sv.ler_nota("Nota"),
+            "leituras devolvem orientacao como resultado, nao como erro")
     confere("pagamentos —" in sv.visao_geral() and "SEM HUB" not in sv.visao_geral(), "visao_geral lista o projeto com hub")
+
+    # --- ler_nota: secao, max_chars, nota grande ---
+    sv.salvar_nota("pagamentos", "evolucao", "Leva grande",
+                   "Entregou a cobranca.\n\n## O que mudou\n\nTabela nova.\n\n## Verificação\n\nTestes.\n\n"
+                   "## Pendências\n\n- migrar clientes\n- avisar suporte\n", resumo="leva da cobranca", data="2026-02-06")
+    s = sv.ler_nota("2026-02-06 Leva grande", secao="pendencias")
+    confere(s.startswith("Caminho: pagamentos/Evolucoes/2026-02-06 Leva grande.md\nSecao: ## Pendências")
+            and "- migrar clientes" in s and "Tabela nova" not in s, "ler_nota secao= devolve so a secao, sem acento nem caixa")
+    s = sv.ler_nota("2026-02-06 Leva grande", secao="nada")
+    confere("nao existe" in s and "## O que mudou" in s and "## Pendências" in s, "secao inexistente lista as secoes")
+    s = sv.ler_nota("2026-02-06 Leva grande", max_chars=250)
+    confere("cortado em" in s and len(s) < 420, "max_chars corta no fim de linha e avisa")
+    grande = "x" * 200 + "\n"
+    sv.salvar_nota("pagamentos", "spec", "Enorme", "Abertura da enorme.\n\n## A\n\n" + grande * 120 + "\n## B\n\n" + grande * 100,
+                   resumo="spec enorme", data="2026-02-07")
+    s = sv.ler_nota("2026-02-07 Enorme")
+    confere("Nota grande" in s and "- ## A (" in s and "- ## B (" in s and "Abertura da enorme." in s and len(s) < 1000,
+            "nota acima do teto devolve o esboco: abertura, secoes e tamanhos")
+    confere(len(sv.ler_nota("2026-02-07 Enorme", integral=True)) > 40000, "integral=true le a nota inteira")
+    s = sv.ler_nota("2026-02-07 Enorme", secao="B")
+    confere("Secao: ## B" in s and "xxxx" in s and len(s) < 22000, "secao= numa nota grande le so a secao")
+
+    # --- contexto_projeto ---
+    c = sv.contexto_projeto("pagamentos")
+    confere(c.startswith("Projeto: pagamentos (pagamentos/pagamentos.md)\nModulo de pagamentos.") and "Repo: /tmp/pagamentos" in c,
+            "contexto_projeto abre com a descricao e o Repo do hub")
+    confere("Ultima evolucao: [[2026-02-06 Leva grande]] (2026-02-06, ativo) — leva da cobranca" in c
+            and "  Entregou a cobranca." in c and "  Pendências:" in c and "  - migrar clientes" in c,
+            "contexto_projeto traz a ultima evolucao com abertura e pendencias")
+    confere("\nSpecs (" in c and "[[2026-02-07 Enorme]] — spec enorme" in c and "\nBugs (" in c,
+            "contexto_projeto lista as secoes do hub com o resumo")
+    confere(len(c) <= sv.TETO_CONTEXTO + 200, "contexto_projeto respeita o teto")
+    c2 = sv.contexto_projeto("PAGAMENTOS", por_secao=1)
+    confere("\nSpecs (" in c2 and c2.count("\n- [[") < c.count("\n- [["), "por_secao limita, e o nome do projeto ignora caixa")
+    try:
+        sv.contexto_projeto("pagamento")
+        confere(False, "projeto sem hub deveria ser recusado")
+    except sv.ErroUso as e:
+        confere("nao tem hub" in str(e) and "pagamentos" in str(e), "projeto sem hub e recusado, com os parecidos")
 
     # --- atualizar_nota ---
     saida = sv.atualizar_nota("2026-02-01 Nota bug", status="resolvido", resumo="bug fechado", tags=["a", "b"])
@@ -142,7 +197,7 @@ def testes():
     sv.atualizar_nota("2026-02-01 Nota evolucao", sucessora="2026-02-01 Nota bug")
     nota = le("pagamentos/Evolucoes/2026-02-01 Nota evolucao.md")
     confere("status: obsoleto" in nota and "Substituída por [[2026-02-01 Nota bug]]." in nota, "sucessora marca obsoleta e linka")
-    for args, erro in ((dict(nota="Nota", status="ativo"), "mais de uma nota"),
+    for args, erro in ((dict(nota="Nota", status="ativo"), "uma nota bate"),
                        (dict(nota="pagamentos", status="ativo"), "hub e indice"),
                        (dict(nota="nada disso", status="ativo"), "nao encontrada"),
                        (dict(nota="2026-02-01 Nota bug"), "ao menos um")):
@@ -185,9 +240,16 @@ def testes_cache():
         f.write("\nLinha nova.\n")
     n3 = next(n for n in sv.notas() if n["rel"].endswith("Nota bug.md"))
     confere(n3 is not n1 and "Linha nova." in n3["texto"], "arquivo alterado e relido")
+    confere("linha nova." in n3["norm"] and n3["links"] == n1["links"] and n3["nome_norm"] == "2026-02-01 nota bug",
+            "texto normalizado, nome normalizado e links acompanham a releitura")
+    versao = sv._VERSAO
+    sv.notas()
+    confere(sv._VERSAO == versao, "sem mudanca a versao do conjunto nao sobe")
     os.remove(caminho)
     confere(not any(n["rel"].endswith("Nota bug.md") for n in sv.notas()), "arquivo apagado some da lista")
     confere(caminho not in sv._CACHE, "e sai do cache")
+    confere(sv._VERSAO == versao + 1 and "2026-02-01 Nota bug" not in sv.indice(sv.notas())["por_nome"],
+            "remocao sobe a versao e o indice derivado acompanha")
 
 
 def testes_validar():
@@ -208,6 +270,8 @@ def testes_validar():
     erros, avisos, totais = sv.validar_vault()
     confere(not any(c == "E4" and "Cobrança recorrente" in m for c, _, m in erros),
             "wikilink com caminho nao e E4")
+    b = sv.buscar("sem frontmatter")
+    confere("solta.md" in b and '"' in b.split("solta.md", 1)[1][:160], "nota fora do hub cai no trecho da busca")
     codigos = sorted({c for c, _, _ in erros})
     confere(codigos == ["E1", "E2", "E3", "E4", "E5"], f"linter acha E1..E5: {codigos}")
     confere(any(c == "E2" and "'data'" in m for c, _, m in erros), "campo data ausente e E2")
