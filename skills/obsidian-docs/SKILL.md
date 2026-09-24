@@ -121,7 +121,8 @@ O servidor confere ao salvar (avisa, nunca recusa) e `validar tipo=padrao` lista
   linka ao menos uma relacionada além do hub quando ela existe.
 - **Tamanho**: acima de 40.000 caracteres `ler_nota` devolve só o esboço. Spec ou plano desse
   tamanho vira spec curta mais tickets (`artefato=`), ou `dividir_nota`: abertura mais índice na
-  nota, uma nota por seção em `Anexos - <nome>/`, fora do hub.
+  nota, uma nota por seção ao lado dela (`<nome> - NN <seção>`, com `parte_de:` no frontmatter),
+  fora do hub.
 - **Nome errado** (data repetida, sufixo de tipo, título longo) → `renomear_nota`: move o arquivo
   e reescreve os wikilinks do vault inteiro. Nunca renomeie por fora dele.
 

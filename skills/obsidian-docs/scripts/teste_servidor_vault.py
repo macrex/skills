@@ -109,8 +109,8 @@ def testes():
         confere("so vale para tipo spec ou plano" in str(e), "artefato so em spec/plano")
 
     # --- caractere que quebra wikilink no Obsidian nao entra no nome ---
-    saida = sv.salvar_nota("pagamentos", "analise", "O PR #1 [x] ^y", "c", resumo="r", data="2026-02-04")
-    confere("pagamentos/Analises/2026-02-04 O PR 1 x y.md" in saida, "titulo com # [ ] ^ vira nome linkavel")
+    saida = sv.salvar_nota("pagamentos", "analise", "O PR #1 [x] ^y `z`", "c", resumo="r", data="2026-02-04")
+    confere("pagamentos/Analises/2026-02-04 O PR 1 x y z.md" in saida, "titulo com # [ ] ^ e crase vira nome linkavel")
 
     # --- wikilink quebrado e avisado; hub parecido e avisado ---
     saida = sv.salvar_nota("pagamentos", "analise", "Com link", "Veja [[Nao existe]].", resumo="r", data="2026-02-03")
@@ -355,18 +355,18 @@ def testes_reorganizar():
 
     # --- dividir: Enorme (## A, ## B) vira abertura + indice, e dois anexos fora do hub ---
     saida = sv.dividir_nota("2026-02-07 Enorme")
-    confere("Dividida: pagamentos/Specs/2026-02-07 Enorme.md em 2 anexo(s) em pagamentos/Specs/Anexos - 2026-02-07 Enorme/" in saida,
-            f"dividir: {saida.splitlines()[0]}")
+    confere("Dividida: pagamentos/Specs/2026-02-07 Enorme.md em 2 anexo(s)" in saida, f"dividir: {saida.splitlines()[0]}")
     mae = le("pagamentos/Specs/2026-02-07 Enorme.md")
-    confere(len(mae) < 1000 and "## Anexos" in mae and "[[2026-02-07 Enorme - 01 A]]" in mae
+    confere(len(mae) < 1000 and "\n---\n\n# Enorme" in mae and "## Anexos" in mae and "[[2026-02-07 Enorme - 01 A]]" in mae
             and "[[2026-02-07 Enorme - 02 B]]" in mae and "Abertura da enorme." in mae, "nota-mae vira abertura + indice")
-    parte = le("pagamentos/Specs/Anexos - 2026-02-07 Enorme/2026-02-07 Enorme - 02 B.md")
-    confere(parte.startswith("---\nprojeto: pagamentos\ntipo: spec\n") and "# B" in parte
+    parte = le("pagamentos/Specs/2026-02-07 Enorme - 02 B.md")
+    confere(parte.startswith("---\nprojeto: pagamentos\ntipo: spec\n") and "\nparte_de: 2026-02-07 Enorme\n---\n\n# B" in parte
             and "Parte 2 de 2 de [[2026-02-07 Enorme]]" in parte and parte.count("x" * 200) == 100,
-            "anexo tem o frontmatter da mae, o titulo da secao e o conteudo inteiro")
+            "anexo fica ao lado, com o frontmatter da mae mais parte_de, o titulo da secao e o conteudo inteiro")
     erros, avisos, _ = sv.validar_vault(projeto="pagamentos")
-    confere(not any(c == "E5" and "Anexos - " in o for c, o, _ in erros) and not any(c == "A5" for c, _, _ in avisos),
-            "anexos nao sao cobrados no hub e a nota grande sumiu do A5")
+    confere(not any(c == "E5" and "Enorme - " in o for c, o, _ in erros) and not any(c == "A5" for c, _, _ in avisos)
+            and not any(c in ("A6", "A8") and "Enorme" in o for c, o, _ in avisos),
+            "anexos e nota-mae nao sao cobrados no hub nem no padrao de secoes e nome, e a nota grande sumiu do A5")
     confere("Nota grande" not in sv.ler_nota("2026-02-07 Enorme") and "xxxx" in sv.ler_nota("Enorme - 02 B"),
             "a mae ja nao devolve esboco e o anexo se acha pelo nome")
     for args, erro in ((dict(nota="2026-02-07 Enorme"), "ja dividida"), (dict(nota="2026-02-05 Vizinha"), "ao menos duas")):

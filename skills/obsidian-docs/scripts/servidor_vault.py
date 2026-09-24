@@ -30,7 +30,7 @@ Ferramentas:
   salvar_nota     cria a nota com tudo que a convencao exige (e hub/Home novos)
   atualizar_nota  corpo, status, tags, sucessora (obsoleta) ou resumo no hub
   renomear_nota   move a nota, troca o titulo e reescreve os wikilinks do vault
-  dividir_nota    nota grande vira indice + uma nota por secao em Anexos - <nome>/
+  dividir_nota    nota grande vira indice + uma nota por secao ao lado (parte_de:)
   mapa_codigo     mapa do codigo (graphify-out do repo, ponteiro Repo: do hub)
   consultar_codigo pergunta ao grafo via CLI graphify (query/explain/path)
   gerar_mapa      regrava a nota Mapa do Codigo preservando a Leitura curada
@@ -709,8 +709,9 @@ TIPOS = {"spec", "plano", "bug", "evolucao", "arquitetura", "adr", "analise", "m
 STATUS = {"rascunho", "ativo", "resolvido", "obsoleto"}
 PASTAS = {"spec": "Specs", "plano": "Specs", "bug": "Bugs", "evolucao": "Evolucoes",
           "arquitetura": "Arquitetura", "adr": "Arquitetura", "analise": "Analises"}
-# Alem do que o SO proibe, `# ^ [ ]`: no nome, eles quebram o wikilink que aponta a nota.
-NOME_PROIBIDO_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f#^\[\]]')
+# Alem do que o SO proibe, `# ^ [ ]` e a crase: no nome, eles quebram o wikilink que
+# aponta a nota (a crase porque links_de tira trechos de codigo antes de ler os links).
+NOME_PROIBIDO_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f#^\[\]`]')
 SUBSTITUIDA_RE = re.compile(r"^Substituída por \[\[[^\]]*\]\]\.\n+")
 PREFIXO_DATA_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")
 
@@ -920,6 +921,8 @@ def secoes_faltando(tipo, corpo):
     if not pedidas:
         return []
     tem = [normalizar(t) for nivel, t, _, _ in secoes_de(corpo)[0]]
+    if "anexos" in tem:  # nota dividida: as secoes vivem nos anexos
+        return []
 
     def bate(chave):
         return any(chave in t or any(s in t for s in SINONIMOS.get(chave, ())) for t in tem)
@@ -1204,7 +1207,7 @@ def dividir_nota(nota="", lote=False):
         puxar()
     todas = notas()
     alvo = alvo_de_escrita(nota, todas)
-    if "/Anexos - " in alvo["rel"]:
+    if alvo["fm"].get("parte_de"):
         raise ErroUso("anexo nao se divide de novo")
     texto = alvo["texto"]
     fim_fm = texto.find("\n---", 3) if texto.startswith("---") else -1
@@ -1220,22 +1223,26 @@ def dividir_nota(nota="", lote=False):
     coberto = {i for _, _, ini, fim in n2 for i in range(ini, fim)}
     if len(coberto) != len(linhas) - n2[0][2]:
         raise ErroUso("ha um `# ` no meio da nota: divida a mao")
-    pasta_pai = os.path.dirname(alvo["rel"])
-    pasta = (f"{pasta_pai}/" if pasta_pai else "") + f"Anexos - {alvo['nome']}"
+    # Os anexos ficam ao lado da nota-mae, nao numa subpasta: no Windows o caminho
+    # `Anexos - <nome>/<nome> - NN <secao>.md` passava dos 260 caracteres.
+    pasta = os.path.dirname(alvo["rel"])
+    cabeca_parte = cabeca[:-4] + f"\nparte_de: {alvo['nome']}\n---"
     partes = []
     for i, (_, titulo, ini, fim) in enumerate(n2, 1):
-        nome_parte = nome_seguro(f"{alvo['nome']} - {i:02d} {curto(titulo, 40)}")
+        rotulo = titulo if len(titulo) <= 40 else titulo[:40].rsplit(" ", 1)[0]
+        nome_parte = nome_seguro(f"{alvo['nome']} - {i:02d} {rotulo}")
         conteudo = "\n".join(linhas[ini + 1:fim]).strip("\n")
         corpo_parte = (f"# {titulo}\n\nProjeto: [[{alvo['projeto']}]]. Parte {i} de {len(n2)} "
                        f"de [[{alvo['nome']}]].\n\n{conteudo}\n")
-        escrever(os.path.join(VAULT, *f"{pasta}/{nome_parte}.md".split("/")), cabeca + "\n" + corpo_parte)
+        rel_parte = f"{pasta}/{nome_parte}.md" if pasta else f"{nome_parte}.md"
+        escrever(os.path.join(VAULT, *rel_parte.split("/")), cabeca_parte + "\n\n" + corpo_parte)
         partes.append((nome_parte, titulo))
-    abertura = "\n".join(linhas[:n2[0][2]]).rstrip("\n")
+    abertura = "\n".join(linhas[:n2[0][2]]).strip("\n")
     indice_ = "\n".join(f"- [[{p}]] — {t}" for p, t in partes)
     escrever(os.path.join(VAULT, *alvo["rel"].split("/")),
-             f"{cabeca}\n{abertura}\n\n## Anexos\n\nDividida em {len(partes)} partes, em "
-             f"`{os.path.basename(pasta)}/`:\n\n{indice_}\n")
-    return (f"Dividida: {alvo['rel']} em {len(partes)} anexo(s) em {pasta}/\n"
+             f"{cabeca}\n\n{abertura}\n\n## Anexos\n\nDividida em {len(partes)} partes, ao lado "
+             f"desta nota:\n\n{indice_}\n")
+    return (f"Dividida: {alvo['rel']} em {len(partes)} anexo(s) ao lado dela\n"
             "Git: " + (LOTE_PENDENTE if lote else
                        sincronizar(f"{alvo['projeto']}: divide {alvo['nome']} em {len(partes)} anexos")))
 
@@ -1258,7 +1265,7 @@ def validar_vault(projeto=None, tipo=None):
     for n in todas:
         por_nome.setdefault(n["nome"], n["rel"])
         if n["projeto"]:
-            projetos[n["projeto"]].append((n["nome"], n["rel"]))
+            projetos[n["projeto"]].append(n)
         fm = frontmatter(n["texto"])
         if fm is None:
             erros.append(("E1", n["rel"], "sem frontmatter"))
@@ -1294,9 +1301,9 @@ def validar_vault(projeto=None, tipo=None):
             avisos.append(("A3", proj + "/", "projeto sem hub"))
             continue
         citados = hub["links"]
-        for nome, rel in nomes:  # anexo de nota dividida e listado pela nota-mae, nao pelo hub
-            if nome != proj and nome not in citados and "/Anexos - " not in rel:
-                erros.append(("E5", rel, "nao listada no hub"))
+        for n in nomes:  # anexo (parte_de:) e listado pela nota-mae, nao pelo hub
+            if n["nome"] != proj and n["nome"] not in citados and not n["fm"].get("parte_de"):
+                erros.append(("E5", n["rel"], "nao listada no hub"))
     for n in sorted(todas, key=lambda x: x["rel"]):
         if n["nome"] not in links_para and n["nome"] != "Home":
             avisos.append(("A1", n["rel"], "orfa: ninguem linka para ela"))
@@ -1333,6 +1340,8 @@ def avisos_padrao_da_nota(n):
     if len(n["texto"]) > TETO_NOTA:
         saida.append(("A5", n["rel"], f"nota grande: {len(n['texto'])} caracteres (teto {TETO_NOTA}); "
                                       "ler_nota devolve o esboco"))
+    if n["fm"].get("parte_de"):  # anexo herda tipo, tags e nome da mae: so o tamanho conta
+        return saida
     t = valores(n["fm"].get("tipo"))[0]
     if "/Tickets - " not in n["rel"]:
         faltam = secoes_faltando(t, corpo_de(n))
@@ -1801,9 +1810,10 @@ FERRAMENTAS = [
      }, "nota", "novo_titulo"),
      "fn": renomear_nota},
     {"name": "dividir_nota",
-     "description": "Nota grande vira abertura + indice, e cada secao ## vira uma nota em "
-                    "`Anexos - <nome>/` ao lado dela, com o mesmo frontmatter. Os anexos nao "
-                    "entram no hub (a nota-mae os lista) e o validar nao os cobra la. Commit+push.",
+     "description": "Nota grande vira abertura + indice, e cada secao ## vira uma nota ao lado "
+                    "dela, `<nome> - NN <secao>`, com o mesmo frontmatter mais `parte_de:`. Os "
+                    "anexos nao entram no hub (a nota-mae os lista) e o validar nao os cobra la. "
+                    "Commit+push.",
      "inputSchema": esquema({"nota": P_NOTA, "lote": P_LOTE}, "nota"),
      "fn": dividir_nota},
     {"name": "sincronizar",
