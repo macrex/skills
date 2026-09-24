@@ -324,6 +324,52 @@ def testes_validar():
             and "Nada" not in sv.relatorio_validacao([], [], totais, so_placar=True), "so_placar imprime so o placar")
 
 
+def testes_reorganizar():
+    # --- renomear: arquivo, titulo e os wikilinks de quem aponta (hub inclusive) ---
+    saida = sv.renomear_nota("2026-02-03 Com link", "Com link renomeada")
+    confere("Renomeada: pagamentos/Analises/2026-02-03 Com link.md -> pagamentos/Analises/2026-02-03 Com link renomeada.md" in saida
+            and "Wikilinks reescritos em 2 nota(s)" in saida, f"renomear move e conta os links reescritos: {saida.splitlines()[:2]}")
+    confere(not existe("pagamentos/Analises/2026-02-03 Com link.md") and existe("pagamentos/Analises/2026-02-03 Com link renomeada.md"),
+            "arquivo movido")
+    nota = le("pagamentos/Analises/2026-02-03 Com link renomeada.md")
+    confere("# Com link renomeada" in nota and "[[Nao existe]]" in nota, "titulo trocado e conteudo preservado")
+    hub = le("pagamentos/pagamentos.md")
+    confere("[[2026-02-03 Com link renomeada]] — r" in hub and "[[2026-02-03 Com link]]" not in hub, "hub reescrito")
+    confere("Deriva de [[2026-02-03 Com link renomeada]]" in le("pagamentos/Analises/2026-02-05 Vizinha.md"), "link em outra nota reescrito")
+    # a colisao e por nome completo: mesma data e mesmo titulo no mesmo projeto
+    for args, erro in ((dict(nota="pagamentos", novo_titulo="x"), "hub e mapa"),
+                       (dict(nota="2026-02-01 Nota adr", novo_titulo="Nota bug"), "ja existe"),
+                       (dict(nota="2026-02-05 Vizinha", novo_titulo="Vizinha"), "ja se chama")):
+        try:
+            sv.renomear_nota(**args)
+            confere(False, f"deveria recusar {args}")
+        except sv.ErroUso as e:
+            confere(erro in str(e), f"renomear recusa {args}")
+
+    # --- dividir: Enorme (## A, ## B) vira abertura + indice, e dois anexos fora do hub ---
+    saida = sv.dividir_nota("2026-02-07 Enorme")
+    confere("Dividida: pagamentos/Specs/2026-02-07 Enorme.md em 2 anexo(s) em pagamentos/Specs/Anexos - 2026-02-07 Enorme/" in saida,
+            f"dividir: {saida.splitlines()[0]}")
+    mae = le("pagamentos/Specs/2026-02-07 Enorme.md")
+    confere(len(mae) < 1000 and "## Anexos" in mae and "[[2026-02-07 Enorme - 01 A]]" in mae
+            and "[[2026-02-07 Enorme - 02 B]]" in mae and "Abertura da enorme." in mae, "nota-mae vira abertura + indice")
+    parte = le("pagamentos/Specs/Anexos - 2026-02-07 Enorme/2026-02-07 Enorme - 02 B.md")
+    confere(parte.startswith("---\nprojeto: pagamentos\ntipo: spec\n") and "# B" in parte
+            and "Parte 2 de 2 de [[2026-02-07 Enorme]]" in parte and parte.count("x" * 200) == 100,
+            "anexo tem o frontmatter da mae, o titulo da secao e o conteudo inteiro")
+    erros, avisos, _ = sv.validar_vault(projeto="pagamentos")
+    confere(not any(c == "E5" and "Anexos - " in o for c, o, _ in erros) and not any(c == "A5" for c, _, _ in avisos),
+            "anexos nao sao cobrados no hub e a nota grande sumiu do A5")
+    confere("Nota grande" not in sv.ler_nota("2026-02-07 Enorme") and "xxxx" in sv.ler_nota("Enorme - 02 B"),
+            "a mae ja nao devolve esboco e o anexo se acha pelo nome")
+    for args, erro in ((dict(nota="2026-02-07 Enorme"), "ja dividida"), (dict(nota="2026-02-05 Vizinha"), "ao menos duas")):
+        try:
+            sv.dividir_nota(**args)
+            confere(False, f"deveria recusar {args}")
+        except sv.ErroUso as e:
+            confere(erro in str(e), f"dividir recusa {args}")
+
+
 def testes_git():
     vault = sv.VAULT
     subprocess.run(["git", "-C", vault, "init", "-q", "-b", "main"], check=True)
@@ -375,6 +421,7 @@ def main():
         sv.SEM_GIT = True
         testes()
         testes_validar()   # antes do cache, que apaga uma nota linkada e criaria outro E4
+        testes_reorganizar()
         testes_cache()
         shutil.rmtree(sv.VAULT)
         os.makedirs(sv.VAULT)

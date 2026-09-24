@@ -29,6 +29,8 @@ Ferramentas:
                   fora os links estruturais (hub e Home)
   salvar_nota     cria a nota com tudo que a convencao exige (e hub/Home novos)
   atualizar_nota  corpo, status, tags, sucessora (obsoleta) ou resumo no hub
+  renomear_nota   move a nota, troca o titulo e reescreve os wikilinks do vault
+  dividir_nota    nota grande vira indice + uma nota por secao em Anexos - <nome>/
   mapa_codigo     mapa do codigo (graphify-out do repo, ponteiro Repo: do hub)
   consultar_codigo pergunta ao grafo via CLI graphify (query/explain/path)
   gerar_mapa      regrava a nota Mapa do Codigo preservando a Leitura curada
@@ -80,7 +82,8 @@ INSTRUCOES = (
     "contexto_projeto (arranque num projeto, com teto: use no lugar do hub inteiro), "
     "buscar, listar_notas, ler_nota (secao= quando so uma parte importa), conexoes "
     "(relacionadas com resumo). Gravar: salvar_nota (nota nova; faz pasta, "
-    "nome, frontmatter, hub, Home e git) e atualizar_nota (nota existente). "
+    "nome, frontmatter, hub, Home e git) e atualizar_nota (nota existente). Reorganizar: "
+    "renomear_nota (reescreve os wikilinks), dividir_nota (nota grande vira indice + anexos). "
     "Codigo: mapa_codigo (antes de mexer no projeto), consultar_codigo (arquitetura), "
     "gerar_mapa (apos o graphify); salvar_nota aceita arquivos= para citar componentes. "
     "Muitas notas de uma vez (migracao, tickets): lote=true em cada gravacao e "
@@ -1121,6 +1124,118 @@ def sincronizar_lote(mensagem=""):
     return f"{len(caminhos)} arquivo(s) no lote. Git: " + saida
 
 
+# ---------- reorganizar: renomear e dividir ----------
+
+def substituir_links(texto, antigo, novo):
+    """[[antigo]], [[antigo|x]], [[antigo#y]] e [[Pasta/antigo]] viram novo, fora de
+    blocos de codigo. (texto, quantos)."""
+    padrao = re.compile(r"(\[\[(?:[^\]\[|#]*/)?)" + re.escape(antigo) + r"(?=[\]|#])")
+    partes, total, pos = [], 0, 0
+    for m in CODEBLOCK_RE.finditer(texto):
+        trecho_, k = padrao.subn(lambda mm: mm.group(1) + novo, texto[pos:m.start()])
+        partes += [trecho_, m.group(0)]
+        total, pos = total + k, m.end()
+    trecho_, k = padrao.subn(lambda mm: mm.group(1) + novo, texto[pos:])
+    partes.append(trecho_)
+    return "".join(partes), total + k
+
+
+def alvo_de_escrita(nota, todas):
+    """Nota comum resolvida para uma operacao de reorganizacao; hub, mapa e anexo ficam de fora."""
+    alvo, erro = resolver(nota, todas)
+    if erro:
+        raise ErroUso(erro)
+    if eh_hub(alvo) or valores(alvo["fm"].get("tipo"))[0] == "mapa":
+        raise ErroUso("hub e mapa tem nome e lugar fixos pela convencao; so notas comuns")
+    return alvo
+
+
+def renomear_nota(nota="", novo_titulo="", lote=False):
+    """Move o arquivo, troca o `# titulo` e reescreve os wikilinks do vault inteiro."""
+    novo_titulo = nome_seguro(novo_titulo)
+    if not novo_titulo:
+        raise ErroUso("novo_titulo e obrigatorio")
+    if lote:
+        abrir_lote()
+    else:
+        puxar()
+    todas = notas()
+    alvo = alvo_de_escrita(nota, todas)
+    m = PREFIXO_DATA_RE.match(alvo["nome"])
+    novo_nome = (m.group(0) if m else "") + novo_titulo
+    if novo_nome == alvo["nome"]:
+        raise ErroUso("a nota ja se chama assim")
+    if any(n["nome"] == novo_nome and n["projeto"] == alvo["projeto"] for n in todas):
+        raise ErroUso(f"ja existe {novo_nome} no projeto {alvo['projeto']}")
+    pasta = os.path.dirname(alvo["rel"])
+    novo_rel = f"{pasta}/{novo_nome}.md" if pasta else f"{novo_nome}.md"
+    texto = alvo["texto"]
+    mh = re.search(r"(?m)^# (.*)$", texto)  # so o titulo muda; outro H1 fica
+    if mh and normalizar(mh.group(1).strip()) == normalizar(PREFIXO_DATA_RE.sub("", alvo["nome"])):
+        texto = texto[:mh.start(1)] + novo_titulo + texto[mh.end(1):]
+    antigo = os.path.join(VAULT, *alvo["rel"].split("/"))
+    escrever(os.path.join(VAULT, *novo_rel.split("/")), texto)
+    os.remove(antigo)
+    if _LOTE is not None:
+        _LOTE.append(antigo)
+    tocadas = 0
+    for n in todas:
+        if n is alvo:
+            continue
+        novo_texto, k = substituir_links(n["texto"], alvo["nome"], novo_nome)
+        if k:
+            escrever(os.path.join(VAULT, *n["rel"].split("/")), novo_texto)
+            tocadas += 1
+    return (f"Renomeada: {alvo['rel']} -> {novo_rel}\nWikilinks reescritos em {tocadas} nota(s)\n"
+            "Git: " + (LOTE_PENDENTE if lote else
+                       sincronizar(f"{alvo['projeto']}: renomeia {alvo['nome']} -> {novo_nome}")))
+
+
+def dividir_nota(nota="", lote=False):
+    """Nota grande vira abertura + indice, e cada secao ## vira uma nota em
+    `Anexos - <nome>/`, ao lado dela. Os anexos nao entram no hub: a nota-mae os lista."""
+    if lote:
+        abrir_lote()
+    else:
+        puxar()
+    todas = notas()
+    alvo = alvo_de_escrita(nota, todas)
+    if "/Anexos - " in alvo["rel"]:
+        raise ErroUso("anexo nao se divide de novo")
+    texto = alvo["texto"]
+    fim_fm = texto.find("\n---", 3) if texto.startswith("---") else -1
+    if fim_fm == -1:
+        raise ErroUso(f"{alvo['rel']} nao tem frontmatter")
+    cabeca, corpo = texto[:fim_fm + 4], texto[fim_fm + 4:]
+    secoes, linhas = secoes_de(corpo)
+    n2 = [s for s in secoes if s[0] == 2]
+    if any(normalizar(t) == "anexos" for _, t, _, _ in n2):
+        raise ErroUso("ja dividida: tem a secao Anexos")
+    if len(n2) < 2:
+        raise ErroUso("precisa de ao menos duas secoes ## para dividir")
+    coberto = {i for _, _, ini, fim in n2 for i in range(ini, fim)}
+    if len(coberto) != len(linhas) - n2[0][2]:
+        raise ErroUso("ha um `# ` no meio da nota: divida a mao")
+    pasta_pai = os.path.dirname(alvo["rel"])
+    pasta = (f"{pasta_pai}/" if pasta_pai else "") + f"Anexos - {alvo['nome']}"
+    partes = []
+    for i, (_, titulo, ini, fim) in enumerate(n2, 1):
+        nome_parte = nome_seguro(f"{alvo['nome']} - {i:02d} {curto(titulo, 40)}")
+        conteudo = "\n".join(linhas[ini + 1:fim]).strip("\n")
+        corpo_parte = (f"# {titulo}\n\nProjeto: [[{alvo['projeto']}]]. Parte {i} de {len(n2)} "
+                       f"de [[{alvo['nome']}]].\n\n{conteudo}\n")
+        escrever(os.path.join(VAULT, *f"{pasta}/{nome_parte}.md".split("/")), cabeca + "\n" + corpo_parte)
+        partes.append((nome_parte, titulo))
+    abertura = "\n".join(linhas[:n2[0][2]]).rstrip("\n")
+    indice_ = "\n".join(f"- [[{p}]] — {t}" for p, t in partes)
+    escrever(os.path.join(VAULT, *alvo["rel"].split("/")),
+             f"{cabeca}\n{abertura}\n\n## Anexos\n\nDividida em {len(partes)} partes, em "
+             f"`{os.path.basename(pasta)}/`:\n\n{indice_}\n")
+    return (f"Dividida: {alvo['rel']} em {len(partes)} anexo(s) em {pasta}/\n"
+            "Git: " + (LOTE_PENDENTE if lote else
+                       sincronizar(f"{alvo['projeto']}: divide {alvo['nome']} em {len(partes)} anexos")))
+
+
 # ---------- linter ----------
 
 TIPOS_VALIDOS = TIPOS | {"hub"}
@@ -1139,7 +1254,7 @@ def validar_vault(projeto=None, tipo=None):
     for n in todas:
         por_nome.setdefault(n["nome"], n["rel"])
         if n["projeto"]:
-            projetos[n["projeto"]].append(n["nome"])
+            projetos[n["projeto"]].append((n["nome"], n["rel"]))
         fm = frontmatter(n["texto"])
         if fm is None:
             erros.append(("E1", n["rel"], "sem frontmatter"))
@@ -1175,9 +1290,9 @@ def validar_vault(projeto=None, tipo=None):
             avisos.append(("A3", proj + "/", "projeto sem hub"))
             continue
         citados = hub["links"]
-        for nome in nomes:
-            if nome != proj and nome not in citados:
-                erros.append(("E5", f"{proj}/{nome}.md", "nao listada no hub"))
+        for nome, rel in nomes:  # anexo de nota dividida e listado pela nota-mae, nao pelo hub
+            if nome != proj and nome not in citados and "/Anexos - " not in rel:
+                erros.append(("E5", rel, "nao listada no hub"))
     for n in sorted(todas, key=lambda x: x["rel"]):
         if n["nome"] not in links_para and n["nome"] != "Home":
             avisos.append(("A1", n["rel"], "orfa: ninguem linka para ela"))
@@ -1671,6 +1786,22 @@ FERRAMENTAS = [
          "lote": P_LOTE,
      }, "nota"),
      "fn": atualizar_nota},
+    {"name": "renomear_nota",
+     "description": "Renomeia uma nota comum: move o arquivo (a data do nome fica), troca o "
+                    "`# titulo` e reescreve os wikilinks do vault inteiro, hubs inclusive. Hub "
+                    "e mapa nao se renomeiam. Commit+push.",
+     "inputSchema": esquema({
+         "nota": P_NOTA,
+         "novo_titulo": {"type": "string", "description": "Titulo novo, sem a data."},
+         "lote": P_LOTE,
+     }, "nota", "novo_titulo"),
+     "fn": renomear_nota},
+    {"name": "dividir_nota",
+     "description": "Nota grande vira abertura + indice, e cada secao ## vira uma nota em "
+                    "`Anexos - <nome>/` ao lado dela, com o mesmo frontmatter. Os anexos nao "
+                    "entram no hub (a nota-mae os lista) e o validar nao os cobra la. Commit+push.",
+     "inputSchema": esquema({"nota": P_NOTA, "lote": P_LOTE}, "nota"),
+     "fn": dividir_nota},
     {"name": "sincronizar",
      "description": "Fecha um lote (gravacoes com lote=true): commit unico -> pull --rebase "
                     "-> push. Obrigatorio ao fim de migracao ou serie de tickets; sem isso "

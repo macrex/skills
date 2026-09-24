@@ -120,7 +120,10 @@ O servidor confere ao salvar (avisa, nunca recusa) e `validar tipo=padrao` lista
   `status=resolvido` na mesma leva (o servidor lista os que continuam ativos ao salvar). Toda nota
   linka ao menos uma relacionada além do hub quando ela existe.
 - **Tamanho**: acima de 40.000 caracteres `ler_nota` devolve só o esboço. Spec ou plano desse
-  tamanho vira spec curta mais tickets (`artefato=`), ou anexos em notas próprias.
+  tamanho vira spec curta mais tickets (`artefato=`), ou `dividir_nota`: abertura mais índice na
+  nota, uma nota por seção em `Anexos - <nome>/`, fora do hub.
+- **Nome errado** (data repetida, sufixo de tipo, título longo) → `renomear_nota`: move o arquivo
+  e reescreve os wikilinks do vault inteiro. Nunca renomeie por fora dele.
 
 ## Validar
 
