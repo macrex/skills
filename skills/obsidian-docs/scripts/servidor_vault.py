@@ -571,12 +571,19 @@ def conexoes(nota=""):
     por_nome, por_rel = idx["por_nome"], {n["rel"]: n for n in todas}
     proj, hub_rel, hub = alvo["projeto"], hub_de(alvo), eh_hub(alvo)
 
+    mae = alvo["fm"].get("parte_de")
+
     def estrutural(rel):
-        """Link que a convencao gera sozinha: nota <-> hub do projeto, hub <-> Home."""
+        """Link que a convencao gera sozinha: nota <-> hub do projeto, hub <-> Home,
+        nota-mae <-> anexo."""
         if rel in ("Home.md", hub_rel):
             return True
         outra = por_rel.get(rel)
-        return bool(hub and outra and (outra["projeto"] == proj or (proj is None and eh_hub(outra))))
+        if not outra:
+            return False
+        if outra["fm"].get("parte_de") == alvo["nome"] or (mae and outra["nome"] == mae):
+            return True
+        return bool(hub and (outra["projeto"] == proj or (proj is None and eh_hub(outra))))
 
     def linha(rel):
         r = resumo_de(por_rel[rel], idx)
@@ -601,6 +608,11 @@ def conexoes(nota=""):
     elif not hub and hub_rel:
         linhas.append(f"Hub: [[{proj}]] (" + ("lista esta nota" if hub_rel in backlinks
                                                else "NAO lista esta nota: validar aponta") + ")")
+    anexos = sum(1 for n in todas if n["fm"].get("parte_de") == alvo["nome"])
+    if anexos:
+        linhas.append(f"Anexos: {anexos} (o indice esta na propria nota)")
+    if mae:
+        linhas.append(f"Parte de [[{mae}]]")
     linhas.append(f"Relacionadas de saida ({len(saida) + len(quebrados)}):"
                   if saida or quebrados else "Relacionadas de saida: nenhuma alem de hub/Home")
     linhas += [linha(r) for r in saida]

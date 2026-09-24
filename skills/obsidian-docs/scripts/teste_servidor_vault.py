@@ -369,6 +369,12 @@ def testes_reorganizar():
             "anexos e nota-mae nao sao cobrados no hub nem no padrao de secoes e nome, e a nota grande sumiu do A5")
     confere("Nota grande" not in sv.ler_nota("2026-02-07 Enorme") and "xxxx" in sv.ler_nota("Enorme - 02 B"),
             "a mae ja nao devolve esboco e o anexo se acha pelo nome")
+    con = sv.conexoes("2026-02-07 Enorme")
+    confere("Anexos: 2 (o indice esta na propria nota)" in con and "Enorme - 01 A" not in con
+            and "Relacionadas de saida: nenhuma" in con, "conexoes da mae resume os anexos numa linha")
+    con = sv.conexoes("Enorme - 02 B")
+    confere("Parte de [[2026-02-07 Enorme]]" in con and "Backlinks: nenhum" in con and "- pagamentos/Specs/2026-02-07 Enorme.md" not in con,
+            "conexoes do anexo aponta a mae numa linha, sem lista-la como relacionada")
     for args, erro in ((dict(nota="2026-02-07 Enorme"), "ja dividida"), (dict(nota="2026-02-05 Vizinha"), "ao menos duas")):
         try:
             sv.dividir_nota(**args)

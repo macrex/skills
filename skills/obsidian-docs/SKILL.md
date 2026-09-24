@@ -104,27 +104,21 @@ O que cada ferramenta aceita está na descrição dela no MCP.
 
 ## Padrão de nota
 
-O servidor confere ao salvar (avisa, nunca recusa) e `validar tipo=padrao` lista no vault:
+O servidor avisa ao salvar (nunca recusa) e `validar tipo=padrao` lista no vault:
 
-- **Título** até 80 caracteres, sem data dentro dele nem sufixo de tipo como `(Plano)`: a data já
-  está no nome e o tipo no frontmatter. O nome aparece em hub, `buscar` e `conexoes`.
-- **Resumo** até 200 caracteres, uma frase que diz o que a nota decide ou entrega; hash de commit
-  vai no corpo. É o que `buscar` e `contexto_projeto` mostram.
-- **Tags** 1 a 3; o servidor normaliza para kebab-case sem acento.
-- **Corpo**: um parágrafo de abertura em prosa e as seções do tipo — `evolucao`: `## O que mudou`,
-  `## Verificação`, `## Pendências`; `bug`: `## Sintoma`, `## Causa`, `## Correção`;
-  `spec`/`plano`: `## Objetivo`, `## Fora de escopo` (mais o que a spec pedir); `adr`:
-  `## Contexto`, `## Decisão`, `## Consequências`; `analise`: `## Achados`, `## Recomendação`.
-  Tickets, `arquitetura` e `mapa` ficam de fora.
-- **Links e ciclo**: a evolução linka a spec, o plano ou o bug que fechou, e eles vão a
-  `status=resolvido` na mesma leva (o servidor lista os que continuam ativos ao salvar). Toda nota
-  linka ao menos uma relacionada além do hub quando ela existe.
-- **Tamanho**: acima de 40.000 caracteres `ler_nota` devolve só o esboço. Spec ou plano desse
-  tamanho vira spec curta mais tickets (`artefato=`), ou `dividir_nota`: abertura mais índice na
-  nota, uma nota por seção ao lado dela (`<nome> - NN <seção>`, com `parte_de:` no frontmatter),
-  fora do hub.
-- **Nome errado** (data repetida, sufixo de tipo, título longo) → `renomear_nota`: move o arquivo
-  e reescreve os wikilinks do vault inteiro. Nunca renomeie por fora dele.
+- **Título** até 80 caracteres, sem data nem sufixo de tipo. **Resumo** até 200, uma frase com o
+  que a nota decide ou entrega; hash de commit vai no corpo. **Tags** 1 a 3, kebab-case.
+- **Corpo**: abertura em prosa e as seções do tipo. `evolucao`: `## O que mudou`,
+  `## Verificação`, `## Pendências`. `bug`: `## Sintoma`, `## Causa`, `## Correção`.
+  `spec`/`plano`: `## Objetivo`, `## Fora de escopo`. `adr`: `## Contexto`, `## Decisão`,
+  `## Consequências`. `analise`: `## Achados`, `## Recomendação`. Tickets, `arquitetura`, `mapa`
+  e anexos ficam de fora.
+- **Ciclo**: a evolução linka a spec, o plano ou o bug que fechou, e eles vão a `status=resolvido`
+  na mesma leva; o servidor lista os que continuam ativos. Toda nota linka uma relacionada além do
+  hub quando ela existe.
+- **Tamanho e nome**: acima de 40.000 caracteres `ler_nota` devolve só o esboço; `dividir_nota`
+  (anexos ao lado, com `parte_de:`) ou spec curta mais tickets. Nome errado → `renomear_nota`,
+  nunca por fora dele.
 
 ## Validar
 
