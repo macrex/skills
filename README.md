@@ -1,8 +1,9 @@
 # skills
 
-Três skills para agentes de IA: `/faz` leva um pedido até código verificado, `/obsidian-docs`
-guarda a documentação num vault Obsidian fora do repositório, e `/cpv` fecha a leva com commit,
-push e a nota no vault. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.
+Skills para agentes de IA:\
+`/faz` leva um pedido até código verificado,\
+`/obsidian-docs` guarda a documentação num vault Obsidian fora do repositório, e\
+`/cpv` fecha a leva com commit, push e a nota no vault. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.
 
 ## Usar
 
