@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Confere o que o Claude Code espera deste repositorio antes de instala-lo.
+"""Confere o que cada harness espera deste repositorio antes de instala-lo.
 
   python scripts/validar_repo.py
 
 Checa os manifestos (.claude-plugin/plugin.json e marketplace.json, hooks/hooks.json),
 que todo caminho citado neles existe, e o frontmatter de cada skills/*/SKILL.md e
 do agent: `name` igual ao nome da pasta, `description` presente e dentro do limite,
-campos conhecidos. Sai com 1 se algo falhar — e o que a CI roda.
+campos conhecidos. Depois o contrato por harness: cada secao `## <harness>` de
+skills/faz/references/harness.md tem as mesmas linhas, uma secao de instalacao no
+README e o registro do MCP na obsidian-docs — um harness novo entra no teste ao
+ganhar a secao, e falha ate os outros dois arquivos o conhecerem. Sai com 1 se
+algo falhar — e o que a CI roda.
 """
 import json
 import os
@@ -18,7 +22,15 @@ CAMPOS_SKILL = {"name", "description", "argument-hint", "disable-model-invocatio
                 "allowed-tools", "user-invocable", "model", "context", "agent", "hooks", "when_to_use"}
 CAMPOS_AGENT = {"name", "description", "tools", "model", "skills", "color", "permissionMode", "hooks"}
 MAX_DESCRICAO = 1024
+# As linhas que toda secao de harness.md tem, na ordem: e o que o /faz le de cada harness.
+LINHAS_HARNESS = ("Reconhecer", "Skills do Matt", "Invocar uma skill", "Perguntar", "Sub-agente",
+                  "Segurar a sessão")
 falhas = []
+
+
+def ler(rel):
+    with open(os.path.join(RAIZ, rel), encoding="utf-8") as f:
+        return f.read()
 
 
 def falha(msg):
@@ -71,11 +83,37 @@ def checar_skill(pasta):
         if campo not in CAMPOS_SKILL:
             falha(f"{rel}: campo desconhecido no frontmatter: {campo}")
     # referencias a arquivos da propria skill precisam existir
-    with open(os.path.join(RAIZ, rel), encoding="utf-8") as f:
-        corpo = f.read()
+    corpo = ler(rel)
     for ref in set(re.findall(r"`((?:references|scripts|assets)/[\w./ -]+?)`", corpo)):
         if not os.path.exists(os.path.join(RAIZ, "skills", pasta, ref)):
             falha(f"{rel}: cita {ref}, que nao existe")
+    # o Codex ignora disable-model-invocation: skill escondida leva o agents/openai.yaml
+    if fm.get("disable-model-invocation") == "true":
+        yaml = os.path.join(RAIZ, "skills", pasta, "agents", "openai.yaml")
+        if not os.path.exists(yaml) or "allow_implicit_invocation: false" not in ler(f"skills/{pasta}/agents/openai.yaml"):
+            falha(f"skills/{pasta}: disable-model-invocation sem agents/openai.yaml com allow_implicit_invocation: false")
+
+
+def checar_harnesses():
+    texto = ler("skills/faz/references/harness.md")
+    secoes = re.split(r"^## ", texto, flags=re.M)[1:]
+    if len(secoes) < 2:
+        falha("harness.md: menos de duas secoes de harness")
+    readme = ler("README.md")
+    obsidian = ler("skills/obsidian-docs/SKILL.md")
+    ausentes = obsidian[obsidian.find("## Se as ferramentas do vault"):obsidian.find("## Quando usar")]
+    for secao in secoes:
+        titulo, _, corpo = secao.partition("\n")
+        nome = titulo.split(" (")[0].strip()
+        for linha in LINHAS_HARNESS:
+            if f"**{linha}:**" not in corpo:
+                falha(f"harness.md: secao {nome} sem a linha {linha}")
+        if not re.search(r"^### .*" + re.escape(nome), readme, re.M):
+            falha(f"README.md: sem secao de instalacao para {nome}")
+        if nome not in ausentes:
+            falha(f"obsidian-docs/SKILL.md: 'Se as ferramentas do vault' nao diz como registrar o MCP no {nome}")
+        else:
+            print(f"harness ok: {nome}")
 
 
 def main():
@@ -119,6 +157,7 @@ def main():
             checar_skill(pasta)
         else:
             falha(f"skills/{pasta}: sem SKILL.md")
+    checar_harnesses()
 
     for rel in (plugin or {}).get("agents", []):
         if os.path.exists(os.path.join(RAIZ, rel)):
@@ -133,7 +172,7 @@ def main():
     if falhas:
         print("\n".join("FALHA " + f for f in falhas))
         sys.exit(1)
-    print("repositorio ok: manifestos, caminhos e frontmatter das skills")
+    print("repositorio ok: manifestos, caminhos, frontmatter das skills e contrato por harness")
 
 
 if __name__ == "__main__":

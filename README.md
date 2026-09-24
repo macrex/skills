@@ -15,9 +15,12 @@ dependências) e o agent `vault-migrador`.
 | [`cpv`](skills/cpv/) | Fecha a leva: descobre os repositórios que a sessão tocou, varre segredos, commita no estilo de cada um, empurra e registra a evolução no vault | `/cpv`, `/cpv sem-vault` |
 
 - `faz` e `cpv` são user-invoked (`disable-model-invocation: true`): só rodam quando você digita.
-  O `/cpv` é a única autorização de commit; nenhum agente o invoca.
-- `faz` precisa das skills do Matt Pocock e do `/goal`, os dois do Claude Code:
-  `/plugin install mattpocock-skills`. Em outro agente ela carrega, mas não vai até o fim.
+  O `/cpv` é a única autorização de commit; nenhum agente o invoca. No Antigravity, que não
+  documenta esse campo, as duas aparecem na lista do agente.
+- `faz` precisa das skills do Matt Pocock e de um loop `/goal` que segure a sessão até a leva
+  fechar: nativo no Claude Code e no Codex, extensão no Pi, inexistente no Antigravity (lá você
+  reenvia `continue` quando a sessão parar). O que muda de um harness para outro está em
+  [`skills/faz/references/harness.md`](skills/faz/references/harness.md).
 - `obsidian-docs` e a nota do `cpv` precisam do MCP `vault-docs`; sem ele, `cpv` fecha só o git.
 
 ## Instalar
@@ -56,10 +59,55 @@ export OBSIDIAN_VAULT=~/obsidian/projetos       # Windows: setx OBSIDIAN_VAULT D
 
 Chegam as três skills e a extensão `vault-docs`, que sobe o mesmo servidor Python e injeta as
 regras do vault no system prompt. Sem a variável a extensão fica calada. Node 22.19+, `python3`
-ou `python` no PATH. O agent `vault-migrador` não vem (o Pi não tem sub-agentes): `migrar tudo`
+ou `python` no PATH. O agent `vault-migrador` não vem (o Pi não tem sub-agentes nativos): `migrar tudo`
 roda inline. Não instale também por `npx skills add -a pi`, ou as skills ficam duplicadas.
 
-### Outros agentes (Cursor, Codex, Gemini CLI, Copilot, OpenCode, Windsurf...)
+Para o `/faz`, as skills do Matt e um `/goal`:
+
+```bash
+pi install https://github.com/mattpocock/skills
+pi install npm:@narumitw/pi-goal        # /goal <objetivo>, que segura a sessão até a leva fechar
+pi install npm:pi-subagents             # opcional: modo sub-agents e a revisão em dois eixos
+```
+
+O repositório do Matt traz também `in-progress/` e `misc/`, que o plugin do Claude Code não
+instala; em `~/.pi/agent/settings.json` troque a entrada dele por esta, que deixa as mesmas 25:
+
+```json
+{ "source": "https://github.com/mattpocock/skills", "skills": ["skills/engineering/**", "skills/productivity/**"] }
+```
+
+O `/goal` do `@narumitw/pi-goal` pausa depois de 25 respostas (`continuationLimits.automaticTurns` em
+`~/.pi/agent/pi-goal.json`); uma leva de vários tickets passa disso — suba o valor.
+
+### Codex (`npx skills add`)
+
+```bash
+npx skills@latest add macrex/skills -g -a codex        # ~/.agents/skills, com link em ~/.codex/skills
+npx skills@latest add mattpocock/skills -g -a codex    # para o /faz
+codex mcp add vault-docs -- python ~/.agents/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
+```
+
+As regras do vault vão no `AGENTS.md` (passo 3 de "Outros agentes"). O `/goal` é nativo;
+sub-agentes pedem `[features] multi_agent = true` no `~/.codex/config.toml`. `faz` e `cpv` ficam
+fora da lista do agente pelo `agents/openai.yaml` de cada uma; `$faz` e `$cpv` as invocam.
+
+### Antigravity (CLI `agy` e IDE)
+
+```bash
+npx skills@latest add macrex/skills -g -a antigravity      # ~/.agents/skills, que o IDE lê
+npx skills@latest add mattpocock/skills -g -a antigravity  # para o /faz
+ln -s ~/.agents/skills/* ~/.gemini/antigravity-cli/skills/  # o CLI só lê esta pasta
+agy mcp add vault-docs -- python ~/.agents/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
+```
+
+O CLI e o IDE compartilham `~/.gemini/config/mcp_config.json`, então o `agy mcp add` vale para os
+dois (o arquivo com BOM quebra o `agy mcp`; grave sem). As regras do vault vão no `AGENTS.md` do
+projeto ou no `~/.gemini/GEMINI.md` (passo 3). Não há `/goal` nem sub-agente: o `/faz` roda
+inline, e você reenvia `continue` se a sessão parar antes de a leva fechar. No CLI as skills
+atendem por `/faz`, `/obsidian-docs` e `/cpv`; no IDE, cite a skill pelo nome.
+
+### Outros agentes (Cursor, Gemini CLI, Copilot, OpenCode, Windsurf...)
 
 **1. Skills**, pelo [CLI `skills`](https://skills.sh) (spec [Agent Skills](https://agentskills.io/specification)):
 

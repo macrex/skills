@@ -1,0 +1,4 @@
+# O Codex ignora `disable-model-invocation` do SKILL.md; este arquivo e o
+# equivalente dele: a skill sai da lista do agente e so entra por `$cpv`.
+policy:
+  allow_implicit_invocation: false

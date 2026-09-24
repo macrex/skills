@@ -8,7 +8,7 @@ allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vau
 
 # /cpv — fecha a leva
 
-# Versao: 1.1
+# Versao: 1.2
 
 **Este comando só vale digitado pelo usuário.** Nenhum agente, skill ou workflow o invoca
 (`disable-model-invocation: true`). Invocar `/cpv` É o pedido expresso de commit e push — de
@@ -44,7 +44,9 @@ do `cwd` — fechar só este deixaria mudança feita noutro repositório (o de s
 harness) sem commit e sem nota. A marca em cada linha diz a fonte:
 
 - **`sessao`** — o transcript registrou a sessão escrevendo ali; é o que sabe o que ESTA leva
-  tocou, inclusive fora do `cwd`.
+  tocou, inclusive fora do `cwd`. O descobridor lê o transcript do Claude Code, do Pi e do Codex;
+  no Antigravity não há transcript legível e só a varredura roda — a linha `transcript:` da saída
+  diz qual foi.
 - **`varredura`** — repo com mudança pendente sob o `cwd` (até 2 níveis). Entra como alvo **só**
   quando contém o `cwd`; os outros vão para `NAO INCLUIDOS` (numa pasta-pai a varredura acha
   dezenas de repos sujos de trabalho antigo).
@@ -182,7 +184,9 @@ trabalho)? Não crie outra: confira que ela está no hub (`contexto_projeto <pro
 
 ### 6. Relatório
 
-Três linhas **por repositório**:
+Descoberta só pela varredura (a linha `transcript:` do Contexto diz `nao encontrado`) → uma linha
+dizendo isso antes de tudo: repo tocado fora do `cwd` pode ter ficado de fora. Depois, três linhas
+**por repositório**:
 
 - o que foi commitado (hash curto e assunto), ou o commit que **já existia**
 - push: para onde, ou por que não

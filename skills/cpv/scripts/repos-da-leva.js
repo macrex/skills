@@ -18,7 +18,9 @@
 // Uso:
 //   node repos-da-leva.js [--cwd <dir>] [--sessao <id>] [--json]
 //
-// Sem --sessao usa CLAUDE_CODE_SESSION_ID. Sem transcript, so a varredura.
+// O transcript e o do harness que chamou (ver "o transcript" abaixo): --sessao ou
+// CLAUDE_CODE_SESSION_ID no Claude Code, PI_SESSION_FILE no Pi, o rollout mais
+// recente deste cwd no Codex. Sem transcript, so a varredura.
 
 const fs = require('fs');
 const path = require('path');
@@ -77,11 +79,26 @@ function raizDe(alvo) {
 
 // ------------------------------------------------------------- o transcript
 
-// O jsonl da sessao mora em ~/.claude/projects/<slug do cwd>/<id>.jsonl, e o
-// slug depende de onde a sessao abriu — entao procura pelo NOME do arquivo em
-// todos os projetos, que e o que nao muda.
-function acharTranscript(sessao) {
-  if (!sessao) return null;
+// Cada harness grava a sessao num lugar e num formato, e o que se quer de todos e
+// a mesma coisa: os caminhos que ferramentas de ESCRITA tocaram. Um repo apenas
+// lido nao pode virar alvo de `git add -A`.
+//
+//   claude-code  ~/.claude/projects/<slug do cwd>/<id>.jsonl, id em --sessao ou
+//                CLAUDE_CODE_SESSION_ID; tool_use Edit/Write com input.file_path.
+//   pi           PI_SESSION_FILE, que o bash do Pi exporta; toolCall edit/write
+//                com arguments.path, relativo ao cwd do cabecalho ou absoluto.
+//   codex        ~/.codex/sessions/AAAA/MM/DD/rollout-*.jsonl; patches
+//                `*** Update File: <caminho>` dentro de strings JSON, escapadas
+//                uma ou duas vezes. O Codex nao exporta o id da sessao para o
+//                shell. ponytail: vale o rollout dos ultimos minutos com o cwd
+//                desta chamada — a sessao corrente acabou de gravar a propria
+//                chamada deste script —, ate o Codex exportar o id.
+//   antigravity  SQLite em ~/.gemini/antigravity*/conversations, sem leitura sem
+//                dependencia: fica so a varredura, e a saida diz isso.
+
+// O slug do Claude Code depende de onde a sessao abriu — entao procura pelo NOME
+// do arquivo em todos os projetos, que e o que nao muda.
+function transcriptClaude(sessao) {
   const base = path.join(os.homedir(), '.claude', 'projects');
   let projetos;
   try {
@@ -96,36 +113,160 @@ function acharTranscript(sessao) {
   return null;
 }
 
-// Todo caminho de arquivo que a sessao ESCREVEU: so o `input` das ferramentas
-// de escrita conta. `Read` usa o mesmo campo `file_path`, e um repo apenas lido
-// nao pode virar alvo de `git add -A`. Sao megabytes, entao so as linhas que
-// citam o campo passam pelo JSON.parse.
-const ESCREVEM = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
+// O cwd do rollout esta no cabecalho (session_meta), a primeira linha.
+function cwdDoRollout(texto) {
+  const fim = texto.indexOf('\n');
+  const m = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(fim === -1 ? texto : texto.slice(0, fim));
+  return m ? JSON.parse(`"${m[1]}"`) : null;
+}
 
-function caminhosEscritos(transcript) {
+// O cabecalho carrega as instrucoes-base do modelo: dezenas de KB. Le so o comeco
+// de cada rollout recente, do mais novo ao mais antigo, e para no primeiro que
+// abriu neste cwd. Rollout parado ha mais tempo e sessao antiga, nao a que esta
+// rodando este script.
+const ROLLOUT_RECENTE_MS = 5 * 60 * 1000;
+
+function transcriptCodex(cwd) {
+  const base = path.join(os.homedir(), '.codex', 'sessions');
+  const rollouts = [];
+  const descer = (dir, nivel) => {
+    let filhos;
+    try {
+      filhos = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const f of filhos) {
+      if (f.isDirectory() && nivel < 3) descer(path.join(dir, f.name), nivel + 1);
+      else if (f.isFile() && /^rollout-.*\.jsonl$/.test(f.name)) rollouts.push(path.join(dir, f.name));
+    }
+  };
+  descer(base, 0);
+  const recentes = [];
+  for (const arq of rollouts) {
+    try {
+      const mtime = fs.statSync(arq).mtimeMs;
+      if (Date.now() - mtime < ROLLOUT_RECENTE_MS) recentes.push({ arq, mtime });
+    } catch {
+      // apagado entre o readdir e o stat
+    }
+  }
+  const alvo = path.resolve(cwd).toLowerCase();
+  for (const { arq } of recentes.sort((x, y) => y.mtime - x.mtime)) {
+    let cabecalho;
+    try {
+      const fd = fs.openSync(arq, 'r');
+      const buf = Buffer.alloc(64 * 1024);
+      const lidos = fs.readSync(fd, buf, 0, buf.length, 0);
+      fs.closeSync(fd);
+      cabecalho = buf.toString('utf8', 0, lidos);
+    } catch {
+      continue;
+    }
+    const cwdRollout = cwdDoRollout(cabecalho);
+    if (cwdRollout && path.resolve(cwdRollout).toLowerCase() === alvo) return arq;
+  }
+  return null;
+}
+
+// O Pi primeiro: aberto de dentro de uma sessao do Claude Code ele herda
+// CLAUDE_CODE_SESSION_ID, e PI_SESSION_ID so existe no bash do proprio Pi.
+// PI_SESSION_FILE fica vazio em sessao efemera (--no-session); o harness ainda e o Pi.
+function acharTranscript(sessao, cwd) {
+  const pi = process.env.PI_SESSION_FILE;
+  if (process.env.PI_SESSION_ID) return { harness: 'pi', arquivo: pi && fs.existsSync(pi) ? pi : null };
+  if (sessao) return { harness: 'claude-code', arquivo: transcriptClaude(sessao) };
+  if (process.env.CLAUDECODE) return { harness: 'claude-code', arquivo: null };
+  const codex = transcriptCodex(cwd);
+  return codex ? { harness: 'codex', arquivo: codex } : { harness: 'outro', arquivo: null };
+}
+
+// Sao megabytes, entao so as linhas que citam uma das marcas passam pelo JSON.parse.
+function linhasComJson(texto, marcas) {
+  const registros = [];
+  for (const linha of texto.split('\n')) {
+    if (!marcas.some((marca) => linha.includes(marca))) continue;
+    try {
+      registros.push(JSON.parse(linha));
+    } catch {
+      // linha truncada: ignora
+    }
+  }
+  return registros;
+}
+
+const ESCREVEM_CLAUDE = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
+
+function escritosClaude(texto) {
+  const achados = [];
+  for (const registro of linhasComJson(texto, ['"file_path"', '"notebook_path"'])) {
+    const blocos = registro.message && Array.isArray(registro.message.content) ? registro.message.content : [];
+    for (const b of blocos) {
+      if (b.type !== 'tool_use' || !ESCREVEM_CLAUDE.has(b.name) || !b.input) continue;
+      const alvo = b.input.file_path || b.input.notebook_path;
+      if (alvo) achados.push(alvo);
+    }
+  }
+  return achados;
+}
+
+const ESCREVEM_PI = new Set(['edit', 'write']);
+
+function escritosPi(texto) {
+  const achados = [];
+  const cabecalho = linhasComJson(texto, ['"type":"session"']).find((r) => r.type === 'session');
+  const base = cabecalho && cabecalho.cwd ? cabecalho.cwd : process.cwd();
+  for (const registro of linhasComJson(texto, ['"toolCall"'])) {
+    const blocos = registro.message && Array.isArray(registro.message.content) ? registro.message.content : [];
+    for (const b of blocos) {
+      if (b.type !== 'toolCall' || !ESCREVEM_PI.has(b.name) || !b.arguments || !b.arguments.path) continue;
+      achados.push(path.resolve(base, b.arguments.path));
+    }
+  }
+  return achados;
+}
+
+// O patch vive numa string do registro: `payload.input` do `apply_patch`, ou, no
+// modo exec, num literal JSON dentro do JS que `payload.input` carrega. Cada
+// nivel de escape sai por JSON.parse; so entao as linhas do patch sao linhas de
+// verdade e o caminho vai ate o fim dela — cortar antes disso, num `\n` literal,
+// come `\novo` e `\repo` de caminho Windows.
+const LINHA_DO_PATCH = /^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm;
+
+function textosDoPatch(valor) {
+  if (typeof valor !== 'string') return [];
+  const textos = [valor];
+  for (const m of valor.matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
+    try {
+      textos.push(JSON.parse(`"${m[1]}"`));
+    } catch {
+      // aspas que nao fecham um literal JSON
+    }
+  }
+  return textos;
+}
+
+function escritosCodex(texto) {
+  const base = cwdDoRollout(texto) || process.cwd();
+  const achados = [];
+  for (const registro of linhasComJson(texto, ['File: '])) {
+    const payload = registro.payload || {};
+    for (const t of textosDoPatch(payload.input).concat(textosDoPatch(payload.arguments))) {
+      for (const m of t.matchAll(LINHA_DO_PATCH)) achados.push(path.resolve(base, m[1].trim()));
+    }
+  }
+  return achados;
+}
+
+function caminhosEscritos({ harness, arquivo }) {
   let texto;
   try {
-    texto = fs.readFileSync(transcript, 'utf8');
+    texto = fs.readFileSync(arquivo, 'utf8');
   } catch {
     return [];
   }
-  const achados = new Set();
-  for (const linha of texto.split('\n')) {
-    if (!linha.includes('"file_path"') && !linha.includes('"notebook_path"')) continue;
-    let registro;
-    try {
-      registro = JSON.parse(linha);
-    } catch {
-      continue;                       // linha truncada: ignora
-    }
-    const blocos = registro.message && Array.isArray(registro.message.content) ? registro.message.content : [];
-    for (const b of blocos) {
-      if (b.type !== 'tool_use' || !ESCREVEM.has(b.name) || !b.input) continue;
-      const alvo = b.input.file_path || b.input.notebook_path;
-      if (alvo) achados.add(alvo);
-    }
-  }
-  return [...achados];
+  const leitor = { 'claude-code': escritosClaude, pi: escritosPi, codex: escritosCodex }[harness];
+  return [...new Set(leitor(texto))];
 }
 
 // -------------------------------------------------------------- a varredura
@@ -201,7 +342,12 @@ function texto(repos, info) {
   const vizinhos = repos.filter((r) => !fazer.includes(r) && !r.vault && !r.parado);
   const pular = repos.filter((r) => !fazer.includes(r) && !vizinhos.includes(r));
 
-  linhas.push(`Sessao: ${info.sessao || '(sem id)'} | transcript: ${info.transcript || 'nao encontrado'}`);
+  const t = info.transcript;
+  const motivo = t.harness === 'outro'
+    ? 'Codex sem rollout recente deste cwd, ou Antigravity, que nao tem transcript legivel'
+    : t.harness;
+  const transcript = t.arquivo ? `${t.harness} ${t.arquivo}` : `nao encontrado (${motivo}) — so a varredura do cwd`;
+  linhas.push(`Sessao: ${info.sessao || '(sem id)'} | transcript: ${transcript}`);
   linhas.push(`cwd: ${info.cwd}`);
   linhas.push('');
   linhas.push(`REPOSITORIOS DA LEVA (${fazer.length})`);
@@ -246,7 +392,7 @@ function texto(repos, info) {
 function main() {
   const a = args(process.argv);
   const cwd = path.resolve(a.cwd);
-  const transcript = acharTranscript(a.sessao);
+  const transcript = acharTranscript(a.sessao, cwd);
 
   const origens = new Map();          // raiz -> Set('sessao' | 'varredura')
   const marcar = (raiz, origem) => {
@@ -256,7 +402,7 @@ function main() {
     origens.get(chave).add(origem);
   };
 
-  if (transcript) {
+  if (transcript.arquivo) {
     const jaVisto = new Map();        // dir -> raiz, para nao subir a arvore duas vezes
     for (const alvo of caminhosEscritos(transcript)) {
       const dir = path.dirname(alvo);

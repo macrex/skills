@@ -1,23 +1,21 @@
 # /faz leva — a leva que a linha dispara
 
-Você está na sessão nova, e o usuário colou a linha de `/goal` que o
-`/faz <pedido>` entregou: ela nomeia esta skill com `leva <documento>`, o
+Você está na sessão nova, e o usuário colou a linha que o `/faz <pedido>`
+entregou: ela nomeia esta skill com `leva <documento>`, o
 documento do entendimento e as quatro skills do
 [Matt Pocock](https://github.com/mattpocock/skills) que esta leva encadeia. É a
 linha que autoriza as três reservadas ao usuário — `to-spec`, `to-tickets` e
 `implement` —, porque é ele quem as nomeia; o `code-review` você invoca sozinho.
 O `/goal` é o laço: a condição dele é a leva inteira, e a sessão só para quando
-ela vale. Se a sua primeira mensagem não é o kickoff dele (`A session-scoped
-Stop hook is now active with condition: "..."`), o `/goal` não foi despachado —
-o workspace não está confiado, e é só nele que o comando existe: diga isso ao
-usuário em uma linha e siga assim mesmo, porque a linha vale como pedido dele.
+ela vale. Se a sessão não confirmou o loop do seu harness ("Segurar a sessão" em
+`references/harness.md`), diga isso ao usuário em uma linha e siga assim mesmo,
+porque a linha vale como pedido dele.
 
-**As quatro se cumprem pela ferramenta `Skill`, nunca lendo o `SKILL.md` delas.**
-Dar `cat` no arquivo de uma skill e seguir o texto à mão não é invocá-la: perde
-os sub-agentes que ela abre e o rigor que ela cobra, e ainda faz o relatório
-dizer que ela rodou. Recusa da ferramenta `Skill` numa das três é turno expirado
-— peça ao usuário que cole o nome de novo, sozinho numa linha, e espere; não
-emule o que ela faria.
+**As quatro se cumprem como o seu harness invoca skills** ("Invocar uma skill"
+em `references/harness.md`); antes do primeiro passo, rode
+`node "<pasta desta skill>/scripts/skills-do-matt.js"`, que dá o nome e o
+caminho de cada uma. Seguir de memória o que a skill faria não é invocá-la, e
+ainda faz o relatório dizer que ela rodou.
 
 Nesta sessão para-se **uma vez**, com os tickets na mesa, para o usuário escolher
 como a implementação roda; nada mais é perguntado — o conteúdo já foi confirmado
@@ -45,19 +43,21 @@ ausente não pede o `/setup-matt-pocock-skills`.
 
 | Passo | Faz | Produz |
 |---|---|---|
-| to-spec | `/mattpocock-skills:to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
-| to-tickets | `/mattpocock-skills:to-tickets <spec>`; a tabela é mostrada, não perguntada | um ticket por fatia vertical |
-| implement | `/mattpocock-skills:implement`, cumprida **no modo que o usuário escolher na terceira parada** (logo abaixo). Ela manda commitar; aqui a leva fica na working tree | código, suíte verde por ticket |
-| code-review | `/mattpocock-skills:code-review`. A leva inteira está na working tree e não há commit, então o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) são `Agent` que você mesmo dispara, no `<modelo da revisão>` da linha (`model` omitido quando é o da sessão) | dois relatórios, lado a lado |
-| correções | sem skill: um `Agent`, no mesmo `<modelo da revisão>`, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
-| qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
+| to-spec | `to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
+| to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada | um ticket por fatia vertical |
+| implement | `implement`, cumprida **no modo que o usuário escolher na terceira parada** (logo abaixo). Ela manda commitar; aqui a leva fica na working tree | código, suíte verde por ticket |
+| code-review | `code-review`. A leva inteira está na working tree e não há commit, então o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" em `references/harness.md`), no `<modelo da revisão>` da linha; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
+| correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo `<modelo da revisão>`, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
+| qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (no Claude Code a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
 | fechamento | nota de evolução no tracker | o que mudou, o que a revisão pegou, o que não foi verificado |
 
 ## A terceira parada: o modo do implement
 
 Com a tabela de tickets na mesa — e só aí, porque nada disso é legível antes —
-pare. **O critério da sua recomendação é a qualidade do que sai da leva, nunca o
-que custa menos a você.** O inline é o mais rápido e o mais barato dos três, e é
+pare. Os modos que existem são os do seu harness (`references/harness.md`);
+harness com só o inline não tem o que perguntar — diga que é o modo e siga. **O critério da sua
+recomendação é a qualidade do que sai da leva, nunca o que custa menos a
+você.** O inline é o mais rápido e o mais barato dos três, e é
 exatamente o modo em que quem escreveu o código é quem declara que ele está
 verde: recomendá-lo porque sai barato é recomendar contra o usuário.
 
@@ -84,9 +84,10 @@ Os parâmetros brigam entre si, e é esse o julgamento: risco alto com suíte fr
 não vira workflow, vira inline com o humano vendo, porque portão que não reprova
 não garante nada. Escolha um modo e diga **em uma linha qual parâmetro decidiu**.
 
-Pergunte com `AskUserQuestion`: os três, o seu marcado, e a linha do parâmetro
-que decidiu. Diga que o `<modelo do implement>` da linha vale para os agentes de
-sub-agents e de workflow — no inline quem executa é a sessão. Se o usuário
+Pergunte, pelo mecanismo do seu harness: os modos que ele tem, o seu marcado, e
+a linha do parâmetro que decidiu. Diga que o `<modelo do implement>` da linha
+vale para os agentes de sub-agents e de workflow — no inline quem executa é a
+sessão. Se o usuário
 trocar, é decisão dele: nomeie a garantia de que ele está abrindo mão, uma
 linha, e siga sem reabrir.
 
@@ -98,11 +99,13 @@ muda quem os executa:
 
 - **inline**: você, ticket a ticket, na ordem. O portão roda antes de passar ao
   próximo; dois vermelhos param a leva no mesmo ponto em que parariam a cadeia.
-- **sub-agents**: um `Agent` por ticket, no `<modelo do implement>` da linha
-  (`model` omitido quando é o da sessão), disparados **um de cada vez** — nunca
-  em paralelo, é a mesma working tree. O prompt de cada um é o preâmbulo mais as
-  notas dos anteriores, e o portão é você lendo o que ele devolve.
-- **workflow**: o esqueleto de `workflow-tickets.md`, sem mudanças.
+- **sub-agents**: um sub-agente por ticket ("Sub-agente" em
+  `references/harness.md`), no `<modelo do implement>` da linha (modelo omitido
+  quando é o da sessão), disparados **um de cada vez** — nunca em paralelo, é a
+  mesma working tree. O prompt de cada um é o preâmbulo mais as notas dos
+  anteriores, e o portão é você lendo o que ele devolve.
+- **workflow** (só no Claude Code): o esqueleto de `workflow-tickets.md`, sem
+  mudanças.
 
 ## Quando algo trava
 

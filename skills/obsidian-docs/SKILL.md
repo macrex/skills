@@ -17,7 +17,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 15.1
+# Versao: 15.2
 
 Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
 onde o vault fica e aplica as convenções (pasta por tipo, nome com data, frontmatter, link e
@@ -30,9 +30,10 @@ servidor, e por fora dele nascem notas órfãs.
 
 ## Se as ferramentas do vault não estão na sessão
 
-O prefixo depende da rota: `mcp__vault-docs__*` (`npx skills add` e Pi) ou
-`mcp__plugin_macrex-skills_vault-docs__*` (plugin). Só faltam de verdade quando **nenhum** dos dois
-está lá. Então:
+O prefixo depende do harness: `mcp__vault-docs__*` (`npx skills add` no Claude Code, e Pi),
+`mcp__plugin_macrex-skills_vault-docs__*` (plugin), e o prefixo próprio que Codex e Antigravity dão
+ao servidor `vault-docs`. Só faltam de verdade quando **nenhuma** ferramenta do servidor está lá.
+Então:
 
 - **Claude Code**: confira com `claude mcp list`. Skill vinda do plugin (está sob
   `~/.claude/plugins/cache/`): o plugin já declara o servidor; **não** rode `--instalar` (criaria um
@@ -43,8 +44,12 @@ está lá. Então:
 - **Pi**: as ferramentas vêm da extensão `vault-docs` do pacote; não há MCP para registrar, e
   `claude mcp list` e `--instalar` não existem aqui. Faltam por `OBSIDIAN_VAULT` vazia ou pacote
   fora do `pi list`; diga qual.
+- **Codex** e **Antigravity** (CLI `agy`; IDE e CLI compartilham `~/.gemini/config/mcp_config.json`,
+  que com BOM quebra o `agy mcp`): registre com
+  `<codex|agy> mcp add vault-docs -- python <pasta desta skill>/scripts/servidor_vault.py --vault <pasta de projetos do vault>`
+  (`python3` fora do Windows) e peça o reinício.
 
-Nos dois casos: faça tudo que não depende do vault, diga que a gravação ficou pendente e encerre o
+Em todos: faça tudo que não depende do vault, diga que a gravação ficou pendente e encerre o
 turno com isso claro.
 
 ## Quando usar cada ferramenta

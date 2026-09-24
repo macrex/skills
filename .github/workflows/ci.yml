@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.9"
 
-      - name: Manifestos e frontmatter das skills
+      - name: Manifestos, frontmatter das skills e contrato por harness
         run: python scripts/validar_repo.py
 
       - name: Hook do vault (SessionStart e SubagentStart)
@@ -47,3 +47,7 @@ jobs:
         run: |
           node skills/cpv/scripts/teste-repos-da-leva.js
           node skills/cpv/scripts/teste-segredos.js
+
+      - name: Localizador das skills do Matt (/faz)
+        shell: bash
+        run: node skills/faz/scripts/teste-skills-do-matt.js

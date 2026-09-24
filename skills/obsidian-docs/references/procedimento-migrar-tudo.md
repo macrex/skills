@@ -23,8 +23,9 @@ barato e fixo, nunca no da sessão. No Claude Code, `subagent_type: vault-migrad
 ou use `general-purpose` com `model: sonnet` explícito. Noutras plataformas, o modelo rápido
 equivalente. Modelo maior só se o Sonnet comprovadamente não der conta.
 
-**Sem ferramenta de sub-agente** (caso do Pi): o inventário roda inline, em sequência, um projeto
-por vez, com as mesmas regras e a mesma tabela. O gate e a migração sequencial não mudam.
+**Sem ferramenta de sub-agente** (Pi sem a extensão `pi-subagents`, Antigravity): o inventário
+roda inline, em sequência, um projeto por vez, com as mesmas regras e a mesma tabela. O gate e a
+migração sequencial não mudam.
 
 ## 3. GATE único (obrigatório)
 

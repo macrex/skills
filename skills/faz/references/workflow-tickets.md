@@ -1,7 +1,7 @@
 # Esqueleto do Workflow de implementação
 
 Este esqueleto vale quando a terceira parada do `/faz` escolheu **workflow**; o
-`PREAMBULO` abaixo é o dos três modos. Quem invoca `/mattpocock-skills:implement`
+`PREAMBULO` abaixo é o dos três modos. Quem invoca `implement` (nome do localizador)
 é o `/faz`, uma vez, antes de montar o workflow; este esqueleto é como o que ela
 manda é cumprido, e os agentes por ticket não a invocam de novo — o preâmbulo já
 carrega o que ela pede, e o portão é quem cobra.
