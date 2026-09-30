@@ -24,7 +24,11 @@ cumpri-lo **é** invocá-la.
   sub-agente) retoma a sessão sozinha. Abertura: `/faz leva <documento>`.
 - **Autorização das três reservadas:** só quando a linha as nomeia como **token isolado** —
   `/mattpocock-skills:to-spec` com espaço dos dois lados; pontuação colada cega a busca e a skill
-  é recusada.
+  é recusada. E só **no turno que a linha abriu**: toda mensagem de usuário que não é meta nem
+  resultado de ferramenta abre turno novo — a resposta em texto, a notificação de um trabalho em
+  background, a mensagem de um sub-agente. Por isso a leva invoca as três em sequência logo
+  depois do localizador, antes de qualquer sub-agente, workflow ou pergunta em texto, e depois
+  as cumpre na ordem dos passos com as instruções já carregadas, sem invocá-las de novo.
 
 ## Pi
 

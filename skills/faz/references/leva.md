@@ -15,7 +15,9 @@ linha e siga assim mesmo, porque a linha vale como pedido dele.
 em `references/harness.md`); antes do primeiro passo, rode
 `node "<pasta desta skill>/scripts/skills-do-matt.js"`, que dá o nome e o
 caminho de cada uma. Seguir de memória o que a skill faria não é invocá-la, e
-ainda faz o relatório dizer que ela rodou.
+ainda faz o relatório dizer que ela rodou. Onde a autorização das reservadas
+vale só no turno da linha ("Autorização" em `references/harness.md`), invoque
+as três logo depois do localizador, antes de qualquer outro passo.
 
 Nesta sessão para-se **uma vez**, com os tickets na mesa, para o usuário escolher
 como a implementação roda; nada mais é perguntado — o conteúdo já foi confirmado
