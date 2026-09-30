@@ -6,10 +6,10 @@ documento do entendimento e as quatro skills do
 [Matt Pocock](https://github.com/mattpocock/skills) que esta leva encadeia. É a
 linha que autoriza as três reservadas ao usuário — `to-spec`, `to-tickets` e
 `implement` —, porque é ele quem as nomeia; o `code-review` você invoca sozinho.
-O `/goal` é o laço: a condição dele é a leva inteira, e a sessão só para quando
-ela vale. Se a sessão não confirmou o loop do seu harness ("Segurar a sessão" em
-`references/harness.md`), diga isso ao usuário em uma linha e siga assim mesmo,
-porque a linha vale como pedido dele.
+Onde o harness tem laço (o `/goal` do Pi e do Codex, "Segurar a sessão" em
+`references/harness.md`), a condição dele é a leva inteira, e a sessão só para
+quando ela vale; se a sessão não confirmou esse laço, diga isso ao usuário em uma
+linha e siga assim mesmo, porque a linha vale como pedido dele.
 
 **As quatro se cumprem como o seu harness invoca skills** ("Invocar uma skill"
 em `references/harness.md`); antes do primeiro passo, rode

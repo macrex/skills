@@ -20,12 +20,8 @@ cumpri-lo **é** invocá-la.
 - **Perguntar:** `AskUserQuestion`.
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
 - **Modo workflow:** ferramenta `Workflow`; esqueleto em `references/workflow-tickets.md`.
-- **Segurar a sessão:** `/goal`, que só existe em workspace confiado (`~/.claude.json`,
-  `projects["<cwd>"].hasTrustDialogAccepted` igual a `true`). Abertura:
-  `/goal rode /faz leva <documento>`; não confiado, diga isso no aviso e a abertura é
-  `/faz leva <documento>`. O kickoff da sessão nova é
-  `A session-scoped Stop hook is now active with condition: "..."`, e a condição do `/goal` chega
-  dentro dele, o que conta como mensagem do usuário.
+- **Segurar a sessão:** não há laço; a notificação de cada trabalho em background (workflow,
+  sub-agente) retoma a sessão sozinha. Abertura: `/faz leva <documento>`.
 - **Autorização das três reservadas:** só quando a linha as nomeia como **token isolado** —
   `/mattpocock-skills:to-spec` com espaço dos dois lados; pontuação colada cega a busca e a skill
   é recusada.

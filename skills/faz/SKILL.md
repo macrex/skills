@@ -7,15 +7,15 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.7
+# Versao: 3.8
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o trabalho, esta só
 encadeia e para três vezes para o usuário decidir. São dois movimentos porque metade das skills
 dele é reservada ao usuário: `/faz <pedido>` é o primeiro, do comando ao fim do interrogatório;
 `/faz leva <documento>` é o segundo, disparado numa sessão nova pela linha que o primeiro
-entrega pronta — no Claude Code, no Pi e no Codex uma linha de `/goal`, que segura a sessão até
-a leva fechar, com todas as chamadas dentro do laço dele.
+entrega pronta — no Pi e no Codex uma linha de `/goal`, que segura a sessão até a leva fechar,
+com todas as chamadas dentro do laço dele.
 
 ## O harness, antes de tudo
 

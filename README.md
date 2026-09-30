@@ -14,8 +14,8 @@ Skills para agentes de IA:\
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
 
 `/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
-[Matt Pocock](https://github.com/mattpocock/skills) e de um `/goal`: nativo no Claude Code e no
-Codex, extensão no Pi; no Antigravity, responda `continue` se a sessão parar antes do fim. No Codex
+[Matt Pocock](https://github.com/mattpocock/skills); no Codex e no Pi ela usa um `/goal` (nativo
+no Codex, extensão no Pi), e no Antigravity responda `continue` se a sessão parar antes do fim. No Codex
 as skills atendem por `$macrex-skills:faz`, `$macrex-skills:obsidian-docs` e `$macrex-skills:cpv`.
 
 ## Instalar
