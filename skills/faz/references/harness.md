@@ -15,16 +15,17 @@ cumpri-lo **é** invocá-la.
   prefixo (`mattpocock-skills:grilling`). Sem prefixo, `code-review` colide com a skill nativa:
   instale pelo plugin.
 - **Invocar uma skill:** ferramenta `Skill`, com o nome do localizador; ler o `SKILL.md` com
-  `Read` não é invocar. Recusa numa das três reservadas é turno expirado: peça ao usuário que cole
+  `Read` não é invocar. Recusa numa das três reservadas é turno expirado ou linha que virou comando: peça ao usuário que cole
   o nome de novo, sozinho numa linha, e espere.
 - **Perguntar:** `AskUserQuestion`.
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
 - **Modo workflow:** ferramenta `Workflow`; esqueleto em `references/workflow-tickets.md`.
 - **Segurar a sessão:** não há laço; a notificação de cada trabalho em background (workflow,
-  sub-agente) retoma a sessão sozinha. Abertura: `/faz leva <documento>`.
+  sub-agente) retoma a sessão sozinha. Abertura: `rode /faz leva <documento>`.
 - **Autorização das três reservadas:** só quando a linha as nomeia como **token isolado** —
   `/mattpocock-skills:to-spec` com espaço dos dois lados; pontuação colada cega a busca e a skill
-  é recusada. E só **no turno que a linha abriu**: toda mensagem de usuário que não é meta nem
+  é recusada. Só em **texto**: a linha que começa com `/` vira comando, e nome nos argumentos de
+  comando não autoriza; por isso a abertura começa com `rode`. E só **no turno que a linha abriu**: toda mensagem de usuário que não é meta nem
   resultado de ferramenta abre turno novo — a resposta em texto, a notificação de um trabalho em
   background, a mensagem de um sub-agente. Por isso a leva invoca as três em sequência logo
   depois do localizador, antes de qualquer sub-agente, workflow ou pergunta em texto, e depois
