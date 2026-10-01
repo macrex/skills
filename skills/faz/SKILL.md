@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.9
+# Versao: 3.10
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o trabalho, esta só
@@ -45,6 +45,17 @@ node "<pasta desta skill>/scripts/skills-do-matt.js"
 
 Saiu 1: faltam as marcadas `FALTA`. Nomeie-as, dê o comando de instalação do seu harness
 (`references/harness.md`, "Skills do Matt") e **pare aqui**.
+
+### Confira o repositório
+
+```bash
+git rev-parse --verify -q HEAD
+```
+
+Falhou (pasta fora do git ou repositório sem commit)? Siga com o interrogatório, mas diga isso ao
+usuário agora e repita no aviso da linha: a revisão da leva compara contra `HEAD`, que ainda não
+existe, e fora do git o `/cpv` não tem o que fechar. `git init` e o commit inicial são dele, antes
+de colar a linha — nunca seus.
 
 ### Interrogue
 

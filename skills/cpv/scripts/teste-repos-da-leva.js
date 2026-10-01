@@ -4,7 +4,7 @@
 //   1. so ferramenta de ESCRITA marca o repo como alvo da leva — um repo apenas
 //      lido (Read) nao entra; um editado (Edit) entra;
 //   2. repo sem nenhum commit nao some da lista: entra marcado (semCommit), para
-//      o comando pula-lo dizendo por que;
+//      o comando saber que nao ha log de estilo a ler no primeiro commit;
 //   3. repo com a pasta .obsidian na raiz e' o vault (vault: true), que o comando
 //      ignora;
 //   4. o transcript do Pi (PI_SESSION_FILE, toolCall edit/write, caminho relativo

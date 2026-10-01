@@ -65,7 +65,7 @@ const ATRIBUICAO = [
   // (?<![A-Za-z]) e o sufixo opcional no lugar de \b: `_` e caractere de palavra,
   // entao \b nao existe em DB_PASSWORD nem em client_secret_prd — e o nome
   // composto e a forma dominante em settings.py, compose, manifesto k8s e export.
-  [/(?<![A-Za-z])(password|passwd|pwd|senha|api[_-]?key|apikey|secret|token|access[_-]?key|client[_-]?secret)(?:[_-][A-Za-z0-9]+)*\s*[:=]\s*["'`]?(?!\s*["'`]?\s*$)(?!\$\{?)(?!<)(?!%)(?!\{\{)(?!process\.env)(?!os\.environ)(?!env\()(?!getenv)(?!None\b)(?!null\b)(?!nil\b)(?!true\b)(?!false\b)(?!\*{3,})(?!x{3,})(?!your[_-])(?!changeme)(?!example)(?!placeholder)(?!\.\.\.)[^\s"'`,;)]{4,}/i,
+  [/(?<![A-Za-z])(password|passwd|pwd|senha|api[_-]?key|apikey|secret|token|access[_-]?key|client[_-]?secret)(?:[_-][A-Za-z0-9]+)*\s*[:=]\s*(?<aspas>["'`]?)(?!\s*["'`]?\s*$)(?!\$\{?)(?!<)(?!%)(?!\{\{)(?!process\.env)(?!os\.environ)(?!env\()(?!getenv)(?!None\b)(?!null\b)(?!nil\b)(?!true\b)(?!false\b)(?!\*{3,})(?!x{3,})(?!your[_-])(?!changeme)(?!example)(?!placeholder)(?!\.\.\.)[^\s"'`,;)]{4,}/i,
     'atribuicao de senha/token com valor literal'],
 ];
 
@@ -82,6 +82,11 @@ const MAX_BYTES = 2 * 1024 * 1024;  // arquivo maior que isto nao e fonte: pula 
 const PULAR_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf', '.zip', '.gz',
   '.tgz', '.jar', '.class', '.so', '.dll', '.exe', '.bin', '.woff', '.woff2', '.ttf', '.mp3',
   '.mp4', '.lock']);
+// Em codigo, o lado direito sem aspas e expressao, nao literal
+// (`TOKEN = secrets.token_urlsafe(16)`, `Password: cfg.Password`): ali a
+// ATRIBUICAO so conta com aspas. Config e shell seguem valendo sem elas.
+const CODIGO = new Set(['.py', '.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.go', '.java', '.kt',
+  '.cs', '.rb', '.php', '.rs', '.swift', '.c', '.h', '.cpp', '.html', '.htm', '.vue', '.svelte']);
 
 // ------------------------------------------------------------- utilidades
 
@@ -153,10 +158,13 @@ function varrerArquivo(raiz, rel) {
   if (ehBinario(buf)) return achados;
   const texto = buf.toString('utf8');
   const linhas = texto.split(/\r?\n/);
+  const codigo = CODIGO.has(path.extname(nome).toLowerCase());
   linhas.forEach((linha, i) => {
     const padroes = LINHA_OK.some((re) => re.test(linha)) ? CONTEUDO : CONTEUDO.concat(ATRIBUICAO);
     for (const [re, motivo] of padroes) {
-      const m = re.exec(linha);
+      // todas as ocorrencias: a primeira sem aspas nao pode esconder uma literal adiante
+      const m = [...linha.matchAll(new RegExp(re.source, re.flags + 'g'))]
+        .find((x) => !(codigo && x.groups?.aspas === ''));
       if (m) { achados.push({ arquivo: rel, linha: i + 1, motivo, trecho: mascarar(m[0]) }); break; }
     }
   });

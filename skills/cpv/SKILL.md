@@ -8,7 +8,7 @@ allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vau
 
 # /cpv — fecha a leva
 
-# Versao: 1.2
+# Versao: 1.3
 
 **Este comando só vale digitado pelo usuário.** Nenhum agente, skill ou workflow o invoca
 (`disable-model-invocation: true`). Invocar `/cpv` É o pedido expresso de commit e push — de
@@ -75,7 +75,6 @@ nunca `--no-verify`, nunca inicializar repositório.
 | Situação | Como detectar |
 |---|---|
 | `HEAD` destacado | branch = `HEAD` |
-| Repositório sem nenhum commit | a linha traz `SEM NENHUM COMMIT` — não há estilo a inferir |
 | Merge ou rebase em andamento | `.git/MERGE_HEAD`, `.git/rebase-merge` ou `.git/rebase-apply` existe |
 | Sem remoto | a linha traz `(sem remoto)` — o commit local fica feito, e diga isso |
 | Submódulo sujo | `git -C <raiz> submodule status` com `+` — o super-repo gravaria um ponteiro que o push não leva |
@@ -138,6 +137,8 @@ invente, mostre ao usuário e pergunte antes de estagiar.
 
 Leia `git -C <raiz> log --format='%s' -20` e escreva **no estilo daquele repositório** (idioma,
 prefixo convencional ou a falta dele, tamanho, tom); não imponha um padrão que o repo não usa.
+Repo marcado `SEM NENHUM COMMIT` não tem log para ler, e isso não o pula: o `/cpv` é o pedido
+expresso, e o primeiro commit segue só as regras abaixo, no idioma da conversa.
 Regras que não dependem do repo:
 
 - Assunto no imperativo, uma linha, sem ponto final.
