@@ -5,7 +5,9 @@
 //      URL com senha, chave privada) e achado, com arquivo e linha;
 //   2. o que parece segredo mas nao e — .env.example, senha lida de variavel,
 //      comentario, valor vazio, input type=password, expressao sem aspas em
-//      codigo (`TOKEN = secrets.token_urlsafe(16)`) — NAO e achado;
+//      codigo (`TOKEN = secrets.token_urlsafe(16)`), fixture em arquivo de
+//      teste, caminho no disco (`PWD=/mnt/...`), reticencias de exemplo
+//      (`sk-ant-...`) — NAO e achado;
 //   3. so o que entraria no commit e lido: arquivo ignorado pelo .gitignore e
 //      arquivo apagado ficam de fora; untracked novo entra;
 //   4. exit 1 com achado, 0 limpo, 2 quando nao deu para ler o repositorio.
@@ -104,6 +106,15 @@ escreve('indexer.go', [
 // em config, sem aspas e literal
 escreve('app.yml', 'db_' + PW.toLowerCase() + ': ' + 'Pr0d' + 'Hunter2\n');
 
+// os que ainda bloqueavam /cpv de verdade (vpn, chamados, otp): fixture em
+// arquivo de teste, caminho no disco e reticencias de exemplo nao sao segredo
+escreve('ui/conta_test.go', '\tsalvas := Credentials{User: "P_1", ' + PW.charAt(0) + PW.slice(1).toLowerCase() + ': "senha"}\n');
+escreve('tests/test_rest.py', 'c = Rest(sso_pass="p", totp_' + 'secret="AAAA")\n');
+escreve('env_info.txt', ['PWD=/mnt/d/workspace/otp', 'PWD = /d/workspace/otp', 'TOKEN_FILE=C:\\run\\token'].join('\n'));
+escreve('providers.txt', 'export ANTHROPIC_API_' + 'KEY=sk-ant-...\n');
+// em arquivo de teste, formato fixo continua achado
+escreve('tests/conftest.py', 'chave = "' + AWS + '"\n');
+
 const r = spawnSync(process.execPath, [path.join(__dirname, 'segredos.js'), repo, '--json'], { encoding: 'utf8' });
 const saida = JSON.parse(r.stdout);
 const achados = saida.repos[0].achados;
@@ -137,6 +148,10 @@ assert.deepStrictEqual(porArquivo('monitor.py'), [], `expressao em .py nao e lit
 assert.deepStrictEqual(porArquivo('monitor.html'), [], `expressao em .html nao e literal: ${JSON.stringify(porArquivo('monitor.html'))}`);
 assert.deepStrictEqual(porArquivo('indexer.go').map((a) => a.linha), [2], 'em .go so a senha entre aspas e achada');
 assert.strictEqual(porArquivo('app.yml').length, 1, 'em config, senha sem aspas continua achada');
+for (const a of ['ui/conta_test.go', 'tests/test_rest.py', 'env_info.txt', 'providers.txt']) {
+  assert.deepStrictEqual(porArquivo(a), [], `falso positivo em ${a}: ${JSON.stringify(porArquivo(a))}`);
+}
+assert.strictEqual(porArquivo('tests/conftest.py')[0]?.motivo, 'AWS access key', 'em teste, chave de formato fixo continua achada');
 
 // repo limpo: exit 0
 const base2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cpv-segredos-'));

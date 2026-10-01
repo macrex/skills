@@ -8,7 +8,7 @@ allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vau
 
 # /cpv — fecha a leva
 
-# Versao: 1.3
+# Versao: 1.4
 
 **Este comando só vale digitado pelo usuário.** Nenhum agente, skill ou workflow o invoca
 (`disable-model-invocation: true`). Invocar `/cpv` É o pedido expresso de commit e push — de
