@@ -1,7 +1,7 @@
 {
   "name": "macrex-skills",
-  "version": "1.10.0",
-  "description": "As três skills que trabalham juntas: /faz leva um pedido até código verificado encadeando o SDD/TDD do Matt Pocock, /obsidian-docs guarda o porquê num vault Obsidian fora do repositório, e /cpv fecha a leva no git e na documentação ao mesmo tempo. A /grill-tela leva o grill do Matt a uma página HTML local, com um hook que pergunta o canal (CLI ou tela). Traz o servidor MCP vault-docs e o agent vault-migrador.",
+  "version": "1.11.0",
+  "description": "As três skills que trabalham juntas: /faz leva um pedido até código verificado encadeando o SDD/TDD do Matt Pocock, /obsidian-docs guarda o porquê num vault Obsidian fora do repositório, e /cpv fecha a leva no git e na documentação ao mesmo tempo. A /grill-tela leva o grill do Matt a uma página HTML local, com um hook opcional que pergunta o canal (CLI ou tela). Traz o servidor MCP vault-docs e o agent vault-migrador.",
   "author": {
     "name": "Guilherme Gabriel",
     "url": "https://github.com/macrex"
@@ -35,6 +35,13 @@
       "type": "directory",
       "title": "Pasta de projetos do vault Obsidian",
       "description": "Onde as notas ficam (ex.: D:\\obsidian\\projetos). Deixe em branco para usar a variável OBSIDIAN_VAULT, ou se você não usa o vault.",
+      "required": false
+    },
+    "grill_tela": {
+      "type": "boolean",
+      "title": "Grill na tela",
+      "description": "Ligada, quando o grilling começa o agente pergunta se você quer o grill no CLI ou numa página HTML local (a /grill-tela). Desligada, o grill segue no CLI, como sempre.",
+      "default": false,
       "required": false
     }
   }

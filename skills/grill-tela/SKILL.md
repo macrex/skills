@@ -5,13 +5,18 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.1
+# Versao: 2.2
 
 Esta skill só troca o canal do `grilling`: as regras dele continuam valendo (a fronteira, uma
 rodada por vez, a resposta recomendada em cada questão, seguir até a fronteira esvaziar). Em vez
 de perguntar no terminal, você publica cada rodada numa página local e espera o usuário responder
 lá. O `grilling` ainda não está carregado nesta sessão? Carregue-o antes, como o seu harness
 carrega uma skill.
+
+A pergunta do canal (CLI ou tela) quando o `grilling` começa é opcional e desligada por padrão:
+no Claude Code, a opção **Grill na tela** do plugin (`/config`); no Pi, `GRILL_TELA=1`; no Codex e
+no Antigravity, o bloco `<grill-canal>` no `AGENTS.md`. Desligada, o grill segue no terminal, e
+esta skill só entra quando o usuário a pede pelo nome ou pede o grill na tela.
 
 O programa é `scripts/grill-tela.js`, relativo à pasta deste SKILL.md. Abaixo, `G` é
 `node "<pasta>/scripts/grill-tela.js"`.

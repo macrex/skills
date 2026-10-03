@@ -77,8 +77,9 @@ function vaultConfigurado() {
 // REGRAS tem um dono so: a extensao do Pi (extensions/vault-docs.ts) importa este
 // modulo para injetar no Pi o mesmo texto que o hook injeta no Claude Code. Por isso
 // o gate e a escrita em stdout so rodam quando este arquivo E o programa; importado,
-// ele exporta o texto e nao faz mais nada.
-module.exports = { REGRAS };
+// ele exporta o texto e nao faz mais nada. arquivosDeConfig serve tambem ao gate do
+// hook do grill (grill-canal.js), que le a opcao dele nos mesmos settings.json.
+module.exports = { REGRAS, arquivosDeConfig };
 
 if (require.main === module) {
   if (vaultConfigurado() === false) process.exit(0);
