@@ -22,7 +22,7 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 const PASTA = process.env.GRILL_TELA_DIR || path.join(os.homedir(), '.grill-tela');
 const PREFERENCIAS = path.join(PASTA, 'preferencias.json');
@@ -266,10 +266,29 @@ function tabelaDasRespostas(msg) {
   return [`Rodada ${msg.rodada} respondida na tela:`, '', '| Questão | Marca | Escolha | Comentário |', '|---|---|---|---|', ...linhas].join('\n');
 }
 
+// Sobe um processo que sobrevive ao comando que o lancou. No Windows o detached nao basta: o
+// Antigravity roda cada comando num Job com KILL_ON_JOB_CLOSE e sem breakaway, e o Job leva o
+// filho junto quando o comando termina. Quem cria pelo WMI e o servico dele, fora do Job; o
+// ambiente e a pasta vao explicitos, porque o WMI nao os herda. Falhou, cai no detached.
+function subirDestacado(cmd, args) {
+  if (process.platform === 'win32') {
+    const linha = [cmd, ...args].map((a) => `"${String(a).replace(/"/g, '')}"`).join(' ');
+    const ps = '$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow=[uint16]0; EnvironmentVariables=[string[]]($env:GT_AMBIENTE -split "`n")}; ' +
+      '(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$env:GT_LINHA; CurrentDirectory=$env:GT_PASTA; ProcessStartupInformation=$s}).ReturnValue';
+    const ambiente = Object.entries(process.env).map(([k, v]) => `${k}=${v}`).join('\n');
+    const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, GT_LINHA: linha, GT_AMBIENTE: ambiente, GT_PASTA: process.cwd() },
+    });
+    if (String(r.stdout).trim() === '0') return;
+  }
+  spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref();
+}
+
 function abrirNavegador(url) {
   const [cmd, args] = process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
     : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
-  spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref();
+  subirDestacado(cmd, args);
 }
 
 async function main() {
@@ -281,8 +300,7 @@ async function main() {
   if (cmd === 'iniciar') {
     const projeto = opcao('--projeto') || path.basename(process.cwd());
     const saida = path.join(os.tmpdir(), `grill-tela-${process.pid}-${Date.now()}.url`);
-    spawn(process.execPath, [__filename, 'servidor', '--projeto', projeto, '--saida', saida],
-      { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    subirDestacado(process.execPath, [__filename, 'servidor', '--projeto', projeto, '--saida', saida]);
     for (let i = 0; i < 100 && !fs.existsSync(saida); i++) await new Promise((r) => setTimeout(r, 50));
     let url = '';
     try { url = fs.readFileSync(saida, 'utf8'); fs.unlinkSync(saida); } catch (e) { /* abaixo */ }
