@@ -12,7 +12,12 @@
 //   8. um segundo aguardar substitui o primeiro, que sai com o JSON substituido;
 //   9. resposta que nao e JSON (outro processo na porta) cai na mensagem de seguir no CLI;
 //  10. aguardar --ate sai com o JSON pendente no prazo, e a resposta dada depois chega na volta seguinte;
-//      --ate fora de 1 a 7200 e recusado.
+//      --ate fora de 1 a 7200 e recusado;
+//  11. a ultima resposta e reentregue a cada aguardar ate o agente publicar a proxima rodada;
+//  12. /api/estado?desde=<versao> espera a versao mudar, e devolve o mesmo estado no prazo;
+//  13. questao multipla: validacao, aceito so com o conjunto recomendado, escolhas em lista;
+//  14. abrir imprime a URL com o servidor de pe e manda seguir no CLI com ele parado;
+//  15. a saida do aguardar omite o comentario vazio e a coluna de comentario sem comentarios.
 //
 //   node skills/grill-tela/scripts/teste-grill-tela.js
 
@@ -26,7 +31,7 @@ const { spawn, spawnSync } = require('child_process');
 const SCRIPT = path.join(__dirname, 'grill-tela.js');
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'grill-tela-'));
 process.on('exit', () => fs.rmSync(base, { recursive: true, force: true }));
-const env = { ...process.env, GRILL_TELA_DIR: base };
+const env = { ...process.env, GRILL_TELA_DIR: base, GRILL_TELA_ENCERRAR_MS: '1000' };
 
 const roda = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8', env });
 const arquivo = (nome, obj) => {
@@ -135,7 +140,7 @@ const RODADA = {
   assert.match(fim.saida, /ok \\\| com barra/, 'barra escapada na tabela');
   assert.deepStrictEqual(ultimaLinha(fim.saida), { tipo: 'rodada', rodada: 1, respostas: [
     { id: 'Q1', marca: 'aceito', escolha: 'Servidor local', comentario: 'ok | com barra' },
-    { id: 'Q2', marca: 'outra', escolha: 'grill-web', comentario: null }] });
+    { id: 'Q2', marca: 'outra', escolha: 'grill-web' }] });
   estado = (await pedir(api(url, 'estado'))).json;
   assert.strictEqual(estado.fase, 'aguarde');
   assert.strictEqual(estado.historico.length, 1);
@@ -191,6 +196,70 @@ const RODADA = {
   assert.strictEqual((await pedir(api(url2, 'estado'))).json.fase, 'cli');
   assert.ok(await encerrou(url2), 'o cli encerra o servidor');
 
+  // 11. reentrega: a resposta fica ate a proxima rodada
+  const url4 = iniciar();
+  assert.strictEqual(roda('rodada', url4, arquivo('rodada.json', RODADA)).status, 0);
+  p = await pedir(api(url4, 'respostas'), 'POST', { tipo: 'rodada', rodada: 1, respostas: [{ id: 'Q1', opcao: 0 }, { id: 'Q2', opcao: 0 }] });
+  assert.strictEqual(p.status, 200, p.txt);
+  const primeira = ultimaLinha((await aguardar(url4, '--ate', '2')).saida);
+  assert.strictEqual(primeira.tipo, 'rodada');
+  assert.deepStrictEqual(ultimaLinha((await aguardar(url4, '--ate', '2')).saida), primeira, 'o aguardar seguinte recebe a mesma resposta');
+  const sem = (await aguardar(url4, '--ate', '2')).saida;
+  assert.doesNotMatch(sem, /Comentário/, 'sem comentarios, sem a coluna');
+  assert.strictEqual(roda('rodada', url4, arquivo('rodada2.json', { ...RODADA, rodada: 2 })).status, 0);
+  assert.deepStrictEqual(ultimaLinha((await aguardar(url4, '--ate', '1')).saida), { tipo: 'pendente' }, 'publicada a rodada 2, a resposta velha sai');
+
+  // 12. estado por versao
+  const v = (await pedir(api(url4, 'estado'))).json.versao;
+  const t0 = Date.now();
+  const longa = pedir(api(url4, 'estado') + `&desde=${v}`);
+  await espere(300);
+  assert.strictEqual(roda('final', url4, arquivo('final.json', { tabela: [{ decisao: 'Nome', escolha: 'grill-tela' }] })).status, 0);
+  const mudada = await longa;
+  assert.strictEqual(mudada.json.versao, v + 1);
+  assert.strictEqual(mudada.json.fase, 'final');
+  assert.ok(Date.now() - t0 < 3000, 'a consulta volta assim que a versao muda');
+  assert.strictEqual((await pedir(api(url4, 'estado') + `&desde=${v}`)).json.versao, v + 1, 'versao velha: volta na hora');
+  assert.strictEqual(roda('cli', url4).status, 0);
+
+  const url5 = iniciar({ GRILL_TELA_ESTADO_MS: '500' });
+  const v5 = (await pedir(api(url5, 'estado'))).json.versao;
+  const t1 = Date.now();
+  assert.strictEqual((await pedir(api(url5, 'estado') + `&desde=${v5}`)).json.versao, v5, 'sem mudanca, o mesmo estado no prazo');
+  assert.ok(Date.now() - t1 >= 400, 'a consulta esperou');
+
+  // 13. multipla
+  const MULTI = { rodada: 1, questoes: [{ id: 'M1', cabecalho: 'Canais', titulo: 'Por onde avisar?', multipla: true,
+    opcoes: [{ rotulo: 'E-mail', recomendada: true }, { rotulo: 'SMS' }, { rotulo: 'Portal', recomendada: true }] }] };
+  r = roda('rodada', url5, arquivo('multi-ruim.json', { ...MULTI, questoes: [{ ...MULTI.questoes[0], opcoes: MULTI.questoes[0].opcoes.map((o) => ({ rotulo: o.rotulo })) }] }));
+  assert.strictEqual(r.status, 1, 'multipla sem recomendada: recusada');
+  assert.match(r.stderr, /ao menos uma/);
+  assert.strictEqual(roda('rodada', url5, arquivo('multi-tipo.json', { ...MULTI, questoes: [{ ...MULTI.questoes[0], multipla: 'sim' }] })).status, 1, 'multipla nao booleana: recusada');
+  assert.strictEqual(roda('rodada', url5, arquivo('multi.json', MULTI)).status, 0);
+  p = await pedir(api(url5, 'respostas'), 'POST', { tipo: 'rodada', rodada: 1, respostas: [{ id: 'M1', opcoes: [] }] });
+  assert.strictEqual(p.status, 400, 'multipla vazia: 400');
+  p = await pedir(api(url5, 'respostas'), 'POST', { tipo: 'rodada', rodada: 1, respostas: [{ id: 'M1', opcoes: [2, 0, 0] }] });
+  assert.strictEqual(p.status, 200, p.txt);
+  assert.deepStrictEqual(ultimaLinha((await aguardar(url5, '--ate', '2')).saida).respostas,
+    [{ id: 'M1', marca: 'aceito', escolha: 'E-mail; Portal', escolhas: ['E-mail', 'Portal'] }]);
+  assert.strictEqual(roda('rodada', url5, arquivo('multi2.json', { ...MULTI, rodada: 2 })).status, 0);
+  p = await pedir(api(url5, 'respostas'), 'POST', { tipo: 'rodada', rodada: 2, respostas: [{ id: 'M1', opcoes: [1], propria: 'WhatsApp', comentario: 'só urgente' }] });
+  assert.strictEqual(p.status, 200, p.txt);
+  const multi = await aguardar(url5, '--ate', '2');
+  assert.deepStrictEqual(ultimaLinha(multi.saida).respostas,
+    [{ id: 'M1', marca: 'outra', escolha: 'SMS; WhatsApp', escolhas: ['SMS', 'WhatsApp'], comentario: 'só urgente' }]);
+  assert.match(multi.saida, /\| Comentário \|/, 'com comentario, com a coluna');
+
+  // 14. abrir
+  r = roda('abrir', url5, '--sem-navegador');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout.trim(), url5);
+  assert.strictEqual(roda('cli', url5).status, 0);
+  assert.ok(await encerrou(url5), 'o cli encerra o servidor');
+  r = roda('abrir', url5, '--sem-navegador');
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /siga o grill no CLI/);
+
   // 7. ocioso
   const url3 = iniciar({ GRILL_TELA_OCIOSO_MS: '1000' });
   const ociosa = await aguardar(url3);
@@ -206,7 +275,7 @@ const RODADA = {
   assert.strictEqual(falsa.status, 1);
   assert.match(falsa.erro, /siga o grill no CLI/, falsa.erro);
 
-  console.log('grill-tela ok: iniciar, token, validacao, aguardar, preferencias, final, cli, ocioso, aguardar substituido, resposta que nao e JSON e aguardar com prazo');
+  console.log('grill-tela ok: iniciar, token, validacao, aguardar, preferencias, final, cli, ocioso, aguardar substituido, resposta que nao e JSON, aguardar com prazo, reentrega, estado por versao, multipla, abrir e saida enxuta');
 })().catch((e) => {
   console.error(e);
   process.exit(1);

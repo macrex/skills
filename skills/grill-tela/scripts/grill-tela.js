@@ -7,13 +7,18 @@
 //   node grill-tela.js final <url> <arquivo.json | ->                  publica a tela final
 //   node grill-tela.js aguardar <url> [--ate <segundos>]              espera a pagina
 //   node grill-tela.js cli <url>                                       o grill foi para o terminal
+//   node grill-tela.js abrir <url> [--sem-navegador]                   reabre a pagina no navegador
 //
 // O servidor (subcomando `servidor`, que o `iniciar` sobe destacado) escuta so em 127.0.0.1,
-// numa porta que o sistema escolhe, e recusa todo pedido sem o token da URL. Ele para alguns
-// segundos depois do sim ou do CLI e depois de 2 horas sem a pagina consultar o estado.
+// numa porta que o sistema escolhe, e recusa todo pedido sem o token da URL. Ele para meio
+// minuto depois do sim ou do CLI e depois de 2 horas sem a pagina consultar o estado.
 // O aguardar sem prazo e para o harness que roda comando em background e reacorda o agente
-// (Claude Code); com --ate, quem desiste e o servidor, que devolve {"tipo":"pendente"} e
-// guarda a resposta para a proxima volta — o laco dos harnesses que esperam em primeiro plano.
+// (Claude Code); com --ate, quem desiste e o servidor, que devolve {"tipo":"pendente"} — o laco
+// dos harnesses que esperam em primeiro plano. A ultima resposta da pagina fica guardada ate o
+// agente publicar a proxima rodada ou a tela final: um aguardar morto depois da entrega (timeout
+// do harness, TaskStop) nao a perde, porque o seguinte a recebe de novo.
+// A pagina consulta o estado com ?desde=<versao>, e o servidor segura o pedido ate a versao
+// mudar (ou 25 s), em vez de a pagina perguntar a cada segundo.
 // Preferencias da pagina ficam em ~/.grill-tela/preferencias.json (GRILL_TELA_DIR troca a pasta).
 // So biblioteca padrao.
 
@@ -26,9 +31,11 @@ const { spawn } = require('child_process');
 
 const PASTA = process.env.GRILL_TELA_DIR || path.join(os.homedir(), '.grill-tela');
 const PREFERENCIAS = path.join(PASTA, 'preferencias.json');
-const CHAVES_PREF = ['modo', 'tema', 'voz', 'velocidade', 'volume'];
+const CHAVES_PREF = ['modo', 'tema', 'voz', 'velocidade', 'volume', 'aviso'];
 const OCIOSO_MS = Number(process.env.GRILL_TELA_OCIOSO_MS) || 2 * 60 * 60 * 1000;
-const ENCERRAR_MS = 3000; // tempo para a pagina, que consulta a cada segundo, ver a fase final
+// depois do sim ou do CLI: tempo para a pagina ver a fase final e para um aguardar perdido reentregar
+const ENCERRAR_MS = Number(process.env.GRILL_TELA_ENCERRAR_MS) || 30 * 1000;
+const ESTADO_MS = Number(process.env.GRILL_TELA_ESTADO_MS) || 25 * 1000; // quanto a consulta da pagina espera
 
 // ---------- contratos ----------
 
@@ -49,6 +56,7 @@ function errosDaRodada(r) {
     if (!texto(q.cabecalho)) erros.push(`${onde}.cabecalho: texto não vazio`);
     if (!texto(q.titulo)) erros.push(`${onde}.titulo: texto não vazio`);
     if (q.contexto !== undefined && typeof q.contexto !== 'string') erros.push(`${onde}.contexto: texto, se houver`);
+    if (q.multipla !== undefined && typeof q.multipla !== 'boolean') erros.push(`${onde}.multipla: true ou false, se houver`);
     if (!Array.isArray(q.opcoes) || q.opcoes.length < 2 || q.opcoes.length > 4) {
       return erros.push(`${onde}.opcoes: de 2 a 4 opções`);
     }
@@ -57,7 +65,9 @@ function errosDaRodada(r) {
       else if (o.descricao !== undefined && typeof o.descricao !== 'string') erros.push(`${onde}.opcoes[${j}].descricao: texto, se houver`);
     });
     const recs = q.opcoes.filter((o) => o && o.recomendada === true).length;
-    if (recs !== 1) erros.push(`${onde}.opcoes: exatamente uma com "recomendada": true (tem ${recs})`);
+    if (q.multipla === true) {
+      if (recs < 1) erros.push(`${onde}.opcoes: ao menos uma com "recomendada": true numa questão multipla`);
+    } else if (recs !== 1) erros.push(`${onde}.opcoes: exatamente uma com "recomendada": true (tem ${recs})`);
   });
   return erros;
 }
@@ -72,13 +82,24 @@ function errosDaFinal(f) {
   return erros;
 }
 
-// A pagina manda {id, opcao, propria, comentario}; quem decide a marca e a escolha e o servidor.
+// A pagina manda {id, opcao, propria, comentario} (ou opcoes, uma lista, na questao multipla);
+// quem decide a marca e a escolha e o servidor.
 function respostasDaRodada(rodada, enviadas) {
   const porId = new Map((Array.isArray(enviadas) ? enviadas : []).map((e) => [e && e.id, e]));
   const respostas = [];
   for (const q of rodada.questoes) {
     const e = porId.get(q.id) || {};
     const comentario = texto(e.comentario) ? e.comentario.trim() : null;
+    if (q.multipla) {
+      const sel = [...new Set(Array.isArray(e.opcoes) ? e.opcoes : [])].filter((i) => Number.isInteger(i) && q.opcoes[i]).sort((a, b) => a - b);
+      const propria = texto(e.propria) ? e.propria.trim() : null;
+      if (!sel.length && !propria) return { erro: `${q.id} sem marca: escolha ao menos uma opção ou escreva a sua resposta` };
+      const recs = q.opcoes.map((o, i) => (o.recomendada ? i : -1)).filter((i) => i >= 0);
+      const aceito = !propria && sel.length === recs.length && sel.every((v, k) => v === recs[k]);
+      const escolhas = sel.map((i) => q.opcoes[i].rotulo).concat(propria ? [propria] : []);
+      respostas.push({ id: q.id, marca: aceito ? 'aceito' : 'outra', escolha: escolhas.join('; '), escolhas, comentario });
+      continue;
+    }
     if (Number.isInteger(e.opcao) && q.opcoes[e.opcao]) {
       const o = q.opcoes[e.opcao];
       respostas.push({ id: q.id, marca: o.recomendada ? 'aceito' : 'outra', escolha: o.rotulo, comentario });
@@ -96,16 +117,21 @@ function respostasDaRodada(rodada, enviadas) {
 function servidor(projeto, saida) {
   const token = crypto.randomBytes(16).toString('hex');
   const S = { fase: 'inicio', versao: 0, projeto, rodada: null, final: null, historico: [], ultima: null };
-  let pendente = null; // o que o proximo aguardar devolve
+  let entrega = null; // a ultima resposta da pagina; fica ate a proxima rodada ou final, para reentregar
   let espera = null; // o aguardar que esta pendurado
+  const esperasEstado = new Set(); // as consultas da pagina que esperam a versao mudar
   let ultimaVisita = Date.now();
-  const mudou = () => S.versao++;
+  const mudou = () => {
+    S.versao++;
+    for (const r of esperasEstado) responder(r, 200, S);
+    esperasEstado.clear();
+  };
 
   function entregar(msg) {
-    pendente = msg;
+    entrega = msg;
     if (espera) {
-      responder(espera, 200, pendente);
-      espera = pendente = null;
+      responder(espera, 200, msg);
+      espera = null;
     }
   }
   function encerrar(ms) {
@@ -123,7 +149,17 @@ function servidor(projeto, saida) {
       }
       if (rota === 'GET /api/estado') {
         ultimaVisita = Date.now();
-        return responder(res, 200, S);
+        const desde = url.searchParams.get('desde');
+        if (desde === null || Number(desde) !== S.versao) return responder(res, 200, S);
+        esperasEstado.add(res);
+        const relogio = setTimeout(() => {
+          if (esperasEstado.delete(res)) responder(res, 200, S);
+        }, ESTADO_MS);
+        res.on('close', () => {
+          clearTimeout(relogio);
+          esperasEstado.delete(res);
+        });
+        return;
       }
       if (rota === 'POST /api/rodada' || rota === 'POST /api/final') {
         if (S.fase === 'concluido' || S.fase === 'cli') return responder(res, 409, { erros: [`o grill já terminou (${S.fase})`] });
@@ -131,6 +167,7 @@ function servidor(projeto, saida) {
         const erros = final ? errosDaFinal(corpo) : errosDaRodada(corpo);
         if (erros.length) return responder(res, 400, { erros });
         Object.assign(S, final ? { fase: 'final', final: corpo, rodada: null } : { fase: 'rodada', rodada: corpo, final: null });
+        entrega = null; // o agente seguiu: a resposta anterior ja chegou a ele
         mudou();
         return responder(res, 200, { ok: true });
       }
@@ -166,11 +203,7 @@ function servidor(projeto, saida) {
         return responder(res, 200, { ok: true });
       }
       if (rota === 'GET /api/aguardar') {
-        if (pendente) {
-          responder(res, 200, pendente);
-          pendente = null;
-          return;
-        }
+        if (entrega) return responder(res, 200, entrega);
         if (espera) responder(espera, 200, { tipo: 'substituido' }); // um aguardar por vez: o velho nao fica pendurado
         espera = res;
         // O prazo corre aqui, e nao no cliente: so o servidor sabe se a resposta ja saiu.
@@ -260,11 +293,16 @@ function sai(msg, codigo = 1) {
 
 const celula = (v) => String(v == null ? '' : v).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
+// A tabela e para o usuario ver; o JSON, para o agente. A coluna de comentario so aparece
+// quando ha algum, e o JSON omite o comentario vazio.
 function tabelaDasRespostas(msg) {
+  const comCom = msg.respostas.some((r) => r.comentario);
   const linhas = msg.respostas.map((r) =>
-    `| ${celula(r.id)} | ${r.marca === 'aceito' ? '✓ aceito' : '⇄ outra'} | ${celula(r.escolha)} | ${celula(r.comentario)} |`);
-  return [`Rodada ${msg.rodada} respondida na tela:`, '', '| Questão | Marca | Escolha | Comentário |', '|---|---|---|---|', ...linhas].join('\n');
+    `| ${celula(r.id)} | ${r.marca === 'aceito' ? '✓ aceito' : '⇄ outra'} | ${celula(r.escolha)} |${comCom ? ` ${celula(r.comentario)} |` : ''}`);
+  return [`Rodada ${msg.rodada} respondida na tela:`, '',
+    `| Questão | Marca | Escolha |${comCom ? ' Comentário |' : ''}`, `|---|---|---|${comCom ? '---|' : ''}`, ...linhas].join('\n');
 }
+const enxuta = (msg) => (msg.tipo !== 'rodada' ? msg : { ...msg, respostas: msg.respostas.map(({ comentario, ...r }) => (comentario ? { ...r, comentario } : r)) });
 
 function abrirNavegador(url) {
   const [cmd, args] = process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
@@ -293,7 +331,7 @@ async function main() {
 
   const url = args[0];
   if (!url || !/^http:\/\/127\.0\.0\.1:\d+\/\?t=/.test(url)) {
-    sai('uso: grill-tela.js <iniciar|rodada|final|aguardar|cli> <url que o iniciar imprimiu> [arquivo.json | - | --ate <segundos>]');
+    sai('uso: grill-tela.js <iniciar|rodada|final|aguardar|cli|abrir> <url que o iniciar imprimiu> [arquivo.json | - | --ate <segundos>]');
   }
   const ate = opcao('--ate');
   if (ate !== undefined && !(/^\d+$/.test(ate) && ate >= 1 && ate <= 7200)) sai('--ate: segundos, inteiro de 1 a 7200');
@@ -313,7 +351,12 @@ async function main() {
     if (cmd === 'aguardar') {
       const r = await pedir(url, 'aguardar', 'GET', undefined, ate ? `&ate=${ate}` : '');
       if (r.json.tipo === 'rodada') console.log(tabelaDasRespostas(r.json) + '\n');
-      return console.log(JSON.stringify(r.json));
+      return console.log(JSON.stringify(enxuta(r.json)));
+    }
+    if (cmd === 'abrir') {
+      await pedir(url, 'estado'); // servidor parado cai no catch: siga no CLI
+      if (!args.includes('--sem-navegador')) abrirNavegador(url);
+      return console.log(url);
     }
     if (cmd === 'cli') {
       const r = await pedir(url, 'cli', 'POST', {});
