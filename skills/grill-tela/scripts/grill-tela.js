@@ -5,12 +5,15 @@
 //   node grill-tela.js iniciar [--projeto <nome>] [--sem-navegador]   imprime a URL
 //   node grill-tela.js rodada <url> <arquivo.json | ->                 publica a rodada
 //   node grill-tela.js final <url> <arquivo.json | ->                  publica a tela final
-//   node grill-tela.js aguardar <url>                                  espera a pagina (em background)
+//   node grill-tela.js aguardar <url> [--ate <segundos>]              espera a pagina
 //   node grill-tela.js cli <url>                                       o grill foi para o terminal
 //
 // O servidor (subcomando `servidor`, que o `iniciar` sobe destacado) escuta so em 127.0.0.1,
 // numa porta que o sistema escolhe, e recusa todo pedido sem o token da URL. Ele para alguns
 // segundos depois do sim ou do CLI e depois de 2 horas sem a pagina consultar o estado.
+// O aguardar sem prazo e para o harness que roda comando em background e reacorda o agente
+// (Claude Code); com --ate, quem desiste e o servidor, que devolve {"tipo":"pendente"} e
+// guarda a resposta para a proxima volta — o laco dos harnesses que esperam em primeiro plano.
 // Preferencias da pagina ficam em ~/.grill-tela/preferencias.json (GRILL_TELA_DIR troca a pasta).
 // So biblioteca padrao.
 
@@ -170,7 +173,17 @@ function servidor(projeto, saida) {
         }
         if (espera) responder(espera, 200, { tipo: 'substituido' }); // um aguardar por vez: o velho nao fica pendurado
         espera = res;
-        res.on('close', () => { if (espera === res) espera = null; });
+        // O prazo corre aqui, e nao no cliente: so o servidor sabe se a resposta ja saiu.
+        const ate = Number(url.searchParams.get('ate'));
+        const relogio = ate > 0 ? setTimeout(() => {
+          if (espera !== res) return;
+          espera = null;
+          responder(res, 200, { tipo: 'pendente' });
+        }, ate * 1000) : null;
+        res.on('close', () => {
+          clearTimeout(relogio);
+          if (espera === res) espera = null;
+        });
         return;
       }
       if (rota === 'GET /api/preferencias') return responder(res, 200, lerPreferencias());
@@ -223,9 +236,9 @@ function responder(res, status, obj) {
 
 // ---------- cliente: os subcomandos do agente ----------
 
-function pedir(url, rota, metodo = 'GET', corpo) {
+function pedir(url, rota, metodo = 'GET', corpo, consulta = '') {
   const u = new URL(url);
-  const alvo = `${u.origin}/api/${rota}?t=${u.searchParams.get('t')}`;
+  const alvo = `${u.origin}/api/${rota}?t=${u.searchParams.get('t')}${consulta}`;
   return new Promise((ok, falha) => {
     const req = http.request(alvo, { method: metodo, headers: { 'content-type': 'application/json' } }, (res) => {
       let txt = '';
@@ -280,8 +293,10 @@ async function main() {
 
   const url = args[0];
   if (!url || !/^http:\/\/127\.0\.0\.1:\d+\/\?t=/.test(url)) {
-    sai('uso: grill-tela.js <iniciar|rodada|final|aguardar|cli> <url que o iniciar imprimiu> [arquivo.json | -]');
+    sai('uso: grill-tela.js <iniciar|rodada|final|aguardar|cli> <url que o iniciar imprimiu> [arquivo.json | - | --ate <segundos>]');
   }
+  const ate = opcao('--ate');
+  if (ate !== undefined && !(/^\d+$/.test(ate) && ate >= 1 && ate <= 7200)) sai('--ate: segundos, inteiro de 1 a 7200');
   try {
     if (cmd === 'rodada' || cmd === 'final') {
       let corpo;
@@ -296,7 +311,7 @@ async function main() {
         : `Rodada ${corpo.rodada} na tela, ${corpo.questoes.length} ${corpo.questoes.length === 1 ? 'questão' : 'questões'}.`);
     }
     if (cmd === 'aguardar') {
-      const r = await pedir(url, 'aguardar');
+      const r = await pedir(url, 'aguardar', 'GET', undefined, ate ? `&ate=${ate}` : '');
       if (r.json.tipo === 'rodada') console.log(tabelaDasRespostas(r.json) + '\n');
       return console.log(JSON.stringify(r.json));
     }

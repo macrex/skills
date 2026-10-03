@@ -2,9 +2,9 @@
 
 Skills para agentes de IA:\
 `/faz` leva um pedido até código verificado,\
-`/obsidian-docs` guarda a documentação num vault Obsidian fora do repositório, e\
-`/cpv` fecha a leva com commit, push e a nota no vault. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.\
-`/grill-tela`, só no Claude Code, leva o grill do Matt Pocock a uma página HTML local.
+`/obsidian-docs` guarda a documentação num vault Obsidian fora do repositório,\
+`/cpv` fecha a leva com commit, push e a nota no vault, e\
+`/grill-tela` leva o grill do Matt Pocock a uma página HTML local. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.
 
 ## Usar
 
@@ -13,12 +13,14 @@ Skills para agentes de IA:\
 | `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva numa sessão nova: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
 | `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, com hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já existe no repositório. Também dispara sozinha quando um documento nasce |
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
-| `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez do `AskUserQuestion`; um hook do plugin pergunta o canal (CLI ou tela) quando o `grilling` é invocado. Só Claude Code |
+| `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez de perguntar no terminal. Quando o `grilling` começa, o agente pergunta o canal (CLI ou tela): no Claude Code pelo hook do plugin, no Pi pela extensão do pacote, no Codex e no Antigravity pela regra no `AGENTS.md` |
 
 `/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
 [Matt Pocock](https://github.com/mattpocock/skills); no Codex e no Pi ela usa um `/goal` (nativo
 no Codex, extensão no Pi), e no Antigravity responda `continue` se a sessão parar antes do fim. No Codex
-as skills atendem por `$macrex-skills:faz`, `$macrex-skills:obsidian-docs` e `$macrex-skills:cpv`.
+as skills atendem por `$macrex-skills:faz`, `$macrex-skills:obsidian-docs`, `$macrex-skills:cpv` e
+`$macrex-skills:grill-tela`; nele a grill-tela roda fora do sandbox, que bloqueia a rede local, e
+pede a sua aprovação.
 
 ## Instalar
 
@@ -60,8 +62,9 @@ git clone https://github.com/mattpocock/skills ~/.codex/skills/mattpocock
 codex mcp add vault-docs -- python ~/.codex/skills/macrex/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
 ```
 
-Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes". Para atualizar, `git pull` nas duas
-pastas.
+Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
+`node ~/.codex/skills/macrex/hooks/grill-canal.js regra >> AGENTS.md`. Para atualizar, `git pull`
+nas duas pastas.
 
 ### Antigravity (CLI `agy`)
 
@@ -73,8 +76,9 @@ agy mcp add vault-docs -- python ~/.gemini/antigravity-cli/skills/obsidian-docs/
 ```
 
 O CLI só lê skill que está direto em `~/.gemini/antigravity-cli/skills/`, daí a cópia. Regras do
-vault no `AGENTS.md`: passo 3 de "Outros agentes". Para atualizar, `git pull` nos dois clones e
-repita o `cp`.
+vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
+`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> AGENTS.md`. Para atualizar,
+`git pull` nos dois clones e repita o `cp`.
 
 ### Outros agentes (Cursor, Gemini CLI, Copilot, OpenCode, Windsurf...)
 
