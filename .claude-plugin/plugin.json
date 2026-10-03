@@ -37,12 +37,12 @@
       "description": "Onde as notas ficam (ex.: D:\\obsidian\\projetos). Deixe em branco para usar a variável OBSIDIAN_VAULT, ou se você não usa o vault.",
       "required": false
     },
-    "grill_tela": {
-      "type": "boolean",
-      "title": "Grill na tela",
-      "description": "Ligada, quando o grilling começa o agente pergunta se você quer o grill no CLI ou numa página HTML local (a /grill-tela). Desligada, o grill segue no CLI, como sempre.",
-      "default": false,
-      "required": false
+    "grill_canal": {
+      "type": "string",
+      "title": "Canal do grill",
+      "description": "Onde o grill do Matt Pocock acontece. cli: no terminal, como sempre. perguntar: o agente pergunta CLI ou tela quando o grill começa. tela: sempre numa página HTML local (a /grill-tela).",
+      "options": ["cli", "perguntar", "tela"],
+      "default": "cli"
     }
   }
 }

@@ -1,37 +1,48 @@
 #!/usr/bin/env node
-// PreToolUse da ferramenta Skill: quando o agente invoca o grilling, injeta a
-// instrucao de perguntar o canal (CLI ou tela) antes da primeira rodada.
-// Qualquer outra skill, ou um stdin que nao e JSON, passa calada. Nao decide permissao.
+// PreToolUse da ferramenta Skill: quando o agente invoca o grilling, injeta a instrucao
+// do canal configurado. Qualquer outra skill, ou um stdin que nao e JSON, passa calada.
+// Nao decide permissao.
 //
-// O gate FALHA FECHADO, ao contrario do hook do vault: a pergunta do canal so aparece com
-// a opcao `grill_tela` do plugin ligada (/config ou /plugin). Desligada, ausente ou
-// ilegivel, o hook fica calado e o grill segue o fluxo de sempre do usuario. A opcao
-// chega como CLAUDE_PLUGIN_OPTION_GRILL_TELA; GRILL_TELA e o pluginConfigs dos
-// settings.json sao os fallbacks, na mesma ordem do vault.
+// O canal tem tres modos, na opcao `grill_canal` do plugin (/config):
+//   cli        o padrao: o hook fica calado e o grill segue o fluxo de sempre do usuario;
+//   perguntar  antes da primeira rodada o agente pergunta CLI ou tela;
+//   tela       o grill vai direto para a grill-tela, sem perguntar.
+// A opcao chega como CLAUDE_PLUGIN_OPTION_GRILL_CANAL; GRILL_CANAL e o pluginConfigs dos
+// settings.json sao os fallbacks, na mesma ordem do vault. O gate FALHA FECHADO, ao
+// contrario do hook do vault: valor ausente, ilegivel ou desconhecido vale cli.
 //
-// Os outros harnesses nao tem o PreToolUse da Skill, entao recebem a mesma pergunta como
-// regra permanente: a extensao do Pi (extensions/grill-canal.ts) importa REGRA para o
-// system prompt quando GRILL_TELA esta ligada, e no Codex e no Antigravity
-// `node grill-canal.js regra >> AGENTS.md` liga e apagar o bloco desliga.
+// Os outros harnesses nao tem o PreToolUse da Skill, entao recebem a mesma instrucao como
+// regra permanente: a extensao do Pi (extensions/grill-canal.ts) a poe no system prompt
+// conforme GRILL_CANAL, e no Codex e no Antigravity `node grill-canal.js regra [tela]
+// >> AGENTS.md` liga e apagar o bloco volta ao cli.
 //
-// Uso: node grill-canal.js            (hook, com o evento no stdin)
-//      node grill-canal.js regra      (imprime a regra para o AGENTS.md)
+// Uso: node grill-canal.js                       (hook, com o evento no stdin)
+//      node grill-canal.js regra [perguntar|tela] (imprime a regra para o AGENTS.md)
 
 const fs = require('fs');
 const { arquivosDeConfig } = require('./vault-rules.js');
 
-const INSTRUCAO = `Antes da primeira rodada do grill, pergunte ao usuario pelo AskUserQuestion qual canal ele quer: CLI (as rodadas pelo AskUserQuestion, como de costume) ou tela (uma pagina HTML local). Se ele escolher tela, invoque a skill grill-tela e conduza o grill por ela, sem usar o AskUserQuestion nas rodadas.`;
+// O que o hook injeta no Claude Code, por modo.
+const INSTRUCAO = {
+  perguntar: `Antes da primeira rodada do grill, pergunte ao usuario pelo AskUserQuestion qual canal ele quer: CLI (as rodadas pelo AskUserQuestion, como de costume) ou tela (uma pagina HTML local). Se ele escolher tela, invoque a skill grill-tela e conduza o grill por ela, sem usar o AskUserQuestion nas rodadas.`,
+  tela: `O usuario configurou o grill para a tela: sem perguntar o canal, invoque a skill grill-tela e conduza o grill por ela desde a primeira rodada, sem usar o AskUserQuestion nas rodadas.`,
+};
 
-const REGRA = `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), antes da primeira rodada pergunte ao usuario, em texto, qual canal ele quer: CLI (as rodadas aqui no terminal, como de costume) ou tela (uma pagina HTML local), e encerre o turno. Se ele escolher tela, carregue a skill grill-tela e conduza o grill por ela, sem fazer as perguntas das rodadas no terminal.`;
+// A regra permanente dos harnesses sem o hook, por modo.
+const REGRA = {
+  perguntar: `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), antes da primeira rodada pergunte ao usuario, em texto, qual canal ele quer: CLI (as rodadas aqui no terminal, como de costume) ou tela (uma pagina HTML local), e encerre o turno. Se ele escolher tela, carregue a skill grill-tela e conduza o grill por ela, sem fazer as perguntas das rodadas no terminal.`,
+  tela: `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), sem perguntar o canal, carregue a skill grill-tela e conduza o grill por ela desde a primeira rodada, sem fazer as perguntas das rodadas no terminal.`,
+};
 
-// O boolean do userConfig pode chegar como true, "true" ou "1", conforme quem o escreveu.
-const ligado = (v) => v === true || /^(true|1|sim|yes|on)$/i.test(String(v == null ? '' : v).trim());
+const SINONIMOS = { perguntar: 'perguntar', pergunta: 'perguntar', tela: 'tela', navegador: 'tela', browser: 'tela', cli: 'cli' };
+// Normaliza um valor de opcao ou variavel; o que nao reconhece vale cli.
+const canal = (v) => SINONIMOS[String(v == null ? '' : v).trim().toLowerCase()] || 'cli';
 
-function grillTelaLigada() {
+function canalConfigurado() {
   // A opcao do plugin decide primeiro: e a resposta explicita deste cliente.
-  const opcao = process.env.CLAUDE_PLUGIN_OPTION_GRILL_TELA;
-  if (opcao !== undefined) return ligado(opcao);
-  if ((process.env.GRILL_TELA || '').trim()) return ligado(process.env.GRILL_TELA);
+  const opcao = process.env.CLAUDE_PLUGIN_OPTION_GRILL_CANAL;
+  if (opcao !== undefined) return canal(opcao);
+  if ((process.env.GRILL_CANAL || '').trim()) return canal(process.env.GRILL_CANAL);
   for (const arquivo of arquivosDeConfig()) {
     let cfgs;
     try {
@@ -41,18 +52,23 @@ function grillTelaLigada() {
     }
     for (const [nome, c] of Object.entries(cfgs || {})) {
       if (!nome.startsWith('macrex-skills@')) continue;
-      const v = c && c.options && c.options.grill_tela;
-      if (v !== undefined) return ligado(v);
+      const v = c && c.options && c.options.grill_canal;
+      if (v !== undefined) return canal(v);
     }
   }
-  return false;
+  return 'cli';
 }
 
-module.exports = { INSTRUCAO, REGRA, ligado, grillTelaLigada };
+module.exports = { INSTRUCAO, REGRA, canal, canalConfigurado };
 
 if (require.main === module) {
   if (process.argv[2] === 'regra') {
-    process.stdout.write(`<grill-canal>\n${REGRA}\n</grill-canal>\n`);
+    const modo = canal(process.argv[3] || 'perguntar');
+    if (modo === 'cli') {
+      console.error('uso: grill-canal.js regra [perguntar|tela] (cli e nao ter a regra)');
+      process.exit(1);
+    }
+    process.stdout.write(`<grill-canal>\n${REGRA[modo]}\n</grill-canal>\n`);
   } else {
     let entrada = '';
     process.stdin.on('data', (d) => (entrada += d));
@@ -64,9 +80,10 @@ if (require.main === module) {
         return; // JSON invalido ou sem tool_input: calado
       }
       if (typeof skill !== 'string' || skill.replace(/^mattpocock-skills:/, '') !== 'grilling') return;
-      if (!grillTelaLigada()) return; // desligada: o grill segue o fluxo do usuario
+      const modo = canalConfigurado();
+      if (modo === 'cli') return; // o grill segue o fluxo do usuario
       process.stdout.write(
-        JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: INSTRUCAO } })
+        JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: INSTRUCAO[modo] } })
       );
     });
   }
