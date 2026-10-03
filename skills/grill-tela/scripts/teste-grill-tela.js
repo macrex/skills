@@ -10,7 +10,9 @@
 //   6. o sim e o cli encerram o servidor, e o cli chega ao aguardar; depois do sim o cli e recusado;
 //   7. sem a pagina consultar, o servidor encerra sozinho e o aguardar recebe o JSON encerrado;
 //   8. um segundo aguardar substitui o primeiro, que sai com o JSON substituido;
-//   9. resposta que nao e JSON (outro processo na porta) cai na mensagem de seguir no CLI.
+//   9. resposta que nao e JSON (outro processo na porta) cai na mensagem de seguir no CLI;
+//  10. aguardar --ate sai com o JSON pendente no prazo, e a resposta dada depois chega na volta seguinte;
+//      --ate fora de 1 a 7200 e recusado.
 //
 //   node skills/grill-tela/scripts/teste-grill-tela.js
 
@@ -32,8 +34,8 @@ const arquivo = (nome, obj) => {
   fs.writeFileSync(p, typeof obj === 'string' ? obj : JSON.stringify(obj));
   return p;
 };
-function aguardar(url) {
-  const filho = spawn(process.execPath, [SCRIPT, 'aguardar', url], { env });
+function aguardar(url, ...extra) {
+  const filho = spawn(process.execPath, [SCRIPT, 'aguardar', url, ...extra], { env });
   let saida = '';
   let erro = '';
   filho.stdout.on('data', (d) => (saida += d));
@@ -162,6 +164,25 @@ const RODADA = {
   // 6. cli
   const url2 = iniciar();
   assert.strictEqual(roda('rodada', url2, arquivo('rodada.json', RODADA)).status, 0);
+
+  // 10. aguardar com prazo, o laco dos harnesses que esperam em primeiro plano
+  for (const ruimAte of ['0', 'x', '7201']) {
+    r = roda('aguardar', url2, '--ate', ruimAte);
+    assert.strictEqual(r.status, 1, `--ate ${ruimAte} sai com 1`);
+    assert.match(r.stderr, /--ate/);
+  }
+  const inicioPrazo = Date.now();
+  const comPrazo = await aguardar(url2, '--ate', '1');
+  assert.strictEqual(comPrazo.status, 0, comPrazo.erro);
+  assert.deepStrictEqual(ultimaLinha(comPrazo.saida), { tipo: 'pendente' });
+  assert.ok(Date.now() - inicioPrazo < 5000, 'o prazo vale');
+  p = await pedir(api(url2, 'respostas'), 'POST', { tipo: 'rodada', rodada: 1, respostas: [
+    { id: 'Q1', opcao: 1 }, { id: 'Q2', opcao: 0 }] });
+  assert.strictEqual(p.status, 200, p.txt);
+  const volta = await aguardar(url2, '--ate', '5');
+  assert.deepStrictEqual(ultimaLinha(volta.saida).respostas.map((x) => x.marca), ['outra', 'aceito'],
+    'a resposta dada entre duas voltas nao se perde');
+  assert.strictEqual(roda('rodada', url2, arquivo('rodada2.json', { ...RODADA, rodada: 2 })).status, 0);
   const espera3 = aguardar(url2);
   await espere(300);
   r = roda('cli', url2);
@@ -185,7 +206,7 @@ const RODADA = {
   assert.strictEqual(falsa.status, 1);
   assert.match(falsa.erro, /siga o grill no CLI/, falsa.erro);
 
-  console.log('grill-tela ok: iniciar, token, validacao, aguardar, preferencias, final, cli, ocioso, aguardar substituido e resposta que nao e JSON');
+  console.log('grill-tela ok: iniciar, token, validacao, aguardar, preferencias, final, cli, ocioso, aguardar substituido, resposta que nao e JSON e aguardar com prazo');
 })().catch((e) => {
   console.error(e);
   process.exit(1);

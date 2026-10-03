@@ -3,7 +3,8 @@
 // Checagem do hook do grill, rodado por stdin como o Claude Code faz:
 //   1. `grilling`, com e sem o prefixo `mattpocock-skills:`, recebe o additionalContext do
 //      PreToolUse, que cita o AskUserQuestion e a grill-tela, sem decidir permissao;
-//   2. outra skill, JSON invalido, stdin vazio e `{}` passam calados, com status 0.
+//   2. outra skill, JSON invalido, stdin vazio e `{}` passam calados, com status 0;
+//   3. `regra` imprime a regra para o AGENTS.md entre tags, e importado o modulo so exporta.
 //
 //   node hooks/teste-grill-canal.js
 
@@ -31,4 +32,12 @@ for (const entrada of [skill('tdd'), skill('mattpocock-skills:tdd'), skill('gril
   assert.strictEqual(r.stdout, '', `deveria calar para: ${entrada}`);
 }
 
-console.log('hook do grill ok: grilling com e sem prefixo injeta o canal, o resto passa calado');
+const r = spawnSync(process.execPath, [hook, 'regra'], { input: '', encoding: 'utf8' });
+assert.strictEqual(r.status, 0);
+const { INSTRUCAO, REGRA } = require('./grill-canal.js');
+assert.strictEqual(r.stdout, `<grill-canal>\n${REGRA}\n</grill-canal>\n`);
+assert.match(REGRA, /grill-tela/);
+assert.ok(!REGRA.includes('AskUserQuestion'), 'a regra vale para harness sem AskUserQuestion');
+assert.match(INSTRUCAO, /AskUserQuestion/);
+
+console.log('hook do grill ok: grilling com e sem prefixo injeta o canal, o resto passa calado, e a regra sai para o AGENTS.md');
