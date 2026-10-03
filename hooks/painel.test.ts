@@ -7,14 +7,17 @@ const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'faz-paine
 const SURFACES = ['terminal', 'desktop'] as const
 const MARCO = 'mcp__macrex-skills__faz_marco'
 
-// O mundo sob o mod: um workspace, o store em memoria e a tela que aceita toast.
+// O mundo sob o mod: um workspace, o store em memoria, o relogio parado e a tela que aceita toast.
 function mundo(on: On, cwd = 'D:/ws/a') {
   const toasts: string[] = []
   mock.store(on)
+  const relogio = mock.clock(on)
   on('session.cwd', () => ({ value: cwd }))
   on('ui.toast', ($, e) => { toasts.push(e.text); return { value: undefined } })
-  return { toasts }
+  return { toasts, relogio }
 }
+
+const segundos = (n: number) => n * 1000
 
 const TICKETS = [{ id: '01', titulo: 'Mod do painel' }, { id: '02', titulo: 'Ferramenta faz_marco' }]
 
@@ -58,9 +61,9 @@ describe('painel da leva', () => {
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ text: /2026-10-03 Painel da leva/ })).toBeDefined()
-      expect((await ui.find({ type: 'Text', text: /^implement $/ }))?.props.bold).toBe(true)
-      expect((await ui.find({ type: 'Text', text: /^tickets $/ }))?.props.dimColor).toBe(false)
-      expect((await ui.find({ type: 'Text', text: /^revisao $/ }))?.props.dimColor).toBe(true)
+      expect((await ui.find({ type: 'Text', text: /^implement\b/ }))?.props.bold).toBe(true)
+      expect((await ui.find({ type: 'Text', text: /^tickets\b/ }))?.props.dimColor).toBe(false)
+      expect((await ui.find({ type: 'Text', text: /^revisao\b/ }))?.props.dimColor).toBe(true)
       expect((await ui.find({ type: 'Text', text: /^. 01 / }))?.text).toMatch(/verde.*reparos: 1.*testes: 3\/4/)
       expect((await ui.find({ type: 'Text', text: /^. 02 / }))?.text).toMatch(/em curso/)
       await ui.unmount()
@@ -83,7 +86,7 @@ describe('painel da leva', () => {
     expect((await marco({ marco: 'portao', ticket: '01', portao: 'verde', testes: 'x'.repeat(21) })).deny).toMatch(/testes/)
 
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    expect((await ui.find({ type: 'Text', text: /^spec $/ }))?.props.bold).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /^spec\b/ }))?.props.bold).toBe(true)
     expect((await ui.find({ type: 'Text', text: /^. 01 / }))?.text).toMatch(/pendente/)
   })
 
@@ -110,6 +113,7 @@ describe('painel da leva', () => {
       'leva:D:/ws/a': { documento: 'de outro workspace', fase: 'spec', fases: ['spec'], tickets: [], fechada: false },
       'leva:D:/ws/b': { documento: 'gravada antes', fase: 'revisao', fases: ['spec', 'revisao'], tickets: [], fechada: false },
     })
+    mock.clock(on)
     on('session.start', ($, e) => ({ cwd: e.cwd }))
     on('command.register', () => ({ value: undefined }))
     on('tool.register', () => ({ value: undefined }))
@@ -117,31 +121,75 @@ describe('painel da leva', () => {
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect(await ui.find({ text: /gravada antes/ })).toBeDefined()
     expect(await ui.find({ text: /de outro workspace/ })).toBeUndefined()
-    expect((await ui.find({ type: 'Text', text: /^revisao $/ }))?.props.bold).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /^revisao\b/ }))?.props.bold).toBe(true)
   })
 
-  test('o Agora mostra as 5 ultimas acoes, so com leva ativa e sem a faz_marco', async ($, on) => {
-    mundo(on)
-    on('tool.call', { tool: 'Read' }, () => ({ result: 'ok' }) as never)
+  test('o pane mostra o tempo de cada fase, de cada ticket e o total', async ($, on) => {
+    const { relogio } = mundo(on)
     const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
-    const ler = (arquivo: string) => $.tool.call({ tool: 'Read', file_path: arquivo } as never)
-    const agora = async () => {
-      const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-      const achados = []
-      for (const n of [0, 1, 2, 3, 4, 5, 6, 7]) achados.push(await ui.find({ type: 'Text', text: new RegExp(`Read .*arq${n}`) }))
-      await ui.unmount()
-      return achados.map(a => a !== undefined)
-    }
 
-    await ler('arq0')
     await marco({ marco: 'inicio', documento: 'doc' })
-    for (const n of [1, 2, 3, 4, 5, 6]) await ler(`arq${n}`)
-    expect(await agora()).toEqual([false, false, true, true, true, true, true, false])
+    await relogio.advance(segundos(90))
+    await marco({ marco: 'fase', fase: 'tickets' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await relogio.advance(segundos(30))
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await relogio.advance(segundos(65))
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    await marco({ marco: 'ticket', ticket: '02' })
+    await relogio.advance(segundos(10))
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /^spec 1m30s/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^tickets 30s/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^implement 1m15s/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^. 01 / }))?.text).toMatch(/1m05s/)
+    expect((await ui.find({ type: 'Text', text: /^. 02 / }))?.text).toMatch(/10s/)
+    expect(await ui.find({ type: 'Text', text: /total 3m15s/ })).toBeDefined()
+    await ui.unmount()
 
     await marco({ marco: 'fechamento' })
-    await ler('arq7')
-    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: /arq7/ })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /faz_marco/ })).toBeUndefined()
+    await relogio.advance(segundos(600))
+    const fechada = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await fechada.find({ type: 'Text', text: /total 3m15s/ })).toBeDefined()
+  })
+
+  test('os agentes e workflows da leva aparecem com nome, modelo, estado e duracao', async ($, on) => {
+    const { relogio } = mundo(on)
+    on('tool.call', { tool: 'Agent' }, ($, e) => ({
+      result: e.name === 'opus-sincrono'
+        ? { status: 'completed', agentId: 'a1', resolvedModel: 'claude-opus-5-5', totalDurationMs: segundos(125) }
+        : { status: 'async_launched', agentId: 'a2' },
+    }) as never)
+    on('tool.call', { tool: 'Workflow' }, () => ({ result: { status: 'async_launched', taskId: 'w1', workflowName: 'tickets' } }) as never)
+    on('turn.complete', () => ({ text: '' }))
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+    const agente = (name: string, model?: string) =>
+      $.tool.call({ tool: 'Agent', name, description: 'revisao', prompt: 'p', model } as never)
+
+    await agente('fora-da-leva')
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await agente('opus-sincrono')
+    await agente('sonnet-fundo', 'sonnet')
+    await $.tool.call({ tool: 'Workflow', script: 'x' } as never)
+    await relogio.advance(segundos(40))
+
+    let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /fora-da-leva/ })).toBeUndefined()
+    expect((await ui.find({ type: 'Text', text: /opus-sincrono/ }))?.text).toMatch(/claude-opus-5-5.*concluido.*2m05s/)
+    expect((await ui.find({ type: 'Text', text: /sonnet-fundo/ }))?.text).toMatch(/sonnet.*rodando.*40s/)
+    expect((await ui.find({ type: 'Text', text: /workflow tickets/ }))?.text).toMatch(/rodando.*40s/)
+    await ui.unmount()
+
+    await $.turn.complete({
+      answer: 'ok', durationMs: segundos(40), isAborted: false, turnId: 't1', agentId: 'a2', reason: 'answer',
+      usage: { model: 'claude-sonnet-5-5' },
+    } as never)
+    // o fim do workflow chega pela notificacao da tarefa (session.append), que o kit nao deixa
+    // um teste responder: esse caminho so se verifica numa sessao real
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /sonnet-fundo/ }))?.text).toMatch(/claude-sonnet-5-5.*concluido.*40s/)
+    expect(await ui.find({ type: 'Text', text: /Read|Bash/ })).toBeUndefined()
   })
 })

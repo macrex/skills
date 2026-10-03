@@ -26,6 +26,6 @@ _Evitar_: gate, check
 O pane que um mod do Claude Code abre ao lado da conversa, como o do `/diff`, e que mostra o estado da leva enquanto ela roda. Só existe no Claude Code.
 _Evitar_: dashboard, monitor, statusline, TUI
 
-**Agora**:
-As últimas ações do agente (ferramenta e alvo), que o próprio mod observa enquanto há leva ativa e mostra no painel.
-_Evitar_: atividade, feed
+**Agentes da leva**:
+Os sub-agentes e workflows que a leva abriu, com nome, modelo, estado e duração, que o próprio mod observa enquanto há leva ativa e mostra no painel.
+_Evitar_: Agora, atividade, feed
