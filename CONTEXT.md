@@ -29,3 +29,15 @@ _Evitar_: dashboard, monitor, statusline, TUI
 **Agentes da leva**:
 Os sub-agentes e workflows que a leva abriu, com nome, modelo, estado e duração, que o próprio mod observa enquanto há leva ativa e mostra no painel.
 _Evitar_: Agora, atividade, feed
+
+**Retomada**:
+Uma sessão nova que continua a leva aberta do mesmo documento a partir do estado da leva, sem refazer os tickets que já fecharam.
+_Evitar_: resume, recomeço
+
+**Conferência das skills**:
+O registro de quais skills da leva a sessão em curso invocou de fato, confrontado com as fases que a leva declarou.
+_Evitar_: auditoria, checklist
+
+**Histórico de levas**:
+As levas já fechadas de um workspace, com tempos, portões, reparos, modo do implement e modelos observados.
+_Evitar_: log, métricas

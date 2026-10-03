@@ -13,6 +13,7 @@ Skills para agentes de IA:\
 | `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva numa sessão nova: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
 | `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, com hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já existe no repositório. Também dispara sozinha quando um documento nasce |
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
+| `/faz-painel` | Só no Claude Code: abre e fecha, ao lado da conversa, o painel da leva em curso no workspace. Ele mostra as fases, os tickets com o portão de cada um, o tempo de cada fase e ticket, o total, e os sub-agentes, teammates e workflows da leva com modelo, estado e duração. É só leitura, `Esc` fecha, e um toast avisa quando uma leva começa |
 | `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez de perguntar no terminal. O canal tem três modos: `cli` (o padrão, o grill segue no terminal), `perguntar` (o agente pergunta CLI ou tela quando o `grilling` começa) e `tela` (sempre na página). Escolha pela opção **Canal do grill** no Claude Code, por `GRILL_CANAL` no Pi e pela regra no `AGENTS.md` no Codex e no Antigravity |
 
 `/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
@@ -38,8 +39,10 @@ sem Obsidian, pule o que fala de vault.
 Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces,
 `macrex`. O canal do grill é a opção **Canal do grill** em `/config`: `cli` (o padrão, o hook
 fica calado e o grill segue o seu fluxo), `perguntar` (CLI ou tela, a cada grill) ou `tela` (sempre
-na página). Durante uma leva, `/faz-painel` abre e fecha o painel da leva ao lado da conversa, com as
-fases, os tickets e os portões, o tempo de cada um e os sub-agentes e workflows da leva. O plugin pede o Claude Code 2.1.287 ou mais novo. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
+na página). O plugin pede o Claude Code 2.1.287 ou mais novo. O `/faz-painel` é um mod do Claude Code e
+não pede configuração, mas só aparece onde a Anthropic já liberou os mods; sem eles, o resto do plugin
+funciona igual. Depois de instalar ou atualizar o plugin, reinicie a sessão (`claude --continue` mantém
+a conversa): até lá, a sessão segue com a versão anterior. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
 já tinha as skills em `~/.claude/skills`, remova-as, ou elas ganham do plugin.
 
 ### Pi

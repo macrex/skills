@@ -13,9 +13,13 @@ import { atom, read, update } from 'claude-code'
 const PANE = 'faz-painel'
 const FERRAMENTA = 'faz_marco'
 const MARCO = 'mcp__macrex-skills__faz_marco'
-const MARCOS = ['inicio', 'fase', 'tickets', 'ticket', 'portao', 'fechamento']
+const MARCOS = ['inicio', 'fase', 'tickets', 'ticket', 'portao', 'item', 'fechamento']
 const FASES = ['spec', 'tickets', 'implement', 'revisao', 'correcoes', 'qualidade', 'fechamento']
 const PORTOES = ['verde', 'vermelho']
+const MODOS = ['inline', 'sub-agents', 'workflow']
+// as fases depois do implement, cujo andamento chega item a item, e o titulo do cartao de cada uma
+const FASES_COM_ITENS = { revisao: 'Revisão', correcoes: 'Correções', qualidade: 'Qualidade' }
+const NO_HISTORICO = 10
 const FUNDO = '#24283b'
 const FIM_DE_TAREFA = { completed: 'concluido', failed: 'falhou', killed: 'parado', stopped: 'parado' }
 const MARCA = { pendente: '·', 'em-curso': '▸', verde: '✓', vermelho: '✗', rodando: '▸', concluido: '✓', falhou: '✗', parado: '■' }
@@ -23,8 +27,19 @@ const MARCA = { pendente: '·', 'em-curso': '▸', verde: '✓', vermelho: '✗'
 const LEVA = atom({ plugin: 'macrex-skills', key: 'leva' }, null)
 // Os agentes e workflows da leva, so na sessao (nao vao ao $.store).
 const AGENTES = atom({ plugin: 'macrex-skills', key: 'agentes' }, [])
+// A conferencia das skills: as skills da leva que esta sessao invocou, so na sessao; a leva as
+// invoca logo depois do localizador, antes do inicio, e a sessao nova de uma retomada as recarrega.
+const SKILLS = atom({ plugin: 'macrex-skills', key: 'skills' }, [])
+// As ultimas levas fechadas do workspace, carregadas do $.store no inicio da sessao.
+const HISTORICO = atom({ plugin: 'macrex-skills', key: 'historico' }, [])
+const SKILL_DA_FASE = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review' }
 
 const chave = cwd => `leva:${cwd}`
+const chaveDoHistorico = cwd => `levas:${cwd}`
+// a skill da fase que esta sessao ainda nao invocou, ou undefined
+const semSkill = (fase, skills) => (skills.includes(SKILL_DA_FASE[fase]) ? undefined : SKILL_DA_FASE[fase])
+// um inicio com o mesmo documento sobre a leva aberta e a retomada dela
+const retoma = (leva, m) => m.marco === 'inicio' && Boolean(leva) && !leva.fechada && leva.documento === m.documento
 const dois = n => String(n).padStart(2, '0')
 
 function duracao(ms) {
@@ -38,7 +53,13 @@ function duracao(ms) {
 function aplicar(leva, m, agora) {
   if (m.marco === 'inicio') {
     if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'inicio exige documento (titulo da nota ou caminho)' }
-    return { documento: m.documento, fase: 'spec', fases: ['spec'], entradas: { spec: agora }, inicio: agora, tickets: [], fechada: false }
+    if (m.sujos != null && !(Array.isArray(m.sujos) && m.sujos.every(s => typeof s === 'string'))) {
+      return { erro: 'sujos exige uma lista de caminhos (o git status --porcelain de antes da leva)' }
+    }
+    // a retomada guarda tudo, inclusive os sujos do inicio original
+    if (retoma(leva, m)) return leva
+    const sujos = m.sujos ?? []
+    return { documento: m.documento, fase: 'spec', fases: ['spec'], entradas: { spec: agora }, inicio: agora, tickets: [], sujos, fechada: false }
   }
   if (!MARCOS.includes(m.marco)) return { erro: `marco desconhecido: ${m.marco}; use ${MARCOS.join(', ')}` }
   if (!leva) return { erro: 'nenhuma leva neste workspace: registre o marco inicio antes' }
@@ -52,7 +73,10 @@ function aplicar(leva, m, agora) {
   const achar = id => leva.tickets.find(t => t.id === String(id))
   switch (m.marco) {
     case 'fase':
-      return FASES.includes(m.fase) ? fase(m.fase) : { erro: `fase fora do vocabulario: ${m.fase}; use ${FASES.join(', ')}` }
+      if (!FASES.includes(m.fase)) return { erro: `fase fora do vocabulario: ${m.fase}; use ${FASES.join(', ')}` }
+      if (m.modo == null) return fase(m.fase)
+      if (m.fase !== 'implement' || !MODOS.includes(m.modo)) return { erro: `modo vai so com fase implement e e um de ${MODOS.join(', ')}` }
+      return { ...fase(m.fase), modo: m.modo }
     case 'tickets':
       if (!Array.isArray(m.tickets) || !m.tickets.every(t => t && t.id != null && typeof t.titulo === 'string')) {
         return { erro: 'tickets exige uma lista de { id, titulo }' }
@@ -69,8 +93,28 @@ function aplicar(leva, m, agora) {
       if (!PORTOES.includes(m.portao)) return { erro: `portao deve ser verde ou vermelho, veio ${m.portao}` }
       if (m.reparos != null && ![0, 1, 2].includes(m.reparos)) return { erro: `reparos vai de 0 a 2, veio ${m.reparos}` }
       if (m.testes != null && String(m.testes).length > 20) return { erro: `testes cabe em 20 caracteres, veio ${m.testes}` }
-      const portao = { estado: m.portao, reparos: m.reparos, testes: m.testes == null ? undefined : String(m.testes), fimEm: agora }
+      if (m.notas != null && (typeof m.notas !== 'string' || m.notas.length > 500)) return { erro: 'notas e um texto de ate 500 caracteres' }
+      const portao = { estado: m.portao, reparos: m.reparos, testes: m.testes == null ? undefined : String(m.testes), notas: m.notas, fimEm: agora }
       return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, ...portao } : t)) }
+    }
+    case 'item': {
+      const f = m.fase ?? leva.fase
+      if (typeof m.item !== 'string' || !m.item.trim() || m.item.length > 60) return { erro: 'item exige o nome do item, ate 60 caracteres' }
+      if (!FASES_COM_ITENS[f]) return { erro: `item vai so nas fases ${Object.keys(FASES_COM_ITENS).join(', ')}; veio fase ${f}` }
+      if (m.portao != null && !PORTOES.includes(m.portao)) return { erro: `portao deve ser verde ou vermelho, veio ${m.portao}` }
+      if (m.detalhe != null && (typeof m.detalhe !== 'string' || m.detalhe.length > 60)) return { erro: 'detalhe e um texto de ate 60 caracteres' }
+      // o mesmo item da mesma fase e atualizado, e guarda a hora em que comecou
+      const itens = leva.itens ?? []
+      const velho = itens.find(i => i.fase === f && i.titulo === m.item)
+      const novo = {
+        fase: f,
+        titulo: m.item,
+        estado: m.portao ?? 'em-curso',
+        detalhe: m.detalhe ?? velho?.detalhe,
+        inicioEm: velho?.inicioEm ?? agora,
+        fimEm: m.portao ? agora : undefined,
+      }
+      return { ...leva, itens: velho ? itens.map(i => (i === velho ? novo : i)) : [...itens, novo] }
     }
     case 'fechamento':
       return { ...fase('fechamento'), fechada: true, fim: agora }
@@ -89,6 +133,8 @@ export function register(on) {
   on('session.start', async ($, e, next) => {
     const salva = await $.store.get(chave(e.cwd))
     if (salva) await update($, LEVA, () => salva)
+    const historico = await $.store.get(chaveDoHistorico(e.cwd))
+    if (historico) await update($, HISTORICO, () => historico)
     // o tempo da fase e dos agentes em curso anda sozinho no pane
     $.clock.every(10000, () => void ativa($).then(sim => sim && $.ui.invalidate('ui.render')))
     await $.command.register({
@@ -108,14 +154,23 @@ export function register(on) {
           marco: { type: 'string', enum: MARCOS },
           documento: { type: 'string', description: 'inicio: o documento da leva (titulo da nota ou caminho)' },
           fase: { type: 'string', enum: FASES },
+          modo: { type: 'string', enum: MODOS, description: 'fase implement: como o implement roda' },
           tickets: {
             type: 'array',
             items: { type: 'object', properties: { id: { type: 'string' }, titulo: { type: 'string' } }, required: ['id', 'titulo'] },
           },
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
+          item: { type: 'string', maxLength: 60, description: 'item: o nome do item da revisao, das correcoes ou da qualidade' },
+          detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
           portao: { type: 'string', enum: PORTOES },
           reparos: { type: 'integer', minimum: 0, maximum: 2 },
           testes: { type: 'string', maxLength: 20, description: 'portao: contagem de testes, ex. 3/4' },
+          notas: { type: 'string', maxLength: 500, description: 'portao: o que o ticket entregou, para a retomada' },
+          sujos: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'inicio: os caminhos do git status --porcelain de antes da leva',
+          },
         },
         required: ['marco'],
       },
@@ -124,16 +179,39 @@ export function register(on) {
   })
 
   on('tool.call', { tool: MARCO }, async ($, e) => {
-    const leva = aplicar(await read($, LEVA), e, await $.clock.now())
+    const antes = await read($, LEVA)
+    const leva = aplicar(antes, e, await $.clock.now())
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
-    await $.store.set(chave(await $.session.cwd()), leva)
+    if (retoma(antes, e)) {
+      const tickets = leva.tickets.map(({ id, titulo, estado, notas }) => ({ id, titulo, estado, notas }))
+      const estado = JSON.stringify({ fase: leva.fase, tickets, sujos: leva.sujos ?? [] }, null, 2)
+      return { result: `marco registrado; retomada na fase ${leva.fase}\n${estado}` }
+    }
+    const falta = ['inicio', 'fase'].includes(e.marco) && semSkill(leva.fase, await read($, SKILLS))
+    const cwd = await $.session.cwd()
+    await $.store.set(chave(cwd), leva)
     await update($, LEVA, () => leva)
+    if (e.marco === 'fechamento' && !antes.fechada) {
+      const modelos = [...new Set((await read($, AGENTES)).map(a => a.modelo).filter(Boolean))]
+      const historico = [{ ...leva, modelos }, ...((await $.store.get(chaveDoHistorico(cwd))) ?? [])].slice(0, NO_HISTORICO)
+      await $.store.set(chaveDoHistorico(cwd), historico)
+      await update($, HISTORICO, () => historico)
+      // zera no fechamento, nao no inicio: a proxima leva invoca as reservadas antes do inicio
+      await update($, SKILLS, () => [])
+    }
     if (e.marco === 'inicio') {
       await update($, AGENTES, () => [])
       $.ui.toast('Leva registrada: /faz-painel mostra o andamento')
     }
-    return { result: `marco registrado; fase ${leva.fase}` }
+    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}` }
+  })
+
+  // casa pelo sufixo depois do `:`: mattpocock-skills:to-spec e to-spec contam igual
+  on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
+    const nome = String(e.skill ?? '').split(':').pop()
+    if (Object.values(SKILL_DA_FASE).includes(nome)) await update($, SKILLS, lista => (lista.includes(nome) ? lista : [...lista, nome]))
+    return next(e)
   })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
@@ -226,7 +304,26 @@ export function register(on) {
     const leva = await read($, LEVA)
     // o fundo pinta o pane inteiro, nao so as linhas com texto: a raiz ocupa a altura do viewport
     const raiz = { flexDirection: 'column', backgroundColor: FUNDO, minHeight: e.viewport?.rows }
-    if (!leva) return h(Box, raiz, h(Text, { dimColor: true }, 'nenhuma leva neste workspace'))
+    // cada secao e um cartao de borda arredondada: separa as partes em qualquer tema do terminal
+    const cartao = (titulo, ...filhos) =>
+      h(
+        Box,
+        { flexDirection: 'column', borderStyle: 'round', borderColor: 'gray', paddingX: 1 },
+        titulo && h(Text, { bold: true, color: 'cyan' }, titulo),
+        ...filhos,
+      )
+    const historico = await read($, HISTORICO)
+    const passada = l => {
+      const verdes = l.tickets.filter(t => t.estado === 'verde').length
+      const reparos = l.tickets.reduce((soma, t) => soma + (t.reparos ?? 0), 0)
+      const total = l.inicio != null && l.fim != null && `total ${duracao(l.fim - l.inicio)}`
+      return [l.documento, total, l.modo, `${verdes}/${l.tickets.length} verdes`, `reparos ${reparos}`, ...(l.modelos ?? [])]
+        .filter(Boolean)
+        .join(' · ')
+    }
+    // o historico so aparece sem leva aberta: com ela, o espaco e do andamento
+    const cartaoDoHistorico = historico.length > 0 && cartao('Histórico', ...historico.map(l => h(Text, { dimColor: true }, passada(l))))
+    if (!leva) return h(Box, raiz, h(Text, { dimColor: true }, 'nenhuma leva neste workspace'), cartaoDoHistorico)
     const agora = await $.clock.now()
     const ate = leva.fim ?? agora
     // uma fase dura da sua entrada ate a entrada seguinte, ou ate agora (o fim, se fechada)
@@ -238,21 +335,17 @@ export function register(on) {
     }
     const linha = t => {
       const tempo = t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? duracao((t.fimEm ?? agora) - t.inicioEm) : ''
-      const extra = [t.reparos != null && `reparos: ${t.reparos}`, t.testes && `testes: ${t.testes}`, tempo].filter(Boolean).join(', ')
-      return `${MARCA[t.estado]} ${t.id} ${t.titulo} — ${t.estado === 'em-curso' ? 'em curso' : t.estado}${extra ? ` (${extra})` : ''}`
+      const extra = [t.reparos != null && `reparos: ${t.reparos}`, t.testes && `testes: ${t.testes}`, t.detalhe, tempo].filter(Boolean).join(', ')
+      return `${MARCA[t.estado]} ${[t.id, t.titulo].filter(Boolean).join(' ')} — ${t.estado === 'em-curso' ? 'em curso' : t.estado}${extra ? ` (${extra})` : ''}`
     }
+    const cor = estado => (estado === 'verde' ? 'green' : estado === 'vermelho' ? 'red' : undefined)
+    const skills = await read($, SKILLS)
+    // feita e a fase que a leva ja deixou, ou todas as que passou quando fechada
+    const feita = f => leva.fases.includes(f) && (f !== leva.fase || leva.fechada)
     const agentes = await read($, AGENTES)
     const visiveis = [...agentes.filter(a => a.estado === 'rodando'), ...agentes.filter(a => a.estado !== 'rodando').slice(-5)]
     const agente = a =>
       [`${MARCA[a.estado]} ${a.nome}`, a.modelo, a.estado, duracao(a.duracao ?? agora - a.inicio)].filter(Boolean).join(' · ')
-    // cada secao e um cartao de borda arredondada: separa as partes em qualquer tema do terminal
-    const cartao = (titulo, ...filhos) =>
-      h(
-        Box,
-        { flexDirection: 'column', borderStyle: 'round', borderColor: 'gray', paddingX: 1 },
-        titulo && h(Text, { bold: true, color: 'cyan' }, titulo),
-        ...filhos,
-      )
     return h(
       Box,
       raiz,
@@ -262,24 +355,29 @@ export function register(on) {
         leva.fechada && h(Text, { color: 'yellow' }, 'leva fechada, falta o /cpv'),
       ),
       cartao(
-        'Fases',
+        `Fases · etapa ${FASES.indexOf(leva.fase) + 1}/${FASES.length}`,
         h(
           Box,
           { flexWrap: 'wrap' },
-          ...FASES.map(f =>
-            h(Text, { bold: f === leva.fase, dimColor: f !== leva.fase && !leva.fases.includes(f) }, `${f}${tempoDaFase(f)} `),
-          ),
+          ...FASES.map((f, i) => {
+            const marcas = [feita(f) && '✓', leva.fases.includes(f) && semSkill(f, skills) && '!'].filter(Boolean)
+            const texto = [`${f}${tempoDaFase(f)}`, ...marcas].join(' ') + (i < FASES.length - 1 ? ' › ' : '')
+            return h(Text, { bold: f === leva.fase, color: feita(f) ? 'green' : undefined, dimColor: f !== leva.fase && !leva.fases.includes(f) }, texto)
+          }),
         ),
       ),
       leva.tickets.length > 0 &&
         cartao(
           'Tickets',
-          ...leva.tickets.map(t =>
-            h(Text, { color: t.estado === 'verde' ? 'green' : t.estado === 'vermelho' ? 'red' : undefined }, linha(t)),
-          ),
+          ...leva.tickets.map(t => h(Text, { color: cor(t.estado) }, linha(t))),
         ),
+      ...Object.entries(FASES_COM_ITENS).map(([f, titulo]) => {
+        const itens = (leva.itens ?? []).filter(i => i.fase === f)
+        return itens.length > 0 && cartao(titulo, ...itens.map(i => h(Text, { color: cor(i.estado) }, linha(i))))
+      }),
       visiveis.length > 0 &&
         cartao('Agentes', ...visiveis.map(a => h(Text, { dimColor: a.estado !== 'rodando' }, agente(a)))),
+      leva.fechada && cartaoDoHistorico,
     )
   })
 }

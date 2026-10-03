@@ -34,14 +34,32 @@ cumpri-lo **é** invocá-la.
   depois do localizador, antes de qualquer sub-agente, workflow ou pergunta em texto, e depois
   as cumpre na ordem dos passos com as instruções já carregadas, sem invocá-las de novo.
 - **Painel da leva:** a cada marco, chame `mcp__macrex-skills__faz_marco`, que alimenta o painel
-  aberto por `/faz-painel`: `inicio` com o `documento` da linha, logo depois do localizador (a
-  leva já entra na fase `spec`); `fase` ao entrar em cada fase seguinte (`tickets`, `implement`,
-  `revisao`, `correcoes`, `qualidade`); `tickets` com a lista `{ id, titulo }` assim que o
-  `to-tickets` publicar; `ticket` ao começar cada um; `portao` com `verde` ou `vermelho`, os
-  `reparos` (0 a 2) e os `testes` (ex. `3/4`, até 20 caracteres) quando o executor os informou;
-  `fechamento` no fim. No modo workflow a sessão não vê cada ticket começar: quando a notificação
-  do fim do workflow chegar, registre `ticket` e `portao` de cada ticket pelo relatório dele.
-  Ferramenta ausente ou erro dela nunca para a leva: siga sem o marco.
+  aberto por `/faz-painel`: `inicio` com o `documento` da linha e os `sujos` (os caminhos do
+  `git status --porcelain` de antes da leva), logo depois do localizador (a leva já entra na fase
+  `spec`); `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
+  `qualidade`), a de `implement` com o `modo` que o usuário escolheu (`inline`, `sub-agents` ou
+  `workflow`); `tickets` com a lista `{ id, titulo }` assim que o `to-tickets` publicar; `ticket`
+  ao começar cada um; `portao` com `verde` ou `vermelho`, os `reparos` (0 a 2) e os `testes` (ex.
+  `3/4`, até 20 caracteres) quando o executor os informou, e as `notas` do que o ticket entregou
+  (até 500 caracteres); `item` em cada passo da revisão, das correções e da qualidade, para o
+  painel não parar no implement: um por eixo da revisão (`Standards`, `Spec`) ao abrir o
+  sub-agente e de novo, com `portao` e o número de achados em `detalhe`, quando o relatório
+  chegar; nas correções, um com a contagem de aplicadas e recusadas; na qualidade, um por
+  verificador, com a contagem em `detalhe` (até 60 caracteres); `fechamento` no fim, que guarda a
+  leva no Histórico de levas do painel. No modo workflow a sessão não vê cada ticket começar:
+  quando a notificação do fim do workflow chegar, registre `ticket` e `portao` de cada ticket pelo
+  relatório dele. Ferramenta ausente ou erro dela nunca para a leva: siga sem o marco.
+- **Retomada:** resposta do `inicio` que começa com `retomada na fase` quer dizer que a leva
+  aberta do mesmo documento continua (os `sujos` que você passou são ignorados), e o JSON que vem
+  junto traz a fase, os tickets com portão e notas e os sujos. Diga ao usuário em uma linha de
+  onde retomou, pule as fases já passadas, comece o implement do primeiro ticket que não está
+  verde (as notas dos verdes semeiam `entregues`, no fim de `workflow-tickets.md`) e use os sujos
+  gravados no `code-review`, no lugar de um `git status` novo. As três reservadas são invocadas no
+  primeiro turno mesmo assim.
+- **Conferência das skills:** resposta terminada em `sem /<skill> invocada`, e a fase com `!` no
+  painel, quer dizer que esta sessão entrou na fase sem ter invocado a skill dela. O `code-review`
+  você invoca na hora; uma reservada só se invoca no turno da linha, então diga ao usuário qual
+  faltou e peça que cole o nome dela de novo.
 
 ## Pi
 

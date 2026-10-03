@@ -22,7 +22,10 @@ as três logo depois do localizador, antes de qualquer outro passo.
 Nesta sessão para-se **uma vez**, com os tickets na mesa, para o usuário escolher
 como a implementação roda; nada mais é perguntado — o conteúdo já foi confirmado
 no interrogatório. Antes de tudo, `git status --porcelain`: o que já estiver sujo
-não é da leva, e a revisão o exclui.
+não é da leva, e a revisão o exclui. Onde o harness tem painel da leva ("Painel
+da leva" em `references/harness.md`), essa lista vai gravada no marco `inicio`, e
+uma leva aberta do mesmo documento é retomada de onde parou, com a lista gravada
+no lugar de um `git status` novo.
 
 ## Onde as notas vivem
 
@@ -48,7 +51,7 @@ ausente não pede o `/setup-matt-pocock-skills`.
 | to-spec | `to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
 | to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada | um ticket por fatia vertical |
 | implement | `implement`, cumprida **no modo que o usuário escolher na terceira parada** (logo abaixo). Ela manda commitar; aqui a leva fica na working tree | código, suíte verde por ticket |
-| code-review | `code-review`. A leva inteira está na working tree e não há commit, então o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" em `references/harness.md`), no `<modelo da revisão>` da linha; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
+| code-review | `code-review`. A leva inteira está na working tree e não há commit, então o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva (onde o harness tem painel da leva, os `sujos` gravados no `inicio`, "Painel da leva" em `references/harness.md`); a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" em `references/harness.md`), no `<modelo da revisão>` da linha; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
 | correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo `<modelo da revisão>`, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
 | qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (no Claude Code a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
 | fechamento | nota de evolução no tracker | o que mudou, o que a revisão pegou, o que não foi verificado |
@@ -57,7 +60,8 @@ ausente não pede o `/setup-matt-pocock-skills`.
 
 Com a tabela de tickets na mesa — e só aí, porque nada disso é legível antes —
 pare. Os modos que existem são os do seu harness (`references/harness.md`);
-harness com só o inline não tem o que perguntar — diga que é o modo e siga. **O critério da sua
+harness com só o inline não tem o que perguntar — diga que é o modo e siga. Onde o harness tem
+painel da leva, o modo escolhido vai gravado no marco `fase` do implement. **O critério da sua
 recomendação é a qualidade do que sai da leva, nunca o que custa menos a
 você.** O inline é o mais rápido e o mais barato dos três, e é
 exatamente o modo em que quem escreveu o código é quem declara que ele está

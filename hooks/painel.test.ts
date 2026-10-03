@@ -17,6 +17,16 @@ function mundo(on: On, cwd = 'D:/ws/a') {
   return { toasts, relogio }
 }
 
+// A sessao nova sobre um store ja gravado: o session.start do mod carrega dele o workspace cwd.
+function sessaoNova(on: On, store: Record<string, unknown>, cwd = 'D:/ws/b') {
+  mock.store(on, store)
+  mock.clock(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: cwd }))
+  on('command.register', () => ({ value: undefined }))
+  on('tool.register', () => ({ value: undefined }))
+}
+
 const segundos = (n: number) => n * 1000
 
 const TICKETS = [{ id: '01', titulo: 'Mod do painel' }, { id: '02', titulo: 'Ferramenta faz_marco' }]
@@ -70,6 +80,77 @@ describe('painel da leva', () => {
     }
   })
 
+  test('as fases passadas ficam verdes com ✓, separadas por ›, e o titulo diz a etapa x/7', async ($, on) => {
+    mundo(on)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'fase', fase: 'tickets' })
+    await marco({ marco: 'fase', fase: 'implement' })
+    let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /^Fases · etapa 3\/7$/ })).toBeDefined()
+    const spec = await ui.find({ type: 'Text', text: /^spec\b/ })
+    expect(spec?.text).toMatch(/^spec 0s ✓.* › $/)
+    expect(spec?.props.color).toBe('green')
+    const atual = await ui.find({ type: 'Text', text: /^implement\b/ })
+    expect(atual?.text).not.toMatch(/✓/)
+    expect(atual?.props.color).toBeUndefined()
+    expect((await ui.find({ type: 'Text', text: /^revisao\b/ }))?.text).not.toMatch(/✓/)
+    expect((await ui.find({ type: 'Text', text: /^fechamento\b/ }))?.text).not.toMatch(/›/)
+    await ui.unmount()
+
+    await marco({ marco: 'fechamento' })
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /^Fases · etapa 7\/7$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^fechamento\b/ }))?.text).toMatch(/✓/)
+    expect((await ui.find({ type: 'Text', text: /^fechamento\b/ }))?.props.color).toBe('green')
+  })
+
+  test('os itens da revisao, das correcoes e da qualidade aparecem num cartao por fase', async ($, on) => {
+    const { relogio } = mundo(on)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'fase', fase: 'revisao' })
+    await marco({ marco: 'item', item: 'Standards' })
+    await marco({ marco: 'item', item: 'Spec' })
+    await relogio.advance(segundos(80))
+    await marco({ marco: 'item', item: 'Standards', portao: 'verde', detalhe: '1 achado' })
+    await marco({ marco: 'fase', fase: 'qualidade' })
+    await marco({ marco: 'item', item: 'claude plugin test .', portao: 'vermelho', detalhe: '15/16' })
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /^Revisão$/ })).toBeDefined()
+    const standards = await ui.find({ type: 'Text', text: /Standards/ })
+    expect(standards?.text).toMatch(/^✓ Standards — verde \(1 achado, 1m20s\)$/)
+    expect(standards?.props.color).toBe('green')
+    expect((await ui.find({ type: 'Text', text: /Spec/ }))?.text).toMatch(/^▸ Spec — em curso/)
+    expect(await ui.find({ type: 'Text', text: /^Correções$/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^Qualidade$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /claude plugin test/ }))?.props.color).toBe('red')
+
+    expect((await marco({ marco: 'item' })).deny).toMatch(/item/)
+    expect((await marco({ marco: 'item', item: 'x', fase: 'implement' })).deny).toMatch(/fase/)
+    expect((await marco({ marco: 'item', item: 'x', detalhe: 'y'.repeat(61) })).deny).toMatch(/detalhe/)
+    expect((await marco({ marco: 'item', item: 'x', portao: 'amarelo' })).deny).toMatch(/portao/)
+  })
+
+  test('com a leva ativa, o tempo da fase anda sozinho no pane, sem marco novo', async ($, on) => {
+    const relogio = mock.clock(on)
+    mock.store(on, {})
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('session.cwd', () => ({ value: 'D:/ws/a' }))
+    on('command.register', () => ({ value: undefined }))
+    on('tool.register', () => ({ value: undefined }))
+    on('ui.toast', () => ({ value: undefined }))
+    await $.session.start({ cwd: 'D:/ws/a', surface: 'terminal', isInteractive: true })
+    await $.tool.call({ tool: MARCO, marco: 'inicio', documento: 'doc' } as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^spec\b/ }))?.text).toMatch(/^spec 0s/)
+    await relogio.advance(segundos(30))
+    expect((await ui.find({ type: 'Text', text: /^spec\b/ }))?.text).toMatch(/^spec 30s/)
+  })
+
   test('marco invalido volta como erro com o motivo e nao mexe no estado', async ($, on) => {
     mundo(on)
     const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
@@ -101,6 +182,13 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /leva fechada, falta o \/cpv/ })).toBeDefined()
     await ui.unmount()
 
+    // fechada, nem o mesmo documento retoma: comeca do zero
+    expect((await marco({ marco: 'inicio', documento: 'velha' })).result).toMatch(/^marco registrado; fase spec\b/)
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /^. 01 / })).toBeUndefined()
+    await ui.unmount()
+
+    await marco({ marco: 'tickets', tickets: TICKETS })
     await marco({ marco: 'inicio', documento: 'nova' })
     ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect(await ui.find({ text: /velha/ })).toBeUndefined()
@@ -108,15 +196,164 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /nova/ })).toBeDefined()
   })
 
+  test('um inicio com o mesmo documento retoma a leva aberta e devolve fase, tickets com notas e sujos', async ($, on) => {
+    const { relogio } = mundo(on)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    await marco({ marco: 'inicio', documento: 'doc', sujos: ['CONTEXT.md', 'tsconfig.json'] })
+    await relogio.advance(segundos(60))
+    await marco({ marco: 'fase', fase: 'tickets' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', notas: 'faz_marco aceita sujos' })
+    await relogio.advance(segundos(30))
+
+    const r = await marco({ marco: 'inicio', documento: 'doc', sujos: ['outro.md'] })
+    const [cabeca, ...corpo] = String(r.result).split('\n')
+    expect(cabeca).toBe('marco registrado; retomada na fase implement')
+    expect(JSON.parse(corpo.join('\n'))).toEqual({
+      fase: 'implement',
+      tickets: [
+        { id: '01', titulo: 'Mod do painel', estado: 'verde', notas: 'faz_marco aceita sujos' },
+        { id: '02', titulo: 'Ferramenta faz_marco', estado: 'pendente' },
+      ],
+      sujos: ['CONTEXT.md', 'tsconfig.json'],
+    })
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^implement\b/ }))?.props.bold).toBe(true)
+    expect(await ui.find({ type: 'Text', text: /^spec 1m00s/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^. 01 / }))?.text).toMatch(/verde/)
+    expect(await ui.find({ type: 'Text', text: /total 1m30s/ })).toBeDefined()
+  })
+
+  test('sujos fora de lista de strings e notas longas voltam como erro', async ($, on) => {
+    mundo(on)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    expect((await marco({ marco: 'inicio', documento: 'doc', sujos: 'CONTEXT.md' })).deny).toMatch(/sujos/)
+    expect((await marco({ marco: 'inicio', documento: 'doc', sujos: [1] })).deny).toMatch(/sujos/)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    expect((await marco({ marco: 'portao', ticket: '01', portao: 'verde', notas: 'x'.repeat(501) })).deny).toMatch(/notas/)
+    expect((await marco({ marco: 'portao', ticket: '01', portao: 'verde', notas: 'x'.repeat(500) })).deny).toBeUndefined()
+  })
+
+  test('a fase declarada sem a sua skill aparece com ! e o marco avisa', async ($, on) => {
+    mundo(on)
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+    const skill = (nome: string) => $.tool.call({ tool: 'Skill', skill: nome } as never)
+
+    // a leva invoca as reservadas logo depois do localizador, antes do inicio: contam assim mesmo
+    await skill('mattpocock-skills:to-spec')
+    await skill('to-tickets')
+    await skill('mattpocock-skills:grilling')
+    expect((await marco({ marco: 'inicio', documento: 'doc' })).result).toBe('marco registrado; fase spec')
+    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toBe('marco registrado; fase tickets')
+    expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement invocada')
+    expect((await marco({ marco: 'fase', fase: 'revisao' })).result).toBe('marco registrado; fase revisao sem /code-review invocada')
+    expect((await marco({ marco: 'fase', fase: 'correcoes' })).result).toBe('marco registrado; fase correcoes')
+
+    let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^spec\b/ }))?.text).not.toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^tickets\b/ }))?.text).not.toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^implement\b/ }))?.text).toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^revisao\b/ }))?.text).toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^correcoes\b/ }))?.text).not.toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^qualidade\b/ }))?.text).not.toMatch(/!/)
+    await ui.unmount()
+
+    // skill fora das quatro nao conta: a fase implement segue sem a sua
+    await skill('implementar')
+    expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement invocada')
+
+    await skill('mattpocock-skills:code-review')
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^revisao\b/ }))?.text).not.toMatch(/!/)
+    await ui.unmount()
+
+    // o fechamento nunca tem !, e zera as skills: a leva seguinte confere do zero
+    expect((await marco({ marco: 'fechamento' })).result).toBe('marco registrado; fase fechamento')
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^fechamento\b/ }))?.text).not.toMatch(/!/)
+    await ui.unmount()
+    expect((await marco({ marco: 'inicio', documento: 'seguinte' })).result).toBe('marco registrado; fase spec sem /to-spec invocada')
+    expect((await marco({ marco: 'fase', fase: 'revisao' })).result).toBe('marco registrado; fase revisao sem /code-review invocada')
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^spec\b/ }))?.text).toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^revisao\b/ }))?.text).toMatch(/!/)
+  })
+
+  test('na retomada numa sessao nova as skills invocadas recomecam vazias', async ($, on) => {
+    sessaoNova(on, {
+      'leva:D:/ws/b': { documento: 'doc', fase: 'tickets', fases: ['spec', 'tickets'], tickets: [], fechada: false },
+    })
+    await $.session.start({ cwd: 'D:/ws/b', surface: 'terminal', isInteractive: true })
+    await $.tool.call({ tool: MARCO, marco: 'inicio', documento: 'doc' } as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^spec\b/ }))?.text).toMatch(/!/)
+    expect((await ui.find({ type: 'Text', text: /^tickets\b/ }))?.text).toMatch(/!/)
+  })
+
+  test('o modo do implement vai no marco da fase implement e fora dele volta como erro', async ($, on) => {
+    mundo(on)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    expect((await marco({ marco: 'fase', fase: 'tickets', modo: 'inline' })).deny).toMatch(/modo/)
+    expect((await marco({ marco: 'fase', fase: 'implement', modo: 'paralelo' })).deny).toMatch(/modo/)
+    expect((await marco({ marco: 'fase', fase: 'implement', modo: 'workflow' })).deny).toBeUndefined()
+  })
+
+  test('o fechamento guarda a leva no historico, que fica com as 10 ultimas e aparece abaixo da fechada', async ($, on) => {
+    const { relogio } = mundo(on)
+    on('tool.call', { tool: 'Agent' }, () => ({
+      result: { status: 'completed', agentId: 'a1', resolvedModel: 'claude-opus-5-5', totalDurationMs: 1 },
+    }) as never)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    for (let n = 1; n <= 11; n++) {
+      await marco({ marco: 'inicio', documento: `leva ${String(n).padStart(2, '0')}` })
+      await marco({ marco: 'tickets', tickets: TICKETS })
+      await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
+      await marco({ marco: 'portao', ticket: '01', portao: 'verde', reparos: 2 })
+      await $.tool.call({ tool: 'Agent', name: 'opus-revisao', description: 'r', prompt: 'p' } as never)
+      await relogio.advance(segundos(60))
+      await marco({ marco: 'fechamento' })
+    }
+    await marco({ marco: 'fechamento' })
+
+    let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /leva fechada, falta o \/cpv/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Hist/ })).toBeDefined()
+    const linhas = (await ui.findAll({ type: 'Text', text: /^leva \d\d · / })).map(t => t.text)
+    expect(linhas.length).toBe(10)
+    expect(linhas[0]).toMatch(/^leva 11 · total 1m00s · inline · 1\/2 verdes · reparos 2 · claude-opus-5-5$/)
+    expect(linhas.some(l => /^leva 01 /.test(l))).toBe(false)
+    await ui.unmount()
+
+    await marco({ marco: 'inicio', documento: 'aberta' })
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /^Hist/ })).toBeUndefined()
+  })
+
+  test('sem leva, o historico do workspace aparece sozinho, carregado no inicio da sessao', async ($, on) => {
+    const fechada = { documento: 'antiga', fase: 'fechamento', fases: ['spec'], tickets: [], fechada: true, inicio: 0, fim: segundos(30), modelos: [] }
+    sessaoNova(on, { 'levas:D:/ws/a': [{ ...fechada, documento: 'de outro workspace' }], 'levas:D:/ws/b': [fechada] })
+    await $.session.start({ cwd: 'D:/ws/b', surface: 'terminal', isInteractive: true })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /nenhuma leva neste workspace/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^antiga · / }))?.text).toMatch(/total 30s/)
+    expect(await ui.find({ text: /de outro workspace/ })).toBeUndefined()
+  })
+
   test('o estado e por workspace e o inicio da sessao o carrega do store', async ($, on) => {
-    mock.store(on, {
+    sessaoNova(on, {
       'leva:D:/ws/a': { documento: 'de outro workspace', fase: 'spec', fases: ['spec'], tickets: [], fechada: false },
       'leva:D:/ws/b': { documento: 'gravada antes', fase: 'revisao', fases: ['spec', 'revisao'], tickets: [], fechada: false },
     })
-    mock.clock(on)
-    on('session.start', ($, e) => ({ cwd: e.cwd }))
-    on('command.register', () => ({ value: undefined }))
-    on('tool.register', () => ({ value: undefined }))
     await $.session.start({ cwd: 'D:/ws/b', surface: 'terminal', isInteractive: true })
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect(await ui.find({ text: /gravada antes/ })).toBeDefined()
