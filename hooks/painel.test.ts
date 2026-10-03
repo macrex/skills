@@ -196,6 +196,34 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /nova/ })).toBeDefined()
   })
 
+  test('depois do /cpv, a leva fechada deixa de pedir o /cpv, e isso sobrevive ao store', async ($, on) => {
+    mundo(on)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('command.register', () => ({ value: undefined }))
+    on('tool.register', () => ({ value: undefined }))
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    // o /cpv com a leva aberta nao conta: ela ainda nao fechou
+    await $.skill.prompt({ skill: 'macrex-skills:cpv', text: 'x' })
+    await marco({ marco: 'fechamento' })
+    let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /falta o \/cpv/ })).toBeDefined()
+    await ui.unmount()
+
+    await $.skill.prompt({ skill: 'macrex-skills:cpv', text: 'x' })
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /falta o \/cpv/ })).toBeUndefined()
+    expect(await ui.find({ text: /\/cpv rodou/ })).toBeDefined()
+    await ui.unmount()
+
+    // uma sessao nova le a leva do store: o /cpv tem de estar gravado la
+    await $.session.start({ cwd: 'D:/ws/a', surface: 'terminal', isInteractive: true })
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /\/cpv rodou/ })).toBeDefined()
+  })
+
   test('um inicio com o mesmo documento retoma a leva aberta e devolve fase, tickets com notas e sujos', async ($, on) => {
     const { relogio } = mundo(on)
     const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)

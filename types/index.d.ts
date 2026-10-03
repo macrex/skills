@@ -32,6 +32,8 @@ export type Leva = {
   sujos?: string[]
   modo?: 'inline' | 'sub-agents' | 'workflow'
   fechada: boolean
+  // a hora em que o /cpv rodou depois do fechamento
+  cpv?: number
 }
 
 // Uma leva fechada no historico do workspace, com os modelos distintos dos agentes dela.

@@ -207,6 +207,18 @@ export function register(on) {
     return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}` }
   })
 
+  // o /cpv digitado depois do fechamento fecha a leva no git: o painel para de pedi-lo.
+  // ponytail: marca quando o /cpv expande, nao quando termina; um repo que ele pulou nao desmarca
+  on('skill.prompt', async ($, e, next) => {
+    const leva = await read($, LEVA)
+    if (e.skill.split(':').pop() === 'cpv' && leva?.fechada && leva.cpv == null) {
+      const feita = { ...leva, cpv: await $.clock.now() }
+      await $.store.set(chave(await $.session.cwd()), feita)
+      await update($, LEVA, () => feita)
+    }
+    return next(e)
+  })
+
   // casa pelo sufixo depois do `:`: mattpocock-skills:to-spec e to-spec contam igual
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const nome = String(e.skill ?? '').split(':').pop()
@@ -352,7 +364,10 @@ export function register(on) {
       cartao(
         leva.documento,
         leva.inicio != null && h(Text, { dimColor: true }, `total ${duracao(ate - leva.inicio)}`),
-        leva.fechada && h(Text, { color: 'yellow' }, 'leva fechada, falta o /cpv'),
+        leva.fechada &&
+          (leva.cpv == null
+            ? h(Text, { color: 'yellow' }, 'leva fechada, falta o /cpv')
+            : h(Text, { color: 'green' }, 'leva fechada, /cpv rodou')),
       ),
       cartao(
         `Fases · etapa ${FASES.indexOf(leva.fase) + 1}/${FASES.length}`,
