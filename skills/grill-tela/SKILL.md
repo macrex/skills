@@ -5,7 +5,7 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.0
+# Versao: 2.1
 
 Esta skill só troca o canal do `grilling`: as regras dele continuam valendo (a fronteira, uma
 rodada por vez, a resposta recomendada em cada questão, seguir até a fronteira esvaziar). Em vez
