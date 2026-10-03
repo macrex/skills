@@ -192,4 +192,19 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /sonnet-fundo/ }))?.text).toMatch(/claude-sonnet-5-5.*concluido.*40s/)
     expect(await ui.find({ type: 'Text', text: /Read|Bash/ })).toBeUndefined()
   })
+
+  test('o teammate que fica ocioso sai de rodando para concluido', async ($, on) => {
+    const { relogio } = mundo(on)
+    // o Agent de um teammate so responde que o spawn deu certo: nao ha agentId nem status de fim
+    on('tool.call', { tool: 'Agent' }, () => ({ result: 'Spawned successfully.' }) as never)
+    on('classic.TeammateIdle', () => ({}) as never)
+    await $.tool.call({ tool: MARCO, marco: 'inicio', documento: 'doc' } as never)
+    await $.tool.call({ tool: 'Agent', name: 'haiku-conta-hooks', description: 'conta', prompt: 'p', model: 'haiku' } as never)
+    await relogio.advance(segundos(25))
+    await $.classic.TeammateIdle({ teammate_name: 'haiku-conta-hooks', team_name: '' } as never)
+    await relogio.advance(segundos(60))
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /haiku-conta-hooks/ }))?.text).toMatch(/concluido.*25s/)
+  })
 })

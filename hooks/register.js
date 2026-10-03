@@ -16,6 +16,7 @@ const MARCO = 'mcp__macrex-skills__faz_marco'
 const MARCOS = ['inicio', 'fase', 'tickets', 'ticket', 'portao', 'fechamento']
 const FASES = ['spec', 'tickets', 'implement', 'revisao', 'correcoes', 'qualidade', 'fechamento']
 const PORTOES = ['verde', 'vermelho']
+const FUNDO = '#24283b'
 const FIM_DE_TAREFA = { completed: 'concluido', failed: 'falhou', killed: 'parado', stopped: 'parado' }
 const MARCA = { pendente: '·', 'em-curso': '▸', verde: '✓', vermelho: '✗', rodando: '▸', concluido: '✓', falhou: '✗', parado: '■' }
 
@@ -185,6 +186,16 @@ export function register(on) {
     return next(e)
   })
 
+  // um teammate nao termina: fica ocioso quando entrega, e e ai que o trabalho dele acabou
+  on('classic.TeammateIdle', async ($, e, next) => {
+    const fim = await $.clock.now()
+    await mexer($, a => a.tipo === 'agente' && a.nome === e.teammate_name && a.estado === 'rodando', a => ({
+      estado: 'concluido',
+      duracao: fim - a.inicio,
+    }))
+    return next(e)
+  })
+
   // fim de um workflow (ou agente) em background: a notificacao da tarefa chega como mensagem
   on('session.append', async ($, e, next) => {
     const blocos = e.message.content
@@ -213,7 +224,9 @@ export function register(on) {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     const leva = await read($, LEVA)
-    if (!leva) return h(Box, { flexDirection: 'column' }, h(Text, { dimColor: true }, 'nenhuma leva neste workspace'))
+    // o fundo pinta o pane inteiro, nao so as linhas com texto: a raiz ocupa a altura do viewport
+    const raiz = { flexDirection: 'column', backgroundColor: FUNDO, minHeight: e.viewport?.rows }
+    if (!leva) return h(Box, raiz, h(Text, { dimColor: true }, 'nenhuma leva neste workspace'))
     const agora = await $.clock.now()
     const ate = leva.fim ?? agora
     // uma fase dura da sua entrada ate a entrada seguinte, ou ate agora (o fim, se fechada)
@@ -232,29 +245,41 @@ export function register(on) {
     const visiveis = [...agentes.filter(a => a.estado === 'rodando'), ...agentes.filter(a => a.estado !== 'rodando').slice(-5)]
     const agente = a =>
       [`${MARCA[a.estado]} ${a.nome}`, a.modelo, a.estado, duracao(a.duracao ?? agora - a.inicio)].filter(Boolean).join(' · ')
-    return h(
-      Box,
-      { flexDirection: 'column' },
-      h(Text, { bold: true }, leva.documento),
-      leva.inicio != null && h(Text, { dimColor: true }, `total ${duracao(ate - leva.inicio)}`),
+    // cada secao e um cartao de borda arredondada: separa as partes em qualquer tema do terminal
+    const cartao = (titulo, ...filhos) =>
       h(
         Box,
-        { flexWrap: 'wrap' },
-        ...FASES.map(f =>
-          h(Text, { bold: f === leva.fase, dimColor: f !== leva.fase && !leva.fases.includes(f) }, `${f}${tempoDaFase(f)} `),
-        ),
+        { flexDirection: 'column', borderStyle: 'round', borderColor: 'gray', paddingX: 1 },
+        titulo && h(Text, { bold: true, color: 'cyan' }, titulo),
+        ...filhos,
+      )
+    return h(
+      Box,
+      raiz,
+      cartao(
+        leva.documento,
+        leva.inicio != null && h(Text, { dimColor: true }, `total ${duracao(ate - leva.inicio)}`),
+        leva.fechada && h(Text, { color: 'yellow' }, 'leva fechada, falta o /cpv'),
       ),
-      ...leva.tickets.map(t =>
-        h(Text, { color: t.estado === 'verde' ? 'green' : t.estado === 'vermelho' ? 'red' : undefined }, linha(t)),
-      ),
-      visiveis.length > 0 &&
+      cartao(
+        'Fases',
         h(
           Box,
-          { flexDirection: 'column', marginTop: 1 },
-          h(Text, { bold: true }, 'Agentes'),
-          ...visiveis.map(a => h(Text, { dimColor: a.estado !== 'rodando' }, agente(a))),
+          { flexWrap: 'wrap' },
+          ...FASES.map(f =>
+            h(Text, { bold: f === leva.fase, dimColor: f !== leva.fase && !leva.fases.includes(f) }, `${f}${tempoDaFase(f)} `),
+          ),
         ),
-      leva.fechada && h(Text, { dimColor: true }, 'leva fechada, falta o /cpv'),
+      ),
+      leva.tickets.length > 0 &&
+        cartao(
+          'Tickets',
+          ...leva.tickets.map(t =>
+            h(Text, { color: t.estado === 'verde' ? 'green' : t.estado === 'vermelho' ? 'red' : undefined }, linha(t)),
+          ),
+        ),
+      visiveis.length > 0 &&
+        cartao('Agentes', ...visiveis.map(a => h(Text, { dimColor: a.estado !== 'rodando' }, agente(a)))),
     )
   })
 }
