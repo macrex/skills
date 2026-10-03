@@ -221,7 +221,8 @@ function painelVoz(){
 // ---------- rodada ----------
 const R = () => E.rodada;
 const Q = () => R().questoes;
-const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= { opcao:null, propria:'', com:'', abreCom:false };
+// toda questão nasce com a recomendada marcada, para a rodada poder ir direto no Enviar
+const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= { opcao:recIdx(q), propria:'', com:'', abreCom:false };
 const recIdx = q => q.opcoes.findIndex(o=>o.recomendada);
 const marca = q => { const a=resp(q); return a.opcao!==null ? (a.opcao===recIdx(q)?'aceito':'outra') : (a.propria.trim()?'outra':null); };
 const nProntas = () => Q().filter(marca).length;
