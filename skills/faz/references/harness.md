@@ -76,10 +76,10 @@ cumpri-lo **é** invocá-la.
 ## Antigravity (CLI `agy`)
 
 - **Reconhecer:** system prompt do Antigravity; skills chegam por `/nome`, e o texto vem sem o
-  caminho: a pasta desta skill é `~/.gemini/antigravity-cli/skills/faz`.
-- **Skills do Matt:** o CLI só lê skill direto em `~/.gemini/antigravity-cli/skills/`:
+  caminho: a pasta desta skill é `~/.gemini/config/skills/faz`.
+- **Skills do Matt:** o CLI só lê skill direto em `~/.gemini/config/skills/`:
   `git clone https://github.com/mattpocock/skills ~/.gemini/antigravity-cli/mattpocock` e
-  `cp -r ~/.gemini/antigravity-cli/mattpocock/skills/*/*/ ~/.gemini/antigravity-cli/skills/`.
+  `cp -r ~/.gemini/antigravity-cli/mattpocock/skills/*/*/ ~/.gemini/config/skills/`.
 - **Invocar uma skill:** o Antigravity não documenta `disable-model-invocation`: as reservadas
   aparecem na sua lista, e continuam valendo só quando o usuário as nomeia.
 - **Perguntar:** em texto, e encerre o turno.

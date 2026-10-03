@@ -5,7 +5,7 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.2
+# Versao: 2.3
 
 Esta skill só troca o canal do `grilling`: as regras dele continuam valendo (a fronteira, uma
 rodada por vez, a resposta recomendada em cada questão, seguir até a fronteira esvaziar). Em vez
@@ -38,7 +38,7 @@ Leia só o seu. **Pasta** é onde este SKILL.md está; **esperar** é como rodar
   bloqueia socket de rede, até em 127.0.0.1, e sem ela o `iniciar` não sobe. Esperar: o laço,
   com o timeout do comando acima de 150 s; voltou com o processo ainda rodando, espere-o até o
   fim. Perguntar: em texto, e encerre o turno.
-- **Antigravity (CLI `agy`)** — pasta: `~/.gemini/antigravity-cli/skills/grill-tela`. Esperar: o
+- **Antigravity (CLI `agy`)** — pasta: `~/.gemini/config/skills/grill-tela`. Esperar: o
   laço, em primeiro plano; se o comando for para segundo plano, acompanhe-o até o fim.
   Perguntar: em texto, e encerre o turno.
 

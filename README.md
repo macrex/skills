@@ -75,13 +75,13 @@ nas duas pastas.
 ```bash
 git clone https://github.com/macrex/skills ~/.gemini/antigravity-cli/macrex
 git clone https://github.com/mattpocock/skills ~/.gemini/antigravity-cli/mattpocock
-cp -r ~/.gemini/antigravity-cli/macrex/skills/* ~/.gemini/antigravity-cli/mattpocock/skills/*/*/ ~/.gemini/antigravity-cli/skills/
-agy mcp add vault-docs -- python ~/.gemini/antigravity-cli/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
+cp -r ~/.gemini/antigravity-cli/macrex/skills/* ~/.gemini/antigravity-cli/mattpocock/skills/*/*/ ~/.gemini/config/skills/
+agy mcp add vault-docs -- python ~/.gemini/config/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
 ```
 
-O CLI só lê skill que está direto em `~/.gemini/antigravity-cli/skills/`, daí a cópia. Regras do
+O CLI só lê skill que está direto em `~/.gemini/config/skills/` (a pasta global desde o `agy` 1.2.14), daí a cópia. Regras do
 vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
-`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> AGENTS.md` (`regra tela` para
+`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> ~/.gemini/GEMINI.md` (`regra tela` para
 ir sempre à tela); para voltar ao CLI, apague o bloco `<grill-canal>`. Para atualizar,
 `git pull` nos dois clones e repita o `cp`.
 
