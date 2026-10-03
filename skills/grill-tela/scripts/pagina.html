@@ -8,10 +8,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grill</title>
-<link rel="icon" href="data:,"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
 <style>
 :root{
+  /* só fontes da máquina: a IBM Plex, se instalada, senão a do sistema; nada sai para a internet */
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   --bg:#F6F6F3; --surface:#FFFFFF; --surface2:#FAFAF8; --line:#E2E2DC; --line2:#EDEDE8; --ink:#1A1C20; --muted:#5E636B;
   --rec:#1D6B4F; --rec-ink:#FFFFFF; --rec-soft:#E6F1EC; --sel:#1A1C20; --sel-ink:#FFFFFF; --pill-line:#DADAD3; --pill-ink:#3A3E45;
   --troca:#9A5B00; --troca-soft:#FFFBF3; --nota:#7A4A00; --nota-soft:#FBF1E1; --nota-line:#F0D9B0; --shadow:0 1px 2px rgba(0,0,0,.06);
@@ -29,23 +31,23 @@
   --troca:#E3A64A; --troca-soft:#211B11; --nota:#E8B868; --nota-soft:#2B2213; --nota-line:#4A3A1E; --shadow:0 1px 2px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
 button{font:inherit;color:inherit;cursor:pointer}
 button:disabled{cursor:not-allowed}
 input,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--pill-line);border-radius:8px;padding:0 12px;width:100%}
 input{min-height:40px}textarea{padding:10px 12px}
 input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--rec);outline-offset:1px}
-code{font:12.5px "IBM Plex Mono",ui-monospace,monospace;background:var(--surface2);border:1px solid var(--line2);padding:0 5px;border-radius:5px}
+code{font:12.5px var(--mono);background:var(--surface2);border:1px solid var(--line2);padding:0 5px;border-radius:5px}
 a{color:var(--rec)}
 .pill code,.opt code,.lado code{background:none;border:none;padding:0;color:inherit;font-size:.95em}
 strong{font-weight:600}
-.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.mono{font-family:var(--mono)}
 .muted{color:var(--muted)}
 
 /* topo */
 .top{background:var(--surface);border-bottom:1px solid var(--line)}
 .top-in{max-width:1320px;margin:0 auto;padding:6px 32px;min-height:56px;display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap}
-.marca{font:500 16px "IBM Plex Mono",ui-monospace,monospace}
+.marca{font:500 16px var(--mono)}
 .passos{display:flex;align-items:center;gap:10px;list-style:none;margin:0;padding:0;font-size:13px;color:var(--muted)}
 .passos .feito{color:var(--rec)}.passos .agora{color:var(--ink);font-weight:600}
 .passos .traco{width:16px;height:1px;background:var(--line)}
@@ -65,7 +67,7 @@ strong{font-weight:600}
 .h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
 .sub{margin:4px 0 0;color:var(--muted)}
 .envio{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
-.resumo{font:12.5px "IBM Plex Mono",ui-monospace,monospace;color:var(--muted)}
+.resumo{font:12.5px var(--mono);color:var(--muted)}
 .btn{border:1px solid transparent;border-radius:8px;font-weight:600;padding:0 20px;min-height:44px}
 .btn.pri{background:var(--sel);color:var(--sel-ink)}.btn.pri:disabled{opacity:.35}
 .btn.ok{background:var(--rec);color:var(--rec-ink)}
@@ -76,12 +78,12 @@ strong{font-weight:600}
 
 /* panorama: uma linha por questão */
 .cols,.lin{display:flex;flex-wrap:wrap;gap:10px 24px}
-.cols{padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--line);font:11px "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.cols{padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--line);font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .lin{position:relative;align-items:flex-start;padding:14px 20px;border-top:1px solid var(--line2)}
 .lin:first-of-type{border-top:none}
 .lin.troca{background:var(--troca-soft)}
 .c-tema{flex:0 0 150px}.c-perg{flex:1 1 320px;min-width:0}.c-resp{flex:1.35 1 400px;min-width:0}.c-nota{flex:0 0 84px;display:flex;gap:4px;justify-content:flex-end}
-.qid{font:12px "IBM Plex Mono",ui-monospace,monospace;color:var(--muted)}
+.qid{font:12px var(--mono);color:var(--muted)}
 .cab{font-weight:600}
 .st{margin-top:2px;font-size:12px;font-weight:500;color:var(--muted)}
 .st .aceito{color:var(--rec)}.st .outra{color:var(--troca)}.st .com{color:var(--nota)}
@@ -93,8 +95,14 @@ strong{font-weight:600}
 .pill.rec{color:var(--rec);border:1px dashed var(--rec)}
 .pill.sel{background:var(--sel);color:var(--sel-ink);border:1px solid var(--sel);font-weight:600}
 .pill.sel.rec{background:var(--rec);color:var(--rec-ink);border-color:var(--rec)}
+.pill.multi{border-radius:8px}
 .pill.outra-p{color:var(--muted);border-style:dashed}
 .pill.outra-p.sel{color:var(--sel-ink)}
+/* "Outra…" só aparece na linha em uso: mouse, foco ou teclado; marcada, fica sempre */
+.lin .outra-p:not(.sel){opacity:0;transition:opacity .12s}
+.lin:hover .outra-p,.lin:focus-within .outra-p,.lin.atual .outra-p{opacity:1}
+@media (hover:none){.lin .outra-p:not(.sel){opacity:1}}
+.lin.atual{box-shadow:inset 0 0 0 2px var(--pill-line)}
 .desc{margin-top:6px;font-size:12.5px;color:var(--muted)}
 .campo{margin-top:8px}
 .campo.nota{border-color:var(--nota-line);background:var(--nota-soft)}
@@ -117,7 +125,8 @@ strong{font-weight:600}
 .opt.rec{border-style:dashed;border-color:var(--rec)}
 .opt.sel{background:var(--surface2);border:1.5px solid var(--sel)}
 .opt.sel.rec{border:1.5px solid var(--rec);background:var(--rec-soft)}
-.kbd{font:11px "IBM Plex Mono",ui-monospace,monospace;border:1px solid var(--pill-line);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--muted);flex:none;margin-top:2px}
+.opt.multi{border-radius:8px}
+.kbd{font:11px var(--mono);border:1px solid var(--pill-line);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--muted);flex:none;margin-top:2px}
 .estrela{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:500;color:var(--rec);margin-left:6px}
 .rotulo{display:block;margin:16px 0 0;font-size:12.5px;font-weight:500;color:var(--muted)}
 .navega{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
@@ -127,7 +136,7 @@ strong{font-weight:600}
 .hist summary{cursor:pointer;padding:12px 20px;font-weight:500;color:var(--muted);min-height:44px;display:flex;align-items:center}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:11px 20px;border-top:1px solid var(--line2);vertical-align:top}
-th{font:11px "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface2);border-top:1px solid var(--line)}
+th{font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface2);border-top:1px solid var(--line)}
 
 /* aguarde, final e fim */
 .centro{min-height:60vh;display:grid;place-items:center;text-align:center}
@@ -135,13 +144,13 @@ th{font:11px "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.06em;text-tr
 .spin{width:28px;height:28px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--rec);animation:sp .9s linear infinite;margin:0 auto 18px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @keyframes pu{50%{opacity:.5}}
-.glifo{font:500 34px "IBM Plex Mono",ui-monospace,monospace;color:var(--rec);margin-bottom:10px}
+.glifo{font:500 34px var(--mono);color:var(--rec);margin-bottom:10px}
 details.recebido{margin-top:18px;text-align:left}details.recebido summary{cursor:pointer;color:var(--muted);font-size:13px}
 pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;padding:12px;font-size:12px;overflow:auto;max-height:260px;text-align:left}
 .final{max-width:1040px;margin:0 auto}
 
 .cfg{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 8px 28px rgba(0,0,0,.12);padding:16px;width:260px;margin:0;inset:auto;position:fixed;top:64px;right:max(16px,calc((100vw - 1320px)/2 + 32px))}
-.cfg h4{margin:0 0 12px;font:11px "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.cfg h4{margin:0 0 12px;font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .cfg label{display:flex;justify-content:space-between;font-size:13px;font-weight:500}
 .cfg input[type=range]{padding:0;border:none;min-height:0;accent-color:var(--rec);margin:8px 0 12px}
 .cfg select{width:100%;font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--pill-line);border-radius:8px;padding:8px 10px;margin:8px 0 12px}
@@ -162,13 +171,13 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
 const TOKEN = new URLSearchParams(location.search).get('t');
 // E: o estado do servidor; S: o que só a página sabe (marcas ainda não enviadas, campos abertos)
 let E = null;
-const S = { resp:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false };
+const S = { resp:{}, foco:0, linha:0, teclado:false, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false };
 // modo e tema ficam no JSON de preferências do servidor, porque a porta muda a cada grill
 const VAR = {A:'Panorama', B:'Uma por vez'};
 let V = 'A';
 
-async function api(rota, metodo='GET', corpo){
-  const r = await fetch(`/api/${rota}?t=${TOKEN}`, { method:metodo, headers:{'content-type':'application/json'},
+async function api(rota, metodo='GET', corpo, consulta=''){
+  const r = await fetch(`/api/${rota}?t=${TOKEN}${consulta}`, { method:metodo, headers:{'content-type':'application/json'},
     body: corpo===undefined ? undefined : JSON.stringify(corpo) });
   const json = await r.json().catch(()=>null);
   return { ok:r.ok, json };
@@ -232,31 +241,82 @@ function painelVoz(){
    <label>Volume <span id="vol-v">${Math.round(LEIT.vol*100)}%</span></label>
    <input type="range" aria-label="Volume" min="0" max="1" step="0.05" value="${LEIT.vol}" oninput="document.getElementById('vol-v').textContent=Math.round(this.value*100)+'%'" onchange="ajusteVoz('volume',this.value)">
    <button class="btn sec" style="width:100%" onclick="falarTexto('teste','Assim fica a leitura com esta voz, esta velocidade e este volume.')">Testar</button>
-   ${TEM_VOZ?'':'<p class="sub" style="margin:10px 0 0">Este navegador não tem leitura em voz.</p>'}</div>`;
+   ${TEM_VOZ?'':'<p class="sub" style="margin:10px 0 0">Este navegador não tem leitura em voz.</p>'}
+   <h4 style="margin-top:18px">Aviso de rodada nova</h4>
+   <label style="justify-content:flex-start;gap:8px;font-weight:400;align-items:flex-start"><input type="checkbox" style="width:auto;min-height:0;margin-top:3px" ${PREF.aviso?'checked':''} onchange="ajusteAviso(this.checked)">
+   Notificação e um toque quando a rodada chega com a aba em segundo plano. O título da aba sempre avisa.</label></div>`;
 }
 
 // ---------- rodada ----------
 const R = () => E.rodada;
 const Q = () => R().questoes;
-// toda questão nasce com a recomendada marcada, para a rodada poder ir direto no Enviar
-const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= { opcao:recIdx(q), propria:'', com:'', abreProp:false, abreCom:false };
-const recIdx = q => q.opcoes.findIndex(o=>o.recomendada);
-const marca = q => { const a=resp(q); return a.opcao!==null ? (a.opcao===recIdx(q)?'aceito':'outra') : (a.propria.trim()?'outra':null); };
-const nProntas = () => Q().filter(marca).length;
 const qi = i => Q()[i];
+const recIdx = q => q.opcoes.findIndex(o=>o.recomendada);
+const recs = q => q.opcoes.map((o,j)=>o.recomendada?j:-1).filter(j=>j>=0);
+// o rascunho da rodada vive no sessionStorage, para um F5 ou a aba recarregada não apagarem as marcas
+const CHAVE = () => `grill-tela:${TOKEN}:${R().rodada}`;
+let RASC = null, RASC_R = null;
+function rascunho(){
+  if(RASC_R!==R().rodada){ RASC_R=R().rodada; try{ RASC=JSON.parse(sessionStorage.getItem(CHAVE())||'{}')||{}; }catch(e){ RASC={}; } }
+  return RASC;
+}
+function guardar(){
+  try{
+    const o={}; Q().forEach(q=>{ const a=resp(q); o[q.id]={ opcao:a.opcao, opcoes:a.opcoes, propria:a.propria, com:a.com }; });
+    sessionStorage.setItem(CHAVE(), JSON.stringify(o));
+  }catch(e){ /* sem storage: a página funciona igual, só não guarda */ }
+}
+function esquecer(){ try{ sessionStorage.removeItem(CHAVE()); }catch(e){} }
+// toda questão nasce com a recomendada marcada (todas, na múltipla), para a rodada poder ir direto no Enviar
+function novaResp(q){
+  const a = { opcao: q.multipla?null:recIdx(q), opcoes: q.multipla?recs(q):[], propria:'', com:'', abreProp:false, abreCom:false };
+  const r = rascunho()[q.id];
+  if(r && typeof r==='object'){
+    if(typeof r.propria==='string') a.propria=r.propria;
+    if(typeof r.com==='string') a.com=r.com;
+    if(q.multipla){ if(Array.isArray(r.opcoes)) a.opcoes=r.opcoes.filter(j=>Number.isInteger(j)&&q.opcoes[j]); }
+    else if(r.opcao===null ? a.propria.trim() : Number.isInteger(r.opcao)&&q.opcoes[r.opcao]) a.opcao=r.opcao;
+  }
+  return a;
+}
+const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= novaResp(q);
+function marca(q){
+  const a=resp(q), prop=a.propria.trim();
+  if(q.multipla){
+    if(!a.opcoes.length && !prop) return null;
+    const rs=recs(q), sel=[...a.opcoes].sort((x,y)=>x-y);
+    return !prop && sel.length===rs.length && sel.every((v,k)=>v===rs[k]) ? 'aceito' : 'outra';
+  }
+  return a.opcao!==null ? (a.opcao===recIdx(q)?'aceito':'outra') : (prop?'outra':null);
+}
+const nProntas = () => Q().filter(marca).length;
+// a opção j está marcada? e a pílula "Outra…"?
+const marcada = (q,j) => { const a=resp(q); return q.multipla ? a.opcoes.includes(j) : a.opcao===j; };
+const outraMarcada = q => { const a=resp(q); return q.multipla ? !!a.propria.trim() : a.opcao===null; };
 
-function escolher(i,o){ const a=resp(qi(i)); a.opcao=o; a.propria=''; a.abreProp=false; render(); }
-function propria(i,txt){ const a=resp(qi(i)); a.propria=txt; if(txt.trim()) a.opcao=null; else if(a.opcao===null) a.opcao=recIdx(qi(i)); atualiza(i); }
-function comentar(i,txt){ resp(qi(i)).com=txt; atualiza(i); }
+function escolher(i,j){
+  const q=qi(i), a=resp(q);
+  if(q.multipla) a.opcoes = a.opcoes.includes(j) ? a.opcoes.filter(x=>x!==j) : a.opcoes.concat(j);
+  else { a.opcao=j; a.propria=''; a.abreProp=false; }
+  S.linha=i; guardar(); render();
+}
+function propria(i,txt){
+  const q=qi(i), a=resp(q); a.propria=txt;
+  if(!q.multipla){ if(txt.trim()) a.opcao=null; else if(a.opcao===null) a.opcao=recIdx(q); }
+  guardar(); atualiza(i);
+}
+function comentar(i,txt){ resp(qi(i)).com=txt; guardar(); atualiza(i); }
 // abre o campo e já põe o cursor nele
-function abrir(i, campo){ resp(qi(i))[campo]=true; render(); const el=document.querySelector(`[data-campo="${campo}-${i}"]`); if(el) el.focus(); }
+function abrir(i, campo){ resp(qi(i))[campo]=true; S.linha=i; render(); const el=document.querySelector(`[data-campo="${campo}-${i}"]`); if(el) el.focus(); }
 
 async function enviar(){
-  if(S.enviando || nProntas()<Q().length) return;
+  if(S.enviando || !E || E.fase!=='rodada' || nProntas()<Q().length) return;
   S.enviando=true; parar();
-  const respostas = Q().map(q=>{ const a=resp(q); return { id:q.id, opcao:a.opcao, propria:a.propria, comentario:a.com }; });
+  const respostas = Q().map(q=>{ const a=resp(q);
+    return q.multipla ? { id:q.id, opcoes:a.opcoes, propria:a.propria, comentario:a.com } : { id:q.id, opcao:a.opcao, propria:a.propria, comentario:a.com }; });
   const r = await api('respostas','POST',{ tipo:'rodada', rodada:R().rodada, respostas });
   S.enviando=false; S.erro = r.ok ? '' : (r.json && r.json.erro || 'o servidor recusou o envio');
+  if(r.ok) esquecer();
   await consultar(true);
 }
 
@@ -272,14 +332,15 @@ function resumoTexto(){
 }
 function descHTML(q){
   const a=resp(q);
+  if(q.multipla) return 'Marque quantas quiser.' + (a.propria.trim() ? ' A sua resposta vai junto.' : '');
   if(a.opcao!==null) return md(q.opcoes[a.opcao].descricao||'');
   return a.propria.trim() ? 'A sua resposta vai como está.' : 'Escreva a sua resposta, ou escolha uma opção.';
 }
 function pills(q,i){
-  const a=resp(q);
-  return q.opcoes.map((o,j)=>`<button class="pill ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}"
+  const multi = q.multipla ? 'multi' : '';
+  return q.opcoes.map((o,j)=>`<button class="pill ${multi} ${o.recomendada?'rec':''} ${marcada(q,j)?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${marcada(q,j)}"
       title="${esc(puro(o.descricao))}" onclick="escolher(${i},${j})">${o.recomendada?ESTRELA:''}${md(o.rotulo)}</button>`).join('')
-    + `<button class="pill outra-p ${a.opcao===null?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null}" onclick="abrir(${i},'abreProp')">Outra…</button>`;
+    + `<button class="pill outra-p ${multi} ${outraMarcada(q)?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${outraMarcada(q)}" onclick="abrir(${i},'abreProp')">Outra…</button>`;
 }
 const campoProp = (q,i) => { const a=resp(q); return a.abreProp||a.propria
   ? `<input class="campo" data-campo="abreProp-${i}" aria-label="Sua resposta para ${esc(q.id)}" placeholder="Sua resposta…" value="${esc(a.propria)}" oninput="propria(${i},this.value)">` : ''; };
@@ -290,7 +351,7 @@ function cabecaRodada(sub){
   const t=Q().length, n=nProntas();
   return `<div class="cabeca"><div><h1 class="h1">Rodada ${R().rodada}</h1><p class="sub">${sub}</p></div>
     <div class="envio">${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}<span class="resumo" id="resumo">${resumoTexto()}</span>
-    <button class="btn pri" id="enviar" ${n<t?'disabled':''} onclick="enviar()">Enviar rodada ${R().rodada}</button></div></div>`;
+    <button class="btn pri" id="enviar" ${n<t?'disabled':''} title="Ctrl+Enter" onclick="enviar()">Enviar rodada ${R().rodada}</button></div></div>`;
 }
 function historico(){
   if(!E.historico.length) return '';
@@ -304,33 +365,40 @@ function modoPanorama(){
   const n=Q().length;
   return cabecaRodada(`${n} ${n===1?'questão':'questões'}. A recomendada de cada uma já vem marcada: troque só o que discordar.`)
    + `<div class="caixa"><div class="cols" aria-hidden="true"><span class="c-tema">Tema</span><span class="c-perg">Pergunta</span><span class="c-resp">Resposta</span><span class="c-nota">Nota</span></div>
-   ${Q().map((q,i)=>{ const a=resp(q); return `<div class="lin ${marca(q)==='outra'?'troca':''}" data-lin="${i}">
+   ${Q().map((q,i)=>{ const a=resp(q); return `<div class="lin ${marca(q)==='outra'?'troca':''} ${S.teclado&&i===S.linha?'atual':''}" data-lin="${i}" onclick="S.linha=${i}">
      <div class="c-tema"><div class="qid">${esc(q.id)}</div><div class="cab">${esc(q.cabecalho)}</div><div class="st" data-marca="${i}">${statusHTML(q)}</div></div>
      <div class="c-perg"><div class="tit">${md(q.titulo)}</div>${q.contexto?`<div class="ctx">${md(q.contexto)}</div>`:''}</div>
      <div class="c-resp"><div class="pills">${pills(q,i)}</div><div class="desc" data-desc="${i}">${descHTML(q)}</div>${campoProp(q,i)}${campoCom(q,i)}</div>
      <div class="c-nota">${somBtn(i)}<button class="ico ${a.com.trim()?'tem':''}" data-com="${i}" aria-label="Nota sobre esta questão" title="Nota para o agente" onclick="abrir(${i},'abreCom')">${ICONE_NOTA}</button></div>
    </div>`; }).join('')}</div>
-   <p class="nota-rodape">Clique numa opção para trocar a resposta; passe o mouse para ver a descrição. ★ marca a recomendada do agente. Escrever no terminal também assume o grill por lá.</p>` + historico();
+   <p class="nota-rodape">Clique numa opção para trocar a resposta; passe o mouse para ver a descrição. ★ marca a recomendada do agente.
+   Teclado: <span class="kbd">j</span> <span class="kbd">k</span> mudam de linha, <span class="kbd">1</span>–<span class="kbd">4</span> escolhem, <span class="kbd">o</span> abre Outra, <span class="kbd">n</span> a nota, <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> envia.
+   Escrever no terminal também assume o grill por lá.</p>` + historico();
 }
 // a lista lateral de Uma por vez muda com a marca; atualiza() a redesenha sem render()
-const escolhaTexto = q => { const a=resp(q); return a.opcao!==null ? puro(q.opcoes[a.opcao].rotulo) : (a.propria.trim()||'—'); };
+function escolhaTexto(q){
+  const a=resp(q), prop=a.propria.trim();
+  if(q.multipla) return a.opcoes.slice().sort((x,y)=>x-y).map(j=>puro(q.opcoes[j].rotulo)).concat(prop?[prop]:[]).join('; ') || '—';
+  return a.opcao!==null ? puro(q.opcoes[a.opcao].rotulo) : (prop||'—');
+}
 function ladoHTML(q,i){
   const m=marca(q);
   return `<span class="bola ${m||''}">${m?(m==='aceito'?'✓':'⇄'):i+1}</span>
     <span style="min-width:0"><b style="font-weight:600">${esc(q.cabecalho)}</b><small>${esc(escolhaTexto(q))}${resp(q).com.trim()?' · nota':''}</small></span>`;
 }
-function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Enter
+function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9, j/k e Enter
   const ps=Q(), q=ps[S.foco], i=S.foco, a=resp(q);
-  return cabecaRodada(`Uma questão por vez, com a descrição de cada opção. Teclas 1–${Math.min(9,Math.max(...ps.map(p=>p.opcoes.length)))} escolhem, Enter avança.`)
+  return cabecaRodada(`Uma questão por vez, com a descrição de cada opção. Teclas 1–${Math.min(9,Math.max(...ps.map(p=>p.opcoes.length)))} escolhem, Enter avança, Ctrl+Enter envia.`)
    + `<div class="foco">
    <nav class="caixa lado" aria-label="Questões da rodada">${ps.map((p,k)=>`<button class="${k===i?'on':''}" data-lado="${k}" onclick="S.foco=${k};render()">${ladoHTML(p,k)}</button>`).join('')}</nav>
    <section class="caixa cartao">
     <div class="row" style="display:flex;align-items:center;gap:10px"><span class="qid">${esc(q.id)} · ${esc(q.cabecalho)}</span><span class="st" data-marca="${i}">${statusHTML(q)}</span>
       <span class="muted" style="margin-left:auto;font-size:13px">${i+1} de ${ps.length}</span>${somBtn(i)}</div>
     <h2>${md(q.titulo)}</h2>${q.contexto?`<div class="ctx" style="font-size:14px">${md(q.contexto)}</div>`:''}
-    <div class="opts">${q.opcoes.map((o,j)=>`<button class="opt ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}" onclick="escolher(${i},${j})">
+    ${q.multipla?'<div class="desc">Marque quantas quiser.</div>':''}
+    <div class="opts">${q.opcoes.map((o,j)=>`<button class="opt ${q.multipla?'multi':''} ${o.recomendada?'rec':''} ${marcada(q,j)?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${marcada(q,j)}" onclick="escolher(${i},${j})">
       <span class="kbd">${j+1}</span><span><span class="lab">${md(o.rotulo)}</span>${o.recomendada?`<span class="estrela">${ESTRELA} recomendada</span>`:''}${o.descricao?`<span class="d">${md(o.descricao)}</span>`:''}</span></button>`).join('')}</div>
-    <label class="rotulo" for="prop-${i}">Ou escreva a sua resposta</label>
+    <label class="rotulo" for="prop-${i}">${q.multipla?'E escreva outra, se quiser':'Ou escreva a sua resposta'}</label>
     <input id="prop-${i}" class="campo" style="margin-top:6px" value="${esc(a.propria)}" oninput="propria(${i},this.value)">
     <label class="rotulo" for="com-${i}">Nota para o agente</label>
     <input id="com-${i}" class="campo nota" style="margin-top:6px" value="${esc(a.com)}" oninput="comentar(${i},this.value)">
@@ -352,7 +420,7 @@ function topo(){
    <ol class="passos">${passos.join('<li class="traco" aria-hidden="true"></li>')}</ol>
    <div class="acoes">
    ${E.fase==='rodada'?`<div class="seg" role="group" aria-label="Modo">${Object.entries(VAR).map(([k,n])=>`<button class="${k===V?'on':''}" aria-pressed="${k===V}" onclick="modo('${k}')">${n}</button>`).join('')}</div>`:''}
-   <button class="ico" aria-label="Leitura em voz alta" title="Leitura em voz alta" popovertarget="cfg-leitura">${ICONE_SOM}</button>
+   <button class="ico" aria-label="Leitura em voz alta e aviso" title="Leitura em voz alta e aviso" popovertarget="cfg-leitura">${ICONE_SOM}</button>
    <button class="ico" aria-label="Alternar tema" title="Alternar tema" onclick="tema()">${escuro()?ICONE_SOL:ICONE_LUA}</button>
    ${ativo?`<button class="sublink" onclick="paraCli()">Seguir no terminal</button>`:''}</div></div></header>` + painelVoz();
 }
@@ -409,28 +477,75 @@ function atualiza(i){ // resumo, marca, linha, opções e lateral, sem render(),
   document.querySelectorAll(`[data-lin="${i}"]`).forEach(el=>el.classList.toggle('troca', m==='outra'));
   document.querySelectorAll(`[data-com="${i}"]`).forEach(el=>el.classList.toggle('tem', !!a.com.trim()));
   document.querySelectorAll(`[data-q="${i}"]`).forEach(el=>{
-    const on = el.dataset.o==='outra' ? a.opcao===null : a.opcao===+el.dataset.o;
+    const on = el.dataset.o==='outra' ? outraMarcada(q) : marcada(q,+el.dataset.o);
     el.classList.toggle('sel', on); el.setAttribute('aria-pressed', on);
   });
 }
 
-// ---------- consulta ao servidor ----------
+// ---------- aviso de rodada nova, para quem está no terminal ----------
+const TITULO = document.title;
+function avisar(){
+  if(!['rodada','final'].includes(E.fase) || !document.hidden) return;
+  const o = E.fase==='rodada' ? `Rodada ${R().rodada}` : 'Fechamento';
+  document.title = `● ${o} · ${TITULO}`;
+  if(!PREF.aviso) return;
+  try{ if('Notification' in window && Notification.permission==='granted') new Notification(`Grill: ${o} na tela`, { body: E.projeto||'', tag:'grill-tela' }); }catch(e){}
+  try{ // um toque curto e baixo
+    const ac=new (window.AudioContext||window.webkitAudioContext)(), os=ac.createOscillator(), g=ac.createGain();
+    os.frequency.value=660; g.gain.value=0.06; os.connect(g).connect(ac.destination); os.start(); os.stop(ac.currentTime+0.15);
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if(!document.hidden) document.title = TITULO; });
+function ajusteAviso(on){
+  PREF.aviso = on; api('preferencias','POST',{aviso:on});
+  if(on && 'Notification' in window && Notification.permission==='default') Notification.requestPermission().catch(()=>{});
+}
+
+// ---------- consulta ao servidor: o pedido espera a versão mudar, em vez de perguntar a cada segundo ----------
+function aplicar(novo, forcar){
+  if(!novo || typeof novo.versao!=='number') throw new Error('estado ilegível');
+  const mudou = !E || novo.versao !== E.versao;
+  E = novo;
+  if(mudou){ S.foco=0; S.linha=0; S.teclado=false; parar(); avisar(); }
+  if(mudou || forcar){ render(); if(mudou) scrollTo(0,0); }
+}
+const acabou = () => S.caiu || (E && ['concluido','cli'].includes(E.fase));
 async function consultar(forcar){
-  if(S.caiu || (E && ['concluido','cli'].includes(E.fase))) return;
-  try{
-    const r = await api('estado');
-    const mudou = !E || r.json.versao !== E.versao;
-    E = r.json;
-    if(mudou){ S.foco=0; parar(); }
-    if(mudou || forcar){ render(); if(mudou) scrollTo(0,0); }
-  }catch(e){ if(E){ S.caiu=true; render(); } }
+  if(acabou()) return;
+  try{ aplicar((await api('estado')).json, forcar); }
+  catch(e){ if(E){ S.caiu=true; render(); } }
+}
+async function laco(){
+  while(!acabou()){
+    try{ aplicar((await api('estado','GET',undefined, E?`&desde=${E.versao}`:'')).json); }
+    catch(e){ if(E){ S.caiu=true; render(); return; } await new Promise(r=>setTimeout(r,1000)); }
+  }
+}
+
+// ---------- teclado ----------
+function linhaAtual(){ // destaca a linha sem render(), para não perder a rolagem
+  document.querySelectorAll('.lin').forEach(el=>el.classList.toggle('atual', S.teclado && +el.dataset.lin===S.linha));
+  const el=document.querySelector(`.lin[data-lin="${S.linha}"]`); if(el) el.scrollIntoView({block:'nearest'});
 }
 addEventListener('keydown',e=>{
-  if(e.target.matches('input,textarea,select') || !E || E.fase!=='rodada' || V!=='B') return;
-  const q = Q()[S.foco];
-  if(/^[1-9]$/.test(e.key) && q.opcoes[+e.key-1]) escolher(S.foco,+e.key-1);
-  else if(e.key==='Enter' && !e.target.closest('button') && S.foco<Q().length-1){ S.foco++; render(); }
+  if(!E || E.fase!=='rodada') return;
+  if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); enviar(); return; }
+  if(e.target.matches('input,textarea,select') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const n=Q().length, d=/^[1-9]$/.test(e.key) ? +e.key-1 : -1;
+  if(V==='B'){
+    const q = Q()[S.foco];
+    if(d>=0 && q.opcoes[d]) escolher(S.foco,d);
+    else if((e.key==='Enter' && !e.target.closest('button')) || e.key==='j'){ if(S.foco<n-1){ S.foco++; render(); } }
+    else if(e.key==='k' && S.foco>0){ S.foco--; render(); }
+    return;
+  }
+  if(e.key==='j' || e.key==='k'){ S.teclado=true; S.linha=Math.max(0,Math.min(n-1,S.linha+(e.key==='j'?1:-1))); linhaAtual(); }
+  else if(d>=0 && qi(S.linha).opcoes[d]){ S.teclado=true; escolher(S.linha,d); linhaAtual(); }
+  else if(e.key==='o'){ e.preventDefault(); abrir(S.linha,'abreProp'); }
+  else if(e.key==='n'){ e.preventDefault(); abrir(S.linha,'abreCom'); }
 });
+
+const PREF = { aviso:false };
 api('preferencias').then(r=>{
   const p = r.json || {};
   if(VAR[p.modo]) V=p.modo;
@@ -438,8 +553,8 @@ api('preferencias').then(r=>{
   if(typeof p.voz==='string') LEIT.voz=p.voz;
   if([0.5,0.75,1,1.25,1.5,1.75,2].includes(p.velocidade)) LEIT.vel=p.velocidade;
   if(typeof p.volume==='number' && p.volume>=0 && p.volume<=1) LEIT.vol=p.volume;
-}).catch(()=>{}).finally(()=>{ render(); consultar(); });
-setInterval(consultar, 1000);
+  if(typeof p.aviso==='boolean') PREF.aviso=p.aviso;
+}).catch(()=>{}).finally(()=>{ render(); laco(); });
 </script>
 </body>
 </html>
