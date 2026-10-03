@@ -13,7 +13,7 @@ Skills para agentes de IA:\
 | `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva numa sessão nova: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
 | `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, com hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já existe no repositório. Também dispara sozinha quando um documento nasce |
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
-| `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez de perguntar no terminal. Quando o `grilling` começa, o agente pergunta o canal (CLI ou tela): no Claude Code pelo hook do plugin, no Pi pela extensão do pacote, no Codex e no Antigravity pela regra no `AGENTS.md` |
+| `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez de perguntar no terminal. O canal tem três modos: `cli` (o padrão, o grill segue no terminal), `perguntar` (o agente pergunta CLI ou tela quando o `grilling` começa) e `tela` (sempre na página). Escolha pela opção **Canal do grill** no Claude Code, por `GRILL_CANAL` no Pi e pela regra no `AGENTS.md` no Codex e no Antigravity |
 
 `/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
 [Matt Pocock](https://github.com/mattpocock/skills); no Codex e no Pi ela usa um `/goal` (nativo
@@ -36,7 +36,9 @@ sem Obsidian, pule o que fala de vault.
 ```
 
 Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces,
-`macrex`. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
+`macrex`. O canal do grill é a opção **Canal do grill** em `/config`: `cli` (o padrão, o hook
+fica calado e o grill segue o seu fluxo), `perguntar` (CLI ou tela, a cada grill) ou `tela` (sempre
+na página). A opção pede o Claude Code 2.1.271 ou mais novo. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
 já tinha as skills em `~/.claude/skills`, remova-as, ou elas ganham do plugin.
 
 ### Pi
@@ -46,6 +48,7 @@ pi install https://github.com/macrex/skills
 pi install https://github.com/mattpocock/skills
 pi install npm:@narumitw/pi-goal
 export OBSIDIAN_VAULT=~/obsidian/projetos      # Windows: setx OBSIDIAN_VAULT D:\obsidian\projetos
+export GRILL_CANAL=perguntar                   # opcional: cli (padrão), perguntar ou tela
 ```
 
 Em `~/.pi/agent/settings.json`, troque a entrada do Matt por
@@ -63,7 +66,8 @@ codex mcp add vault-docs -- python ~/.codex/skills/macrex/skills/obsidian-docs/s
 ```
 
 Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
-`node ~/.codex/skills/macrex/hooks/grill-canal.js regra >> AGENTS.md`. Para atualizar, `git pull`
+`node ~/.codex/skills/macrex/hooks/grill-canal.js regra >> AGENTS.md` (`regra tela` para ir sempre
+à tela); para voltar ao CLI, apague o bloco `<grill-canal>`. Para atualizar, `git pull`
 nas duas pastas.
 
 ### Antigravity (CLI `agy`)
@@ -77,7 +81,8 @@ agy mcp add vault-docs -- python ~/.gemini/antigravity-cli/skills/obsidian-docs/
 
 O CLI só lê skill que está direto em `~/.gemini/antigravity-cli/skills/`, daí a cópia. Regras do
 vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
-`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> AGENTS.md`. Para atualizar,
+`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> AGENTS.md` (`regra tela` para
+ir sempre à tela); para voltar ao CLI, apague o bloco `<grill-canal>`. Para atualizar,
 `git pull` nos dois clones e repita o `cp`.
 
 ### Outros agentes (Cursor, Gemini CLI, Copilot, OpenCode, Windsurf...)
