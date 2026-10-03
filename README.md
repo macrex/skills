@@ -3,7 +3,8 @@
 Skills para agentes de IA:\
 `/faz` leva um pedido até código verificado,\
 `/obsidian-docs` guarda a documentação num vault Obsidian fora do repositório, e\
-`/cpv` fecha a leva com commit, push e a nota no vault. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.
+`/cpv` fecha a leva com commit, push e a nota no vault. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.\
+`/grill-tela`, só no Claude Code, leva o grill do Matt Pocock a uma página HTML local.
 
 ## Usar
 
@@ -12,6 +13,7 @@ Skills para agentes de IA:\
 | `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva numa sessão nova: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
 | `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, com hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já existe no repositório. Também dispara sozinha quando um documento nasce |
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
+| `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez do `AskUserQuestion`; um hook do plugin pergunta o canal (CLI ou tela) quando o `grilling` é invocado. Só Claude Code |
 
 `/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
 [Matt Pocock](https://github.com/mattpocock/skills); no Codex e no Pi ela usa um `/goal` (nativo

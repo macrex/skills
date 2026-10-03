@@ -1,0 +1,414 @@
+<!doctype html>
+<!-- A tela da grill-tela: o servidor (grill-tela.js) a serve com o token na URL; ela consulta
+     /api/estado a cada segundo e desenha a fase atual (rodada, aguarde, final, concluido, cli). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grill</title>
+<link rel="icon" href="data:,"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#fff; --surface2:#f1f3f6; --border:#e3e6eb; --text:#16181d; --muted:#5f6673;
+  --accent:#4f46e5; --accent-soft:#eef0ff; --ok:#0f9d6b; --ok-soft:#e7f7f0; --warn:#b45309; --warn-soft:#fdf3e4;
+  --info:#2563eb; --info-soft:#eaf1ff; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 16px rgba(0,0,0,.05); --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0f1115; --surface:#171a21; --surface2:#1e222b; --border:#2a2f3a; --text:#e8eaef; --muted:#9aa2b1;
+    --accent:#8b85ff; --accent-soft:#25244a; --ok:#34d399; --ok-soft:#10322a; --warn:#fbbf24; --warn-soft:#3a2c10;
+    --info:#7aa7ff; --info-soft:#18284a; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115; --surface:#171a21; --surface2:#1e222b; --border:#2a2f3a; --text:#e8eaef; --muted:#9aa2b1;
+    --accent:#8b85ff; --accent-soft:#25244a; --ok:#34d399; --ok-soft:#10322a; --warn:#fbbf24; --warn-soft:#3a2c10;
+    --info:#7aa7ff; --info-soft:#18284a; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+textarea,input{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;width:100%}
+textarea:focus,input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+code{font:13px ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--surface2);padding:1px 6px;border-radius:6px}
+a{color:var(--accent)}
+strong{font-weight:650}
+
+/* topo */
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.top-in{max-width:1080px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;font-weight:800;font-size:30px;line-height:1;letter-spacing:-.04em;
+  background:linear-gradient(120deg,var(--accent),#e8590c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:3px}
+.seg button{border:none;background:none;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.icon{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--surface);font-size:15px;display:grid;place-items:center;padding:0}
+.proj{color:var(--muted);font-size:13px}
+.rounds{display:flex;gap:6px;align-items:center;margin-left:auto;font-size:13px;color:var(--muted)}
+.dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:650;border:1px solid var(--border);background:var(--surface)}
+.dot.done{background:var(--ok);border-color:var(--ok);color:#fff}.dot.cur{background:var(--accent);border-color:var(--accent);color:#fff}
+.ghost{background:none;border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--muted)}
+.ghost:hover{color:var(--text);border-color:var(--muted)}
+
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 80px}
+.h1{font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+
+/* peças comuns */
+.chip{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.ctx{background:var(--info-soft);border-left:3px solid var(--info);border-radius:8px;padding:10px 14px;margin:10px 0 14px;font-size:14px}
+.opt{display:block;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin:0 0 8px;transition:.12s}
+.opt:hover{border-color:var(--muted)}
+.opt .lab{font-weight:650;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.opt .desc{color:var(--muted);font-size:13.5px;margin-top:3px}
+.opt.rec{border-color:color-mix(in srgb,var(--ok) 45%,var(--border))}
+.badge-rec{font-size:11px;font-weight:700;color:var(--ok);background:var(--ok-soft);padding:2px 8px;border-radius:999px}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.opt.sel.rec{border-color:var(--ok);background:var(--ok-soft);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 20%,transparent)}
+.radio{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);flex:none}
+.opt.sel .radio{border:5px solid var(--accent)}.opt.sel.rec .radio{border-color:var(--ok)}
+.kbd{font:11px ui-monospace,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--muted)}
+.mark{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;padding:4px 10px;border-radius:999px}
+.mark.aceito{background:var(--ok-soft);color:var(--ok)}.mark.outra{background:var(--accent-soft);color:var(--accent)}
+.mark.pend{background:var(--surface2);color:var(--muted)}.mark.com{background:var(--warn-soft);color:var(--warn)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:none;border-radius:10px;padding:10px 16px;font-weight:650}
+.btn.pri{background:var(--accent);color:#fff}.btn.pri:disabled{opacity:.4;cursor:not-allowed}
+.btn.sec{background:var(--surface2)}
+.btn.okb{background:var(--ok);color:#fff}
+.linkbtn{background:none;border:none;color:var(--accent);font-weight:600;padding:4px 0;font-size:13.5px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+.erro{color:var(--warn);font-size:13.5px}
+
+/* rodapé fixo da rodada */
+.foot{position:fixed;left:0;right:0;bottom:0;z-index:6;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--border)}
+.foot-in{max-width:1080px;margin:0 auto;height:44px;padding:0 16px;display:flex;gap:14px;align-items:center}
+.foot .bar{flex:none;width:90px;height:4px}
+.foot .linkbtn{color:var(--muted);font-weight:500;font-size:13px;margin-left:auto}.foot .linkbtn:hover{color:var(--accent)}
+.send{border:none;border-radius:999px;padding:5px 14px;font-size:13px;font-weight:650;background:var(--accent);color:#fff}
+.send:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed}
+.som{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:inline-grid;place-items:center;padding:0;flex:none}
+.som:hover{color:var(--accent);border-color:var(--accent)}
+.som.falando{color:#fff;background:var(--accent);border-color:var(--accent);animation:pu 1.2s ease-in-out infinite}
+.cfg{border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);box-shadow:var(--shadow);padding:16px;width:260px;margin:0;inset:auto;position:fixed;top:64px;right:max(16px,calc((100vw - 1080px)/2 + 16px))}
+.cfg h4{margin:0 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.cfg label{display:flex;justify-content:space-between;font-size:13.5px;font-weight:600}
+.cfg input[type=range]{padding:0;border:none;accent-color:var(--accent);margin:8px 0 12px}
+.cfg select{width:100%;font:inherit;font-size:13.5px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin:8px 0 12px}
+.prog{font-size:13.5px;color:var(--muted)}.prog b{color:var(--text)}
+.bar{flex:1;min-width:80px;height:6px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok);transition:.2s}
+
+/* modo lista */
+.qa{padding:20px 22px;margin-bottom:16px}
+.qa h3{margin:8px 0 0;font-size:17px}
+.qa .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}
+.qa .opts .opt{margin:0}
+.qa .tail,.big .tail{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap}
+
+/* modo foco */
+.focus{display:grid;grid-template-columns:250px 1fr;gap:20px}
+.side{padding:8px;align-self:start;position:sticky;top:76px}
+.side button{display:flex;width:100%;gap:10px;align-items:center;text-align:left;background:none;border:none;border-radius:10px;padding:10px}
+.side button.on{background:var(--accent-soft)}
+.side .st{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex:none;background:var(--surface2);color:var(--muted)}
+.side .st.aceito{background:var(--ok);color:#fff}.side .st.outra{background:var(--accent);color:#fff}
+.side small{display:block;color:var(--muted);font-size:12px}
+.big{padding:26px 28px}.big h2{font-size:21px;margin:10px 0 0;letter-spacing:-.01em}
+.big .opt{padding:14px 16px}
+.nav{display:flex;justify-content:space-between;margin-top:16px}
+
+/* modo abas */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto}
+.tabs button{background:none;border:none;border-bottom:2.5px solid transparent;padding:10px 14px;display:flex;gap:8px;align-items:center;white-space:nowrap;color:var(--muted);font-weight:600}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.tabs .tick{font-size:12px}
+.twocol{display:grid;grid-template-columns:1.35fr 1fr;gap:20px}
+.pane{padding:22px}
+.answer{padding:20px;position:sticky;top:76px;align-self:start}
+.answer h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.picked{font-weight:650;font-size:16px;margin:6px 0 14px}
+
+/* aguarde / final */
+.center{min-height:58vh;display:grid;place-items:center;text-align:center}
+.spin{width:54px;height:54px;border-radius:50%;border:4px solid var(--surface2);border-top-color:var(--accent);animation:sp 0.9s linear infinite;margin:0 auto 22px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.pulse{animation:pu 1.6s ease-in-out infinite}@keyframes pu{50%{opacity:.45}}
+details{margin-top:18px;text-align:left}summary{cursor:pointer;color:var(--muted);font-size:13px}
+pre{background:var(--surface2);border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:260px;text-align:left}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.hist{padding:14px 18px;margin-bottom:16px}
+.hist summary{font-weight:600;color:var(--text)}
+
+@media (max-width:760px){
+  .focus,.twocol{grid-template-columns:1fr}.side,.answer{position:static}
+  .rounds .t{display:none}.foot .bar{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const TOKEN = new URLSearchParams(location.search).get('t');
+// E: o estado do servidor; S: o que só a página sabe (marcas ainda não enviadas, campos abertos)
+let E = null;
+const S = { resp:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false };
+// modo e tema ficam no JSON de preferências do servidor, porque a porta muda a cada grill
+const VAR = {A:'Lista', B:'Foco', C:'Abas'};
+let V = 'A';
+
+async function api(rota, metodo='GET', corpo){
+  const r = await fetch(`/api/${rota}?t=${TOKEN}`, { method:metodo, headers:{'content-type':'application/json'},
+    body: corpo===undefined ? undefined : JSON.stringify(corpo) });
+  const json = await r.json().catch(()=>null);
+  return { ok:r.ok, json };
+}
+
+// ---------- texto do agente: escapa tudo, depois o markdown curto ----------
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function md(s){
+  const partes = esc(s).split(/(`[^`]+`)/);   // código não recebe as outras marcas
+  return partes.map(p => p.startsWith('`') && p.endsWith('`') && p.length>1 ? `<code>${p.slice(1,-1)}</code>` :
+    p.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+     .replace(/(^|[^\w*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
+     .replace(/(^|[^\w])_([^_\s][^_]*)_/g, '$1<em>$2</em>')).join('');
+}
+
+function modo(v){ V=v; S.foco=0; api('preferencias','POST',{modo:v}); render(); }
+const escuro = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'))==='dark';
+function tema(){ const t = escuro()?'light':'dark'; document.documentElement.dataset.theme=t; api('preferencias','POST',{tema:t}); render(); }
+
+// ---------- leitura em voz alta: speechSynthesis nativo; o estado vive aqui, fora do DOM, e sobrevive ao render() ----------
+const TEM_VOZ = 'speechSynthesis' in window;
+const LEIT = { voz:null, vel:1, vol:0.8, falando:null };
+const vozes = () => (TEM_VOZ ? speechSynthesis.getVoices() : [])
+  .slice().sort((a,b)=> (b.lang.startsWith('pt')-a.lang.startsWith('pt')) || a.name.localeCompare(b.name));
+const vozAtual = () => { const vs=vozes(); return vs.find(v=>v.name===LEIT.voz) || vs.find(v=>v.lang.replace('_','-').startsWith('pt-BR')) || vs[0]; };
+const opcoesVoz = () => { const a=vozAtual(); return vozes().map(v=>`<option value="${esc(v.name)}" ${v===a?'selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('') || '<option>Carregando vozes…</option>'; };
+if(TEM_VOZ) speechSynthesis.onvoiceschanged = () => { const el=document.getElementById('voz'); if(el) el.innerHTML=opcoesVoz(); };
+const puro = s => String(s ?? '').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[`*]/g,'').replace(/(^|\W)_([^_\s][^_]*)_/g,'$1$2').trim();
+const frase = s => { const t=puro(s); return !t || /[.?!:]$/.test(t) ? t : t+'.'; };
+const textoDa = q => [q.id, q.titulo, q.contexto, ...q.opcoes.map((o,i)=>`Opção ${i+1}${o.recomendada?', recomendada':''}: ${frase(o.rotulo)} ${frase(o.descricao)}`)]
+  .map(frase).filter(Boolean).join(' ');
+function marcaFala(id){ LEIT.falando=id; document.querySelectorAll('[data-fala]').forEach(b=>b.classList.toggle('falando', b.dataset.fala===id)); }
+function parar(){ if(TEM_VOZ) speechSynthesis.cancel(); marcaFala(null); }
+function falarTexto(id, texto){
+  if(!TEM_VOZ) return;
+  const era = LEIT.falando; parar();
+  if(era===id) return;                       // clicar de novo no mesmo ícone para
+  const u = new SpeechSynthesisUtterance(texto); u.lang='pt-BR'; u.volume=LEIT.vol; u.rate=LEIT.vel;
+  const voz = vozAtual(); if(voz){ u.voice=voz; u.lang=voz.lang; }
+  u.onend = u.onerror = () => { if(LEIT.falando===id) marcaFala(null); };
+  speechSynthesis.speak(u); marcaFala(id);
+}
+const falar = i => falarTexto(Q()[i].id, textoDa(Q()[i]));
+const ICONE_SOM = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
+const somBtn = i => TEM_VOZ ? `<button class="som ${LEIT.falando===Q()[i].id?'falando':''}" data-fala="${esc(Q()[i].id)}" title="Ouvir esta questão" onclick="falar(${i})">${ICONE_SOM}</button>` : '';
+const fmtVel = v => (+v).toFixed(2).replace(/0$/,'')+'×';
+function ajusteVoz(k,v){ LEIT[{voz:'voz',velocidade:'vel',volume:'vol'}[k]] = k==='voz' ? v : +v; api('preferencias','POST',{[k]: k==='voz' ? v : +v}); }
+function painelVoz(){
+  return `<div id="cfg-leitura" class="cfg" popover><h4>Leitura em voz alta</h4>
+   <label>Voz</label><select id="voz" onchange="ajusteVoz('voz',this.value)">${opcoesVoz()}</select>
+   <label>Velocidade <span id="vel-v">${fmtVel(LEIT.vel)}</span></label>
+   <input type="range" min="0.5" max="2" step="0.25" value="${LEIT.vel}" oninput="document.getElementById('vel-v').textContent=fmtVel(this.value)" onchange="ajusteVoz('velocidade',this.value)">
+   <label>Volume <span id="vol-v">${Math.round(LEIT.vol*100)}%</span></label>
+   <input type="range" min="0" max="1" step="0.05" value="${LEIT.vol}" oninput="document.getElementById('vol-v').textContent=Math.round(this.value*100)+'%'" onchange="ajusteVoz('volume',this.value)">
+   <button class="btn sec" style="width:100%" onclick="falarTexto('teste','Assim fica a leitura com esta voz, esta velocidade e este volume.')">Testar</button>
+   ${TEM_VOZ?'':'<p class="sub" style="margin:10px 0 0">Este navegador não tem leitura em voz.</p>'}</div>`;
+}
+
+// ---------- rodada ----------
+const R = () => E.rodada;
+const Q = () => R().questoes;
+const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= { opcao:null, propria:'', com:'', abreCom:false };
+const recIdx = q => q.opcoes.findIndex(o=>o.recomendada);
+const marca = q => { const a=resp(q); return a.opcao!==null ? (a.opcao===recIdx(q)?'aceito':'outra') : (a.propria.trim()?'outra':null); };
+const nProntas = () => Q().filter(marca).length;
+const qi = i => Q()[i];
+
+function escolher(i,o){ const a=resp(qi(i)); a.opcao=o; a.propria=''; render(); }
+function propria(i,txt){ const a=resp(qi(i)); a.propria=txt; if(txt.trim()) a.opcao=null; atualiza(i); }
+function comentar(i,txt){ resp(qi(i)).com=txt; atualiza(i); }
+function aceitarRestantes(){ Q().forEach(q=>{ if(!marca(q)) resp(q).opcao=recIdx(q); }); render(); }
+
+async function enviar(){
+  if(S.enviando || nProntas()<Q().length) return;
+  S.enviando=true; parar();
+  const respostas = Q().map(q=>{ const a=resp(q); return { id:q.id, opcao:a.opcao, propria:a.propria, comentario:a.com }; });
+  const r = await api('respostas','POST',{ tipo:'rodada', rodada:R().rodada, respostas });
+  S.enviando=false; S.erro = r.ok ? '' : (r.json && r.json.erro || 'o servidor recusou o envio');
+  await consultar(true);
+}
+
+function marcaHTML(q){
+  const m = marca(q);
+  return (m==='aceito' ? '<span class="mark aceito">✓ Aceito a recomendada</span>'
+        : m==='outra' ? '<span class="mark outra">⇄ Escolhi outra</span>'
+        : '<span class="mark pend">○ Sem marca</span>') + (resp(q).com.trim() ? ' <span class="mark com">💬 Com comentário</span>' : '');
+}
+function opcoesHTML(q, numerada){
+  const a=resp(q), i=Q().indexOf(q);
+  return q.opcoes.map((o,j)=>`<button class="opt ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" onclick="escolher(${i},${j})">
+    <div class="lab"><span class="radio"></span>${numerada?`<span class="kbd">${j+1}</span>`:''}${md(o.rotulo)}${o.recomendada?'<span class="badge-rec">★ Recomendada</span>':''}</div>
+    ${o.descricao?`<div class="desc">${md(o.descricao)}</div>`:''}</button>`).join('');
+}
+function extrasHTML(q){
+  const a=resp(q), i=Q().indexOf(q);
+  return `<div style="margin-top:6px"><input placeholder="✎ Ou escreva a sua resposta…" value="${esc(a.propria)}" oninput="propria(${i},this.value)"></div>
+  <div style="margin-top:8px">${a.abreCom||a.com
+    ? `<textarea rows="2" placeholder="Tenho algo a dizer sobre esta questão…" oninput="comentar(${i},this.value)">${esc(a.com)}</textarea>`
+    : `<button class="linkbtn" onclick="resp(qi(${i})).abreCom=true;render()">💬 Tenho algo a dizer</button>`}</div>`;
+}
+function rodape(){
+  const t=Q().length, n=nProntas();
+  return `<div class="foot"><div class="foot-in">
+    <span class="prog" id="prog"><b>${n}</b>/${t} marcadas</span>
+    <div class="bar"><i id="barra" style="width:${n/t*100}%"></i></div>
+    ${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}
+    <button class="linkbtn" onclick="aceitarRestantes()">★ aceitar recomendadas restantes</button>
+    <button class="send" id="enviar" ${n<t?'disabled':''} onclick="enviar()">Enviar rodada ${R().rodada} →</button>
+  </div></div>`;
+}
+const ctxHTML = (q,h) => q.contexto?`<div class="ctx">ℹ️ ${md(q.contexto)}</div>`:`<div style="height:${h}px"></div>`;
+function historico(){
+  if(!E.historico.length) return '';
+  const linhas = E.historico.flatMap(h=>h.respostas.map(r=>({...r, rodada:h.rodada.rodada})));
+  return `<details class="card hist"><summary>Rodadas anteriores (${E.historico.length})</summary>
+    <table style="margin-top:8px"><tr><th>Rodada</th><th>Questão</th><th>Resposta</th><th>Marca</th></tr>
+    ${linhas.map(r=>`<tr><td>${r.rodada}</td><td>${esc(r.id)}</td><td>${md(r.escolha)}${r.comentario?`<br><small style="color:var(--muted)">💬 ${esc(r.comentario)}</small>`:''}</td><td>${r.marca==='aceito'?'✓ aceito':'⇄ outra'}</td></tr>`).join('')}
+    </table></details>`;
+}
+function modoLista(){
+  return historico() + Q().map((q,i)=>`<section class="card qa">
+    <div class="row" style="justify-content:space-between"><span class="chip">${esc(q.id)} · ${esc(q.cabecalho)}</span>${somBtn(i)}</div>
+    <h3>${md(q.titulo)}</h3>${ctxHTML(q,12)}
+    <div class="opts">${opcoesHTML(q)}</div>${extrasHTML(q)}
+    <div class="tail" data-marca="${i}">${marcaHTML(q)}</div></section>`).join('') + rodape();
+}
+// os itens da lista lateral (Foco) e das abas mudam com a marca; atualiza() os redesenha sem render()
+function ladoHTML(q,i){
+  const m=marca(q);
+  return `<span class="st ${m||''}">${m?(m==='aceito'?'✓':'⇄'):i+1}</span>
+    <span><b style="font-size:13.5px">${esc(q.cabecalho)}</b><small>${esc(q.id)}${resp(q).com.trim()?' · 💬':''}</small></span>`;
+}
+const abaHTML = q => { const m=marca(q); return `<span class="tick">${m?(m==='aceito'?'✅':'🔀'):'⚪'}</span>${esc(q.cabecalho)}`; };
+const escolhaHTML = q => { const a=resp(q); return a.opcao!==null ? md(q.opcoes[a.opcao].rotulo) : (esc(a.propria.trim())||'—'); };
+function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Enter
+  const ps=Q(), q=ps[S.foco];
+  return historico() + `<div class="focus">
+   <nav class="card side">${ps.map((p,i)=>`<button class="${i===S.foco?'on':''}" data-lado="${i}" onclick="S.foco=${i};render()">${ladoHTML(p,i)}</button>`).join('')}</nav>
+   <section class="card big">
+    <div class="row" style="justify-content:space-between"><span class="chip">${esc(q.id)} · ${esc(q.cabecalho)}</span><span class="row"><span class="prog">${S.foco+1} / ${ps.length}</span>${somBtn(S.foco)}</span></div>
+    <h2>${md(q.titulo)}</h2>${ctxHTML(q,14)}
+    ${opcoesHTML(q,true)}${extrasHTML(q)}
+    <div class="tail" data-marca="${S.foco}">${marcaHTML(q)}</div>
+    <div class="nav"><button class="btn sec" ${S.foco?'':'disabled'} onclick="S.foco--;render()">← Anterior</button>
+     <span class="prog" style="align-self:center">teclas <span class="kbd">1</span>–<span class="kbd">${q.opcoes.length}</span> escolhem · <span class="kbd">Enter</span> avança</span>
+     ${S.foco<ps.length-1?`<button class="btn pri" onclick="S.foco++;render()">Próxima →</button>`:'<span></span>'}</div>
+   </section></div>` + rodape();
+}
+function modoAbas(){ // como o AskUserQuestion, com o painel "Sua resposta" à direita
+  const ps=Q(), q=ps[S.foco];
+  return historico() + `<div class="tabs">${ps.map((p,i)=>`<button class="${i===S.foco?'on':''}" data-aba="${i}" onclick="S.foco=${i};render()">${abaHTML(p)}</button>`).join('')}</div>
+   <div class="twocol">
+    <section class="card pane"><div class="row" style="justify-content:space-between"><span class="chip">${esc(q.id)}</span>${somBtn(S.foco)}</div><h2 style="margin:10px 0 0;font-size:20px">${md(q.titulo)}</h2>
+     ${ctxHTML(q,14)}${opcoesHTML(q,true)}</section>
+    <aside class="card answer"><h4>Sua resposta</h4><div data-marca="${S.foco}">${marcaHTML(q)}</div><div class="picked" id="escolha">${escolhaHTML(q)}</div>
+     ${extrasHTML(q)}
+     ${S.foco<ps.length-1?`<button class="btn sec" style="margin-top:14px;width:100%" onclick="S.foco++;render()">Próxima aba →</button>`:''}</aside>
+   </div>` + rodape();
+}
+
+// ---------- telas do fluxo ----------
+function topo(){
+  const feitas = E.historico.length, fim = ['final','concluido'].includes(E.fase);
+  const dots = Array.from({length:feitas},(_,i)=>`<span class="dot done">${i+1}</span>`).join('')
+    + (E.fase==='rodada' ? `<span class="dot cur">${R().rodada}</span>` : '');
+  const ativo = !['concluido','cli'].includes(E.fase) && !S.caiu;
+  return `<header class="top"><div class="top-in"><div class="brand">Grill</div><div class="proj">${esc(E.projeto)}</div>
+   <div class="rounds"><span class="t">Rodadas</span>${dots}<span class="dot ${fim?'cur':''}" title="Fechamento">✓</span></div>
+   ${E.fase==='rodada'?`<div class="seg">${Object.entries(VAR).map(([k,n])=>`<button class="${k===V?'on':''}" onclick="modo('${k}')">${n}</button>`).join('')}</div>`:''}
+   <button class="icon" title="Leitura em voz alta" popovertarget="cfg-leitura">${ICONE_SOM}</button>
+   <button class="icon" title="Alternar tema" onclick="tema()">${escuro()?'☀':'☾'}</button>
+   ${ativo?`<button class="ghost" onclick="paraCli()">⌨ Continuar no CLI</button>`:''}</div></header>` + painelVoz();
+}
+const telaRodada = () => `<h1 class="h1">Rodada ${R().rodada}</h1><p class="sub">${Q().length} ${Q().length===1?'questão':'questões'}. A recomendada vem marcada com ★; clique nela para aceitar, ou em outra para trocar.</p>` + {A:modoLista, B:modoFoco, C:modoAbas}[V]();
+function telaAguarde(){
+  const inicio = E.fase==='inicio';
+  return `<div class="center"><div><div class="spin"></div>
+    <h1 class="h1 pulse">${inicio?'Aguarde, o agente está preparando a primeira rodada…':'Aguarde, o agente está pensando…'}</h1>
+    <p class="sub">${inicio?'':'Ele lê suas respostas e decide se há mais perguntas ou se o grill fechou.<br>'}
+    O terminal continua livre: digitar lá assume o grill no CLI.</p>
+    ${E.ultima?`<details><summary>O que o agente recebeu</summary><pre>${esc(JSON.stringify(E.ultima,null,2))}</pre></details>`:''}</div></div>`;
+}
+function telaFinal(){
+  return `<h1 class="h1">A fronteira esvaziou 🎯</h1><p class="sub">Este é o entendimento consolidado. Confirme, ou diga o que ajustar e o agente reabre uma rodada.</p>
+   <div class="card" style="padding:6px 8px;overflow-x:auto"><table><tr><th>#</th><th>Decisão</th><th>Escolha</th></tr>
+   ${E.final.tabela.map((l,i)=>`<tr><td>${i+1}</td><td>${md(l.decisao)}</td><td><b>${md(l.escolha)}</b></td></tr>`).join('')}</table></div>
+   <div style="margin-top:18px">${S.abreAjuste
+     ? `<textarea rows="3" placeholder="O que precisa mudar?" oninput="S.ajuste=this.value">${esc(S.ajuste)}</textarea>
+        <div class="row" style="margin-top:10px"><button class="btn pri" onclick="ajustar()">Enviar ajuste</button>
+        <button class="btn sec" onclick="S.abreAjuste=false;render()">Cancelar</button>${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}</div>`
+     : `<div class="row"><button class="btn okb" onclick="confirmar()">✓ Confirmo o entendimento</button>
+        <button class="btn sec" onclick="S.abreAjuste=true;render()">✎ Quero ajustar</button></div>`}</div>`;
+}
+const telaFim = (ico,t,s) => `<div class="center"><div><div style="font-size:54px">${ico}</div><h1 class="h1">${t}</h1><p class="sub">${s}</p></div></div>`;
+
+async function confirmar(){ await api('respostas','POST',{tipo:'sim'}); await consultar(true); }
+async function ajustar(){
+  const r = await api('respostas','POST',{tipo:'ajuste', texto:S.ajuste});
+  if(r.ok){ S.abreAjuste=false; S.ajuste=''; S.erro=''; } else S.erro = r.json && r.json.erro || 'o servidor recusou o ajuste';
+  await consultar(true);
+}
+async function paraCli(){ await api('cli','POST',{}); await consultar(true); }
+
+function render(){
+  if(!E){ document.getElementById('app').innerHTML = telaFim('⏳','Conectando…',''); return; }
+  const corpo = S.caiu ? telaFim('⚠','O servidor do grill parou','Volte ao terminal: o grill segue lá. Pode fechar esta aba.')
+    : { inicio:telaAguarde, rodada:telaRodada, aguarde:telaAguarde, final:telaFinal,
+    concluido:()=>telaFim('✅','Grill concluído','Volte ao terminal: o agente já tem o seu sim. Pode fechar esta aba.'),
+    cli:()=>telaFim('⌨','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.') }[E.fase]();
+  document.getElementById('app').innerHTML = topo() + `<main class="wrap">${corpo}</main>`;
+}
+function atualiza(i){ // contadores, marca, lateral, aba e escolha, sem render(), para não roubar o foco do campo de texto
+  if(E.fase!=='rodada') return;
+  const t=Q().length, n=nProntas(), p=document.getElementById('prog'), q=qi(i);
+  if(p){ p.innerHTML=`<b>${n}</b>/${t} marcadas`; document.getElementById('barra').style.width=n/t*100+'%'; document.getElementById('enviar').disabled=n<t; }
+  const troca = (sel, html) => document.querySelectorAll(sel).forEach(el=>el.innerHTML=html);
+  troca(`[data-marca="${i}"]`, marcaHTML(q));
+  troca(`[data-lado="${i}"]`, ladoHTML(q,i));
+  troca(`[data-aba="${i}"]`, abaHTML(q));
+  if(i===S.foco) troca('#escolha', escolhaHTML(q));
+  if(resp(q).opcao===null) document.querySelectorAll(`.opt.sel[data-q="${i}"]`).forEach(b=>b.classList.remove('sel'));
+}
+
+// ---------- consulta ao servidor ----------
+async function consultar(forcar){
+  if(S.caiu || (E && ['concluido','cli'].includes(E.fase))) return;
+  try{
+    const r = await api('estado');
+    const mudou = !E || r.json.versao !== E.versao;
+    E = r.json;
+    if(mudou){ S.foco=0; parar(); }
+    if(mudou || forcar){ render(); if(mudou) scrollTo(0,0); }
+  }catch(e){ if(E){ S.caiu=true; render(); } }
+}
+addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea') || !E || E.fase!=='rodada' || V==='A') return;
+  const q = Q()[S.foco];
+  if(/^[1-9]$/.test(e.key) && q.opcoes[+e.key-1]) escolher(S.foco,+e.key-1);
+  else if(e.key==='Enter' && !e.target.closest('button') && S.foco<Q().length-1){ S.foco++; render(); }
+});
+api('preferencias').then(r=>{
+  const p = r.json || {};
+  if(VAR[p.modo]) V=p.modo;
+  if(p.tema==='light'||p.tema==='dark') document.documentElement.dataset.theme=p.tema;
+  if(typeof p.voz==='string') LEIT.voz=p.voz;
+  if([0.5,0.75,1,1.25,1.5,1.75,2].includes(p.velocidade)) LEIT.vel=p.velocidade;
+  if(typeof p.volume==='number' && p.volume>=0 && p.volume<=1) LEIT.vol=p.volume;
+}).catch(()=>{}).finally(()=>{ render(); consultar(); });
+setInterval(consultar, 1000);
+</script>
+</body>
+</html>

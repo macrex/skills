@@ -32,6 +32,10 @@ jobs:
           saida=$(CLAUDE_PLUGIN_OPTION_VAULT= node -e 'const {REGRAS}=require("./hooks/vault-rules.js"); if(!REGRAS.startsWith("<vault-obsidian>")||!REGRAS.endsWith("</vault-obsidian>")) { console.error("REGRAS ausente ou truncado"); process.exit(1); } console.error("import ok");' 2>&1)
           test "$saida" = "import ok"
 
+      - name: Hook do grill (PreToolUse da Skill)
+        shell: bash
+        run: node hooks/teste-grill-canal.js
+
       - name: Servidor do vault
         shell: bash
         run: |
@@ -51,3 +55,7 @@ jobs:
       - name: Localizador das skills do Matt (/faz)
         shell: bash
         run: node skills/faz/scripts/teste-skills-do-matt.js
+
+      - name: Servidor da grill-tela
+        shell: bash
+        run: node skills/grill-tela/scripts/teste-grill-tela.js
