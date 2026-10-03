@@ -21,7 +21,10 @@ cumpri-lo **é** invocá-la.
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
 - **Modo workflow:** ferramenta `Workflow`; esqueleto em `references/workflow-tickets.md`.
 - **Segurar a sessão:** não há laço; a notificação de cada trabalho em background (workflow,
-  sub-agente) retoma a sessão sozinha. Abertura: `rode /faz leva <documento>`.
+  sub-agente) retoma a sessão sozinha. Abertura: `rode /<faz> leva <documento>`, com `<faz>` o
+  nome que o localizador imprime na linha `faz` (`macrex-skills:faz` pelo plugin, `faz` solta):
+  a skill reservada só é liberada quando o nome chamado bate com o token digitado, e com `/faz`
+  na linha o modelo chama `macrex-skills:faz` e leva recusa.
 - **Autorização das três reservadas:** só quando a linha as nomeia como **token isolado** —
   `/mattpocock-skills:to-spec` com espaço dos dois lados; pontuação colada cega a busca e a skill
   é recusada. Só em **texto**: a linha que começa com `/` vira comando, e nome nos argumentos de

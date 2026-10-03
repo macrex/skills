@@ -7,7 +7,8 @@
 //      `~/.claude/skills` nao;
 //   3. em "outro" (Codex, Antigravity), `~/.codex/skills` conta, inclusive o clone do
 //      repositorio do Matt dentro dela, e a pasta do CLI do Antigravity tambem;
-//   4. exit 1 enquanto falta alguma, 0 com as seis.
+//   4. exit 1 enquanto falta alguma, 0 com as seis;
+//   5. o nome da propria faz leva o prefixo do plugin so quando ela roda do cache dele.
 //
 //   node scripts/teste-skills-do-matt.js
 
@@ -46,7 +47,7 @@ function roda(env) {
   });
   const saida = JSON.parse(r.stdout);
   const por = Object.fromEntries(saida.skills.map((s) => [s.skill, s]));
-  return { status: r.status, harness: saida.harness, por, faltam: saida.faltam };
+  return { status: r.status, harness: saida.harness, faz: saida.faz, por, faltam: saida.faltam };
 }
 
 const claude = roda({ CLAUDECODE: '1' });
@@ -79,4 +80,13 @@ const completo = roda({});
 assert.strictEqual(completo.status, 0, 'com as seis, exit 0');
 assert.deepStrictEqual(completo.faltam, []);
 
-console.log('ok: raizes por harness, prefixo so no plugin do Claude Code, exit 1 enquanto falta alguma');
+assert.strictEqual(completo.faz, 'faz', 'fora do cache de plugin a faz se chama so faz');
+
+// A mesma faz copiada para o cache do plugin, como o /plugin install a deixa.
+const scriptsNoPlugin = path.join(base, '.claude', 'plugins', 'cache', 'macrex', 'macrex-skills', '1.0.0', 'skills', 'faz', 'scripts');
+fs.mkdirSync(scriptsNoPlugin, { recursive: true });
+fs.copyFileSync(path.join(__dirname, 'skills-do-matt.js'), path.join(scriptsNoPlugin, 'skills-do-matt.js'));
+const r = spawnSync(process.execPath, [path.join(scriptsNoPlugin, 'skills-do-matt.js'), '--json'], { cwd, encoding: 'utf8' });
+assert.strictEqual(JSON.parse(r.stdout).faz, 'macrex-skills:faz', 'no cache do plugin a faz leva o prefixo dele');
+
+console.log('ok: raizes por harness, prefixo so no plugin do Claude Code, exit 1 enquanto falta alguma, nome da faz');

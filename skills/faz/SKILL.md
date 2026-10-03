@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.10
+# Versao: 3.11
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o trabalho, esta só
@@ -37,7 +37,8 @@ movimento 1, abaixo.
 
 Não procure na sua lista de skills: `disable-model-invocation` tira a skill da sua vista, e três
 destas apareceriam como ausentes mesmo instaladas. Rode o localizador; ele imprime, por skill, o
-nome pelo qual o seu harness a chama e o caminho:
+nome pelo qual o seu harness a chama e o caminho, e na linha `faz` o nome desta skill, que a
+abertura da linha usa:
 
 ```bash
 node "<pasta desta skill>/scripts/skills-do-matt.js"

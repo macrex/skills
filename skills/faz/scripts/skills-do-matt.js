@@ -8,6 +8,11 @@
 //
 // Sai 1 quando falta alguma: e o portao do movimento 1.
 //
+// Imprime tambem o nome pelo qual o harness chama a propria faz: instalada pelo
+// plugin do Claude Code ela vira `<plugin>:faz`, e a abertura da leva tem de digitar
+// esse nome, porque a skill reservada so e liberada quando o nome chamado bate com o
+// token que o usuario digitou.
+//
 // O harness sai do ambiente que a ferramenta de shell dele exporta: CLAUDECODE no
 // Claude Code, PI_SESSION_ID no Pi. Codex e Antigravity nao exportam nada que os
 // distinga e caem em "outro", que olha as pastas privadas dos dois e as do padrao
@@ -104,15 +109,24 @@ function localizar(harness, casa, cwd) {
   });
 }
 
+// A pasta desta skill, dentro do cache de plugin (.claude/plugins/cache/<marketplace>/
+// <plugin>/<versao>/skills/faz), da o prefixo; fora dele a faz se chama so `faz`.
+function nomeDaFaz(pasta) {
+  const m = pasta.match(/[\\/]\.claude[\\/]plugins[\\/]cache[\\/][^\\/]+[\\/]([^\\/]+)[\\/][^\\/]+[\\/]skills[\\/][^\\/]+$/);
+  return (m ? m[1] + ':' : '') + path.basename(pasta);
+}
+
 function main() {
   const json = process.argv.includes('--json');
   const harness = harnessCorrente(process.env);
   const skills = localizar(harness, os.homedir(), process.cwd());
   const faltam = skills.filter((s) => !s.caminho).map((s) => s.skill);
+  const pasta = path.dirname(__dirname);
+  const faz = nomeDaFaz(pasta);
   if (json) {
-    process.stdout.write(JSON.stringify({ harness, skills, faltam }, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ harness, faz, skills, faltam }, null, 2) + '\n');
   } else {
-    const linhas = [`harness: ${harness}`];
+    const linhas = [`harness: ${harness}`, `${'faz'.padEnd(16)} ${faz.padEnd(34)} ${pasta}`];
     for (const s of skills) {
       linhas.push(s.caminho ? `${s.skill.padEnd(16)} ${s.nome.padEnd(34)} ${s.caminho}` : `${s.skill.padEnd(16)} FALTA`);
     }
