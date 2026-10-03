@@ -33,6 +33,15 @@ cumpri-lo **é** invocá-la.
   background, a mensagem de um sub-agente. Por isso a leva invoca as três em sequência logo
   depois do localizador, antes de qualquer sub-agente, workflow ou pergunta em texto, e depois
   as cumpre na ordem dos passos com as instruções já carregadas, sem invocá-las de novo.
+- **Painel da leva:** a cada marco, chame `mcp__macrex-skills__faz_marco`, que alimenta o painel
+  aberto por `/faz-painel`: `inicio` com o `documento` da linha, logo depois do localizador (a
+  leva já entra na fase `spec`); `fase` ao entrar em cada fase seguinte (`tickets`, `implement`,
+  `revisao`, `correcoes`, `qualidade`); `tickets` com a lista `{ id, titulo }` assim que o
+  `to-tickets` publicar; `ticket` ao começar cada um; `portao` com `verde` ou `vermelho`, os
+  `reparos` (0 a 2) e os `testes` (ex. `3/4`, até 20 caracteres) quando o executor os informou;
+  `fechamento` no fim. No modo workflow a sessão não vê cada ticket começar: quando a notificação
+  do fim do workflow chegar, registre `ticket` e `portao` de cada ticket pelo relatório dele.
+  Ferramenta ausente ou erro dela nunca para a leva: siga sem o marco.
 
 ## Pi
 

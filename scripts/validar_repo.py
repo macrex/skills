@@ -145,6 +145,9 @@ def main():
             if p.get("source") != "." and not os.path.isdir(os.path.join(RAIZ, str(p.get("source")))):
                 falha(f"marketplace.json: source '{p.get('source')}' nao existe")
     if hooks:
+        for rel in hooks.get("modules", []):
+            if not os.path.exists(os.path.join(RAIZ, "hooks", rel)):
+                falha(f"hooks.json: modules aponta para {rel}, que nao existe")
         for evento, grupos in (hooks.get("hooks") or {}).items():
             for grupo in grupos:
                 for h in grupo.get("hooks", []):

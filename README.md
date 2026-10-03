@@ -38,7 +38,8 @@ sem Obsidian, pule o que fala de vault.
 Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces,
 `macrex`. O canal do grill é a opção **Canal do grill** em `/config`: `cli` (o padrão, o hook
 fica calado e o grill segue o seu fluxo), `perguntar` (CLI ou tela, a cada grill) ou `tela` (sempre
-na página). A opção pede o Claude Code 2.1.271 ou mais novo. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
+na página). Durante uma leva, `/faz-painel` abre e fecha o painel da leva ao lado da conversa, com as
+fases, os tickets e os portões e as últimas ações do agente. O plugin pede o Claude Code 2.1.287 ou mais novo. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
 já tinha as skills em `~/.claude/skills`, remova-as, ou elas ganham do plugin.
 
 ### Pi

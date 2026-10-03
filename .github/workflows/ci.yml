@@ -38,6 +38,13 @@ jobs:
           node hooks/teste-grill-canal.js
           node --experimental-strip-types extensions/teste-grill-canal.mjs
 
+      - name: Painel da leva (mod do Claude Code)
+        shell: bash
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude plugin validate .claude-plugin/plugin.json
+          claude plugin test .
+
       - name: Servidor do vault
         shell: bash
         run: |
