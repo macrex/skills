@@ -139,7 +139,7 @@ export function register(on) {
     $.clock.every(10000, () => void ativa($).then(sim => sim && $.ui.invalidate('ui.render')))
     await $.command.register({
       name: PANE,
-      description: 'Abre ou fecha o painel da leva ao lado da conversa',
+      description: '(macrex-skills) Abre ou fecha o painel da leva ao lado da conversa',
       immediate: true,
     })
     await $.tool.register({
