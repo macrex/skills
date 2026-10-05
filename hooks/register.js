@@ -10,7 +10,7 @@
 //
 // O grill do /faz (movimento 1) vem antes da leva: os marcos grill e entendimento o abrem e o
 // fecham, e as perguntas saem do AskUserQuestion pelo tema (o header). O inicio da leva o tira
-// da tela; terminado tudo, Limpar a tela volta ao repouso, o Claude dormindo.
+// da tela; o /clear volta ao repouso, o Claude dormindo.
 
 import { atom, read, update } from 'claude-code'
 
@@ -174,13 +174,15 @@ function aplicarNoGrill(grill, m, agora) {
   return { ...grill, documento: m.documento, fim: agora }
 }
 
-// Tira da tela a leva e o grill terminados; o historico fica no store para a proxima fechada.
+// Tira da tela o grill e a leva fechada; o historico fica no store para a proxima fechada. A leva
+// aberta fica: a retomada numa sessao nova le os tickets dela do store.
 async function limpar($) {
   const cwd = await $.session.cwd()
-  await $.store.delete(chave(cwd))
   await $.store.delete(chaveDoGrill(cwd))
-  await update($, LEVA, () => null)
   await update($, GRILL, () => null)
+  if (await ativa($)) return
+  await $.store.delete(chave(cwd))
+  await update($, LEVA, () => null)
   await update($, AGENTES, () => [])
 }
 
@@ -205,7 +207,7 @@ export function register(on) {
     const grill = await $.store.get(chaveDoGrill(e.cwd))
     if (grill) await update($, GRILL, () => grill)
     // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane
-    $.clock.every(10000, async () => ((await ativa($)) || (await emGrill($))) && $.ui.invalidate('ui.render'))
+    $.clock.every(1000, async () => ((await ativa($)) || (await emGrill($))) && $.ui.invalidate('ui.render'))
     // no repouso, o ronco: so o pane montado redesenha
     $.clock.every(RONCO, async () => !(await read($, LEVA)) && !(await read($, GRILL)) && $.ui.invalidate('ui.render'))
     await $.command.register({
@@ -248,6 +250,12 @@ export function register(on) {
         required: ['marco'],
       },
     })
+    return next(e)
+  })
+
+  // o /clear limpa a tela; nenhum session.start vem depois dele
+  on('session.end', async ($, e, next) => {
+    if (e.reason === 'clear') await limpar($)
     return next(e)
   })
 
@@ -412,12 +420,12 @@ export function register(on) {
       await $.ui.close({ id: PANE })
       return { text: 'Painel da leva fechado.' }
     }
-    await $.ui.open({ id: PANE, title: 'Leva', closeOnEscape: true })
+    await $.ui.open({ id: PANE, title: 'Leva' })
     return { text: 'Painel da leva aberto.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text } = $.ui.resolve(e)
     const leva = await read($, LEVA)
     const grill = await read($, GRILL)
     // o tamanho do corpo do pane; o viewport e o da tela inteira, e centralizar por ele joga o
@@ -443,21 +451,12 @@ export function register(on) {
         h(Box, { flexDirection: 'column' }, ...desenho.map((l, i) => h(Text, { color: LARANJA, dimColor: i < dosZs }, l))),
       )
     }
-    const limparATela = h(Button, { key: 'limpar', hotkey: 'l', onPress: () => void limpar($) }, 'Limpar a tela')
-    // o rodape das teclas; o Limpar a tela so aparece com tudo terminado, para nao apagar o que corre
-    const rodape = podeLimpar =>
-      h(
-        Box,
-        { marginTop: 1, gap: 2 },
-        podeLimpar && limparATela,
-        h(Text, { color: APAGADO }, h(Text, { color: TEXTO, backgroundColor: CHIP }, ' Esc '), h(Text, {}, ' fecha')),
-      )
-    // a marca FAZ-PAINEL e o titulo a esquerda; o rotulo e o valor grande (o total) a direita
+    // a marca Painel e o titulo a esquerda; o rotulo e o valor grande (o total) a direita
     const cabecalho = (titulo, rotulo, valor) =>
       h(
         Box,
         { justifyContent: 'space-between', alignItems: 'flex-end' },
-        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, { color: LARANJA }, 'FAZ-PAINEL'), h(Text, { bold: true, color: TEXTO }, titulo)),
+        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, { color: LARANJA }, 'Painel'), h(Text, { bold: true, color: TEXTO }, titulo)),
         h(Box, { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 2 }, h(Text, { color: APAGADO }, rotulo), h(Text, { bold: true, color: TEXTO }, valor)),
       )
     // cada secao e um cartao preenchido um tom abaixo do fundo, com o titulo apagado
@@ -501,7 +500,6 @@ export function register(on) {
         grill.perguntas.length > 0 && cartao(`Perguntas · ${respondidas}/${grill.perguntas.length} respondidas`, ...grill.perguntas.slice(-15).map(pergunta)),
         grill.documento &&
           cartao('Entendimento', h(Text, { color: VERDE }, grill.documento), h(Text, { color: APAGADO }, 'cole a linha da leva numa sessão nova')),
-        rodape(Boolean(grill.documento)),
       )
     }
     const ate = leva.fim ?? agora
@@ -570,7 +568,6 @@ export function register(on) {
       }),
       visiveis.length > 0 && cartao('Sub-agentes', ...visiveis.map(agente)),
       leva.fechada && cartaoDoHistorico,
-      rodape(leva.fechada),
     )
   })
 }

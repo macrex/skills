@@ -35,7 +35,7 @@ const TICKETS = [{ id: '01', titulo: 'Mod do painel' }, { id: '02', titulo: 'Fer
 describe('painel da leva', () => {
   test('/faz-painel abre o pane e, aberto, fecha', async ($, on) => {
     const abertos = new Set<string>()
-    on('ui.open', ($, e) => { if (e.closeOnEscape) abertos.add(e.id); return { value: { isPlaced: true } } })
+    on('ui.open', ($, e) => { abertos.add(e.id); return { value: { isPlaced: true } } })
     on('ui.close', ($, e) => { abertos.delete(e.id); return { value: undefined } })
     on('ui.panes', () => ({
       value: [...abertos].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })),
@@ -123,14 +123,12 @@ describe('painel da leva', () => {
       expect((await ui.find({ type: 'Text', text: /Estado/ }))?.text).toMatch(/^✓ Estado — \$\.store$/)
       expect((await ui.find({ type: 'Text', text: /Botão/ }))?.text).toMatch(/sem resposta/)
       expect(await ui.find({ text: /Solto/ })).toBeUndefined()
-      expect(await ui.find({ key: 'limpar' })).toBeUndefined()
       await ui.unmount()
     }
 
     expect((await marco({ marco: 'entendimento', documento: '2026-10-04 Grill no painel' })).deny).toBeUndefined()
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect(await ui.find({ text: /2026-10-04 Grill no painel/ })).toBeDefined()
-    expect(await ui.find({ key: 'limpar' })).toBeDefined()
   })
 
   test('entendimento sem grill e grill sem pedido voltam como erro', async ($, on) => {
@@ -166,21 +164,45 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /pedido do grill/ })).toBeUndefined()
   })
 
-  test('com a leva fechada, Limpar a tela volta ao Claude dormindo e guarda o historico', async ($, on) => {
+  test('o /clear tira o grill da tela e guarda a leva aberta para a retomada', async ($, on) => {
     sessaoNova(on, {}, 'D:/ws/a')
     on('ui.toast', () => ({ value: undefined }))
     const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+    on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+    const clear = () => $.session.end({ reason: 'clear', sessionId: 's', resume: { id: 's' } } as never)
 
-    await marco({ marco: 'inicio', documento: 'velha' })
+    await marco({ marco: 'grill', pedido: 'grill largado' })
+    await clear()
     let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    expect(await ui.find({ key: 'limpar' })).toBeUndefined()
+    expect(await ui.find({ text: /grill largado/ })).toBeUndefined()
+    expect(await ui.find({ text: /▐▛███▜▌/ })).toBeDefined()
     await ui.unmount()
+
+    await marco({ marco: 'inicio', documento: 'aberta' })
+    await clear()
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /aberta/ })).toBeDefined()
+    await ui.unmount()
+
+    await marco({ marco: 'fechamento' })
+    await clear()
+    ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ text: /aberta/ })).toBeUndefined()
+  })
+
+  test('o /clear da leva fechada volta ao Claude dormindo e guarda o historico', async ($, on) => {
+    sessaoNova(on, {}, 'D:/ws/a')
+    on('ui.toast', () => ({ value: undefined }))
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+    on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+    const clear = () => $.session.end({ reason: 'clear', sessionId: 's', resume: { id: 's' } } as never)
+    let ui
 
     for (const surface of SURFACES) {
       await marco({ marco: 'inicio', documento: 'velha' })
       await marco({ marco: 'fechamento' })
+      await clear()
       ui = await $.ui.mount({ ...PANE, surface })
-      await ui.press({ key: 'limpar' })
       expect(await ui.find({ text: /velha/ })).toBeUndefined()
       expect(await ui.find({ text: /▐▛███▜▌/ })).toBeDefined()
       await ui.unmount()
@@ -303,7 +325,9 @@ describe('painel da leva', () => {
     await $.tool.call({ tool: MARCO, marco: 'inicio', documento: 'doc' } as never)
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect((await ui.find({ type: 'Text', text: /^to-spec\b/ }))?.text).toMatch(/^to-spec( !)?\s+0s ◐$/)
-    await relogio.advance(segundos(30))
+    await relogio.advance(segundos(1))
+    expect((await ui.find({ type: 'Text', text: /^to-spec\b/ }))?.text).toMatch(/^to-spec( !)?\s+1s ◐$/)
+    await relogio.advance(segundos(29))
     expect((await ui.find({ type: 'Text', text: /^to-spec\b/ }))?.text).toMatch(/^to-spec( !)?\s+30s ◐$/)
   })
 

@@ -7,7 +7,7 @@ O trabalho que um `/faz <pedido>` interroga e um `/faz leva <documento>` cumpre,
 _Evitar_: tarefa, feature, sprint
 
 **Fase da leva**:
-Cada etapa em que a leva está: grill, spec, tickets, implement, revisão, correções, qualidade, fechamento.
+Cada etapa em que a leva está: grill, spec, tickets, implement, revisão, correções, qualidade, fechamento. No painel da leva, cada fase aparece pelo nome da skill que a cumpre (`to-spec`, `to-tickets`, `implement`, `code-review`), e o fechamento vira o aviso do `/cpv`.
 _Evitar_: passo (quando se fala do estado observado), etapa
 
 **Estado da leva**:
