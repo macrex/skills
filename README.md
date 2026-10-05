@@ -1,10 +1,33 @@
-# skills
+<p align="center">
+  <img src="assets/logo.svg" width="64" height="64" alt="Logo do macrex skills">
+</p>
 
-Skills para agentes de IA:\
-`/faz` leva um pedido até código verificado,\
-`/obsidian-docs` guarda a documentação num vault Obsidian fora do repositório,\
-`/cpv` fecha a leva com commit, push e a nota no vault, e\
-`/grill-tela` leva o grill do Matt Pocock a uma página HTML local. Funcionam no Claude Code, no Pi, no Codex e no Antigravity.
+<h1 align="center">macrex skills</h1>
+
+<p align="center">
+  <b>Skills para agentes de IA. Um pedido vira código verificado: interrogatório, spec, tickets, implementação, revisão e teste de qualidade.<br>O <code>/faz-painel</code> mostra a leva ao lado da conversa, e a documentação vive num vault Obsidian fora do repositório.</b>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licen%C3%A7a-MIT-blue" alt="Licença: MIT"></a>
+  <a href="https://github.com/macrex/skills/actions/workflows/ci.yml"><img src="https://github.com/macrex/skills/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/funciona%20com-Claude%20Code%20%C2%B7%20Pi%20%C2%B7%20Codex%20%C2%B7%20Antigravity-black" alt="Funciona com Claude Code, Pi, Codex e Antigravity">
+</p>
+
+Depois de instalado, peça do jeito de sempre:
+
+```
+> /faz exportar os chamados em CSV
+> /faz-painel
+> /cpv
+```
+
+O `/faz` interroga até o pedido ficar claro e entrega a linha da leva. Numa sessão nova, a leva roda
+sozinha até tudo estar verificado, sem commitar nada, e o `/faz-painel` acompanha cada passo:
+
+https://github.com/user-attachments/assets/b1894356-3e85-48c4-9da4-b91bd38bb613
+
+<p align="center"><sub>Demonstração de 30 segundos. Ligue o som para ouvir a música.</sub></p>
 
 ## Usar
 
