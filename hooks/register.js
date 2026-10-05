@@ -48,8 +48,20 @@ const MODOS = ['inline', 'sub-agents', 'workflow']
 const FASES_COM_ITENS = { revisao: 'Revisão', correcoes: 'Correções', qualidade: 'Qualidade' }
 const NO_HISTORICO = 10
 const FUNDO = '#24283b'
+// a paleta do video do README: cartoes um tom abaixo do fundo, chips um tom acima; as cores do
+// texto vao explicitas, porque o fundo e escuro mesmo num terminal de tema claro
+const CARTAO = '#1f2335'
+const CHIP = '#292e42'
+const TEXTO = '#c0caf5'
+const APAGADO = '#8b93b8'
+const VERDE = '#9ece6a'
+const AZUL = '#7aa2f7'
+const VERMELHO = '#f7768e'
+const AMARELO = '#e0af68'
+// o nome de cada fase no chip, o da skill que a cumpre; o fechamento nao vira chip, vira o aviso do /cpv
+const ROTULO = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review', correcoes: 'correções', qualidade: 'qualidade' }
 const FIM_DE_TAREFA = { completed: 'concluido', failed: 'falhou', killed: 'parado', stopped: 'parado' }
-const MARCA = { pendente: '·', 'em-curso': '▸', verde: '✓', vermelho: '✗', rodando: '▸', concluido: '✓', falhou: '✗', parado: '■' }
+const DO_AGENTE = { rodando: ['rodando', LARANJA], concluido: ['concluído', VERDE], falhou: ['falhou', VERMELHO], parado: ['parado', APAGADO] }
 
 const LEVA = atom({ plugin: 'macrex-skills', key: 'leva' }, null)
 // Os agentes e workflows da leva, so na sessao (nao vao ao $.store).
@@ -413,7 +425,9 @@ export function register(on) {
     const linhas = e.props?.scroll?.bodyRows ?? e.viewport?.rows
     const colunas = e.props?.bodyColumns ?? e.viewport?.columns
     // o fundo pinta o pane inteiro, nao so as linhas com texto: a raiz ocupa a altura do corpo
-    const raiz = { flexDirection: 'column', backgroundColor: FUNDO, minHeight: linhas }
+    const raiz = { flexDirection: 'column', backgroundColor: FUNDO, minHeight: linhas, paddingX: 2, paddingY: 1 }
+    // a largura de dentro de um cartao: o corpo menos a margem da raiz e a do cartao
+    const largura = (colunas ?? 64) - 8
     // o repouso: so o Claude dormindo, no meio do pane; a caixa de dentro mantem o desenho alinhado
     if (!grill && !leva) {
       const zs = ZS[Math.floor((await $.clock.now()) / RONCO) % ZS.length]
@@ -430,14 +444,36 @@ export function register(on) {
       )
     }
     const limparATela = h(Button, { key: 'limpar', hotkey: 'l', onPress: () => void limpar($) }, 'Limpar a tela')
-    // cada secao e um cartao de borda arredondada: separa as partes em qualquer tema do terminal
-    const cartao = (titulo, ...filhos) =>
+    // o rodape das teclas; o Limpar a tela so aparece com tudo terminado, para nao apagar o que corre
+    const rodape = podeLimpar =>
       h(
         Box,
-        { flexDirection: 'column', borderStyle: 'round', borderColor: 'gray', paddingX: 1 },
-        titulo && h(Text, { bold: true, color: 'cyan' }, titulo),
-        ...filhos,
+        { marginTop: 1, gap: 2 },
+        podeLimpar && limparATela,
+        h(Text, { color: APAGADO }, h(Text, { color: TEXTO, backgroundColor: CHIP }, ' Esc '), h(Text, {}, ' fecha')),
       )
+    // a marca FAZ-PAINEL e o titulo a esquerda; o rotulo e o valor grande (o total) a direita
+    const cabecalho = (titulo, rotulo, valor) =>
+      h(
+        Box,
+        { justifyContent: 'space-between', alignItems: 'flex-end' },
+        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, { color: LARANJA }, 'FAZ-PAINEL'), h(Text, { bold: true, color: TEXTO }, titulo)),
+        h(Box, { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 2 }, h(Text, { color: APAGADO }, rotulo), h(Text, { bold: true, color: TEXTO }, valor)),
+      )
+    // cada secao e um cartao preenchido um tom abaixo do fundo, com o titulo apagado
+    const cartao = (titulo, ...filhos) =>
+      h(Box, { flexDirection: 'column', backgroundColor: CARTAO, paddingX: 2, paddingY: 1, marginTop: 1 }, titulo && h(Text, { color: APAGADO }, titulo), ...filhos)
+    // uma linha de `larg` colunas: as partes da esquerda, espaco, as da direita; cada parte e
+    // [texto, props]; sem lugar, a ultima parte da esquerda encolhe com …
+    const linhaLarga = (larg, esquerda, direita, props = {}) => {
+      const tam = partes => partes.reduce((n, [t]) => n + t.length, 0)
+      const falta = tam(esquerda) + tam(direita) + 1 - larg
+      const esq = falta > 0 ? esquerda.map(([t, p], i) => (i === esquerda.length - 1 ? [`${t.slice(0, Math.max(1, t.length - falta - 1))}…`, p] : [t, p])) : esquerda
+      const parte = ([t, p]) => h(Text, p ?? {}, t)
+      return h(Text, { color: TEXTO, ...props }, ...esq.map(parte), h(Text, {}, ' '.repeat(Math.max(1, larg - tam(esq) - tam(direita)))), ...direita.map(parte))
+    }
+    // um chip da grade das fases: o fundo um tom acima do cartao, o nome a esquerda, o tempo a direita
+    const chip = (larg, esquerda, direita, props) => h(Box, { backgroundColor: CHIP, paddingX: 1, width: larg }, linhaLarga(larg - 2, esquerda, direita, props))
     const historico = await read($, HISTORICO)
     const passada = l => {
       const verdes = l.tickets.filter(t => t.estado === 'verde').length
@@ -448,26 +484,24 @@ export function register(on) {
         .join(' · ')
     }
     // o historico so aparece sob a leva fechada: com ela aberta, o espaco e do andamento
-    const cartaoDoHistorico = historico.length > 0 && cartao('Histórico', ...historico.map(l => h(Text, { dimColor: true }, passada(l))))
+    const cartaoDoHistorico = historico.length > 0 && cartao('Histórico', ...historico.map(l => h(Text, { color: APAGADO }, passada(l))))
     const agora = await $.clock.now()
     // o grill e sempre mais novo que a leva na tela: o inicio de uma leva o apaga
     if (grill) {
       const respondidas = grill.perguntas.filter(p => p.resposta != null).length
       const pergunta = p =>
         p.resposta == null
-          ? h(Text, {}, `▸ ${p.tema} — aguardando`)
-          : h(Text, { color: p.resposta === 'sem resposta' ? undefined : 'green' }, `${p.resposta === 'sem resposta' ? '·' : '✓'} ${p.tema} — ${p.resposta}`)
+          ? h(Text, { color: LARANJA }, `▸ ${p.tema} — aguardando`)
+          : h(Text, { color: p.resposta === 'sem resposta' ? APAGADO : VERDE }, `${p.resposta === 'sem resposta' ? '·' : '✓'} ${p.tema} — ${p.resposta}`)
       return h(
         Box,
         raiz,
-        cartao(
-          `Grill · ${grill.pedido}`,
-          h(Text, { dimColor: true }, `${grill.documento ? 'concluído' : 'em curso'} · ${duracao((grill.fim ?? agora) - grill.inicio)}`),
-        ),
+        cabecalho(`Grill · ${grill.pedido}`, grill.documento ? 'concluído' : 'em curso', duracao((grill.fim ?? agora) - grill.inicio)),
         // ponytail: as 15 ultimas; um grill mais longo que o pane rola para fora por cima
         grill.perguntas.length > 0 && cartao(`Perguntas · ${respondidas}/${grill.perguntas.length} respondidas`, ...grill.perguntas.slice(-15).map(pergunta)),
         grill.documento &&
-          cartao('Entendimento', h(Text, { color: 'green' }, grill.documento), h(Text, { dimColor: true }, 'cole a linha da leva numa sessão nova'), limparATela),
+          cartao('Entendimento', h(Text, { color: VERDE }, grill.documento), h(Text, { color: APAGADO }, 'cole a linha da leva numa sessão nova')),
+        rodape(Boolean(grill.documento)),
       )
     }
     const ate = leva.fim ?? agora
@@ -475,58 +509,68 @@ export function register(on) {
     const entradas = leva.entradas ?? {}
     const tempoDaFase = f => {
       const desde = entradas[f]
-      if (desde == null || f === 'fechamento') return ''
-      return ` ${duracao(Math.min(ate, ...Object.values(entradas).filter(t => t > desde)) - desde)}`
+      if (desde == null) return ''
+      return duracao(Math.min(ate, ...Object.values(entradas).filter(t => t > desde)) - desde)
     }
-    const linha = t => {
-      const tempo = t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? duracao((t.fimEm ?? agora) - t.inicioEm) : ''
-      const extra = [t.reparos != null && `reparos: ${t.reparos}`, t.testes && `testes: ${t.testes}`, t.detalhe, tempo].filter(Boolean).join(', ')
-      return `${MARCA[t.estado]} ${[t.id, t.titulo].filter(Boolean).join(' ')} — ${t.estado === 'em-curso' ? 'em curso' : t.estado}${extra ? ` (${extra})` : ''}`
+    // ticket e item: o portao (verde ✓, vermelho ✗, em curso ◐) e o tempo, alinhados a direita
+    const tempoDe = t => (t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? duracao((t.fimEm ?? agora) - t.inicioEm) : '')
+    const portao = (t, rotulo) => {
+      if (t.estado === 'pendente') return ['pendente', APAGADO]
+      if (t.estado === 'em-curso') return [`${t.detalhe ? `${t.detalhe} ` : ''}em curso ◐`, LARANJA]
+      const reparos = t.reparos ? ` · ${t.reparos} ${t.reparos === 1 ? 'reparo' : 'reparos'}` : ''
+      return [`${rotulo}${t.estado === 'verde' ? '✓' : '✗'}${reparos}`, t.estado === 'verde' ? VERDE : VERMELHO]
     }
-    const cor = estado => (estado === 'verde' ? 'green' : estado === 'vermelho' ? 'red' : undefined)
+    const linha = (t, esquerda, rotulo) => {
+      const [texto, cor] = portao(t, rotulo)
+      return linhaLarga(largura, esquerda, [[texto, { color: cor }], ['  '], [tempoDe(t).padStart(6), { color: APAGADO }]])
+    }
+    const ticket = t => linha(t, [[t.id.padEnd(Math.max(4, t.id.length + 2)), { color: APAGADO }], [t.titulo]], `portão ${t.testes ? `${t.testes} ` : ''}`)
+    const item = i => linha(i, [[i.titulo]], i.detalhe ? `${i.detalhe} ` : '')
     const skills = await read($, SKILLS)
     // feita e a fase que a leva ja deixou, ou todas as que passou quando fechada
     const feita = f => leva.fases.includes(f) && (f !== leva.fase || leva.fechada)
+    // a grade das fases: tres chips por linha onde cabem, senao dois, senao um
+    const porLinha = largura >= 68 ? 3 : largura >= 37 ? 2 : 1
+    const larguraDoChip = Math.floor((largura - (porLinha - 1)) / porLinha)
+    const chipDaFase = f => {
+      const atual = f === leva.fase && !leva.fechada
+      const [estado, cor] = feita(f) ? [`${tempoDaFase(f)} ✓`, VERDE] : atual ? [`${tempoDaFase(f)} ◐`, LARANJA] : ['—', APAGADO]
+      const falta = leva.fases.includes(f) && semSkill(f, skills)
+      return chip(larguraDoChip, [[ROTULO[f]], ...(falta ? [[' !', { color: AMARELO, bold: true }]] : [])], [[estado, { color: cor }]], {
+        bold: atual,
+        color: leva.fases.includes(f) ? TEXTO : APAGADO,
+      })
+    }
+    const fases = FASES.filter(f => ROTULO[f])
+    const linhasDeFases = Array.from({ length: Math.ceil(fases.length / porLinha) }, (_, i) => fases.slice(i * porLinha, (i + 1) * porLinha))
     const agentes = await read($, AGENTES)
     const visiveis = [...agentes.filter(a => a.estado === 'rodando'), ...agentes.filter(a => a.estado !== 'rodando').slice(-5)]
-    const agente = a =>
-      [`${MARCA[a.estado]} ${a.nome}`, a.modelo, a.estado, duracao(a.duracao ?? agora - a.inicio)].filter(Boolean).join(' · ')
+    const agente = a => {
+      const [estado, cor] = DO_AGENTE[a.estado]
+      return linhaLarga(largura, [[a.nome]], [
+        ...(a.modelo ? [[a.modelo, { color: AZUL }], ['  ']] : []),
+        [estado.padEnd(9), { color: cor }],
+        ['  '],
+        [duracao(a.duracao ?? agora - a.inicio).padStart(6), { color: APAGADO }],
+      ])
+    }
     return h(
       Box,
       raiz,
-      cartao(
-        leva.documento,
-        leva.inicio != null && h(Text, { dimColor: true }, `total ${duracao(ate - leva.inicio)}`),
-        leva.fechada &&
-          (leva.cpv == null
-            ? h(Text, { color: 'yellow' }, 'leva fechada, falta o /cpv')
-            : h(Text, { color: 'green' }, 'leva fechada, /cpv rodou')),
-        leva.fechada && limparATela,
-      ),
-      cartao(
-        `Fases · etapa ${FASES.indexOf(leva.fase) + 1}/${FASES.length}`,
-        h(
-          Box,
-          { flexWrap: 'wrap' },
-          ...FASES.map((f, i) => {
-            const marcas = [feita(f) && '✓', leva.fases.includes(f) && semSkill(f, skills) && '!'].filter(Boolean)
-            const texto = [`${f}${tempoDaFase(f)}`, ...marcas].join(' ') + (i < FASES.length - 1 ? ' › ' : '')
-            return h(Text, { bold: f === leva.fase, color: feita(f) ? 'green' : undefined, dimColor: f !== leva.fase && !leva.fases.includes(f) }, texto)
-          }),
-        ),
-      ),
-      leva.tickets.length > 0 &&
-        cartao(
-          'Tickets',
-          ...leva.tickets.map(t => h(Text, { color: cor(t.estado) }, linha(t))),
-        ),
+      cabecalho(`Leva · ${leva.documento}`, 'total', leva.inicio != null ? duracao(ate - leva.inicio) : '—'),
+      leva.fechada &&
+        (leva.cpv == null
+          ? h(Text, { color: AMARELO }, 'leva fechada, falta o /cpv')
+          : h(Text, { color: VERDE }, 'leva fechada, /cpv rodou')),
+      cartao('Fases', h(Box, { flexDirection: 'column', gap: 1 }, ...linhasDeFases.map(fs => h(Box, { gap: 1 }, ...fs.map(chipDaFase))))),
+      leva.tickets.length > 0 && cartao('Tickets', ...leva.tickets.map(ticket)),
       ...Object.entries(FASES_COM_ITENS).map(([f, titulo]) => {
         const itens = (leva.itens ?? []).filter(i => i.fase === f)
-        return itens.length > 0 && cartao(titulo, ...itens.map(i => h(Text, { color: cor(i.estado) }, linha(i))))
+        return itens.length > 0 && cartao(titulo, ...itens.map(item))
       }),
-      visiveis.length > 0 &&
-        cartao('Agentes', ...visiveis.map(a => h(Text, { dimColor: a.estado !== 'rodando' }, agente(a)))),
+      visiveis.length > 0 && cartao('Sub-agentes', ...visiveis.map(agente)),
       leva.fechada && cartaoDoHistorico,
+      rodape(leva.fechada),
     )
   })
 }
