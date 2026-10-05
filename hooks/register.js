@@ -7,6 +7,10 @@
 // desenho le do $.state (types/index.d.ts), que sobrevive a hot reload e redesenha sozinho.
 // O tempo sai da hora de cada marco; os agentes e workflows, dos hooks do Agent, do Workflow,
 // do fim de turno do sub-agente e da notificacao de fim de tarefa.
+//
+// O grill do /faz (movimento 1) vem antes da leva: os marcos grill e entendimento o abrem e o
+// fecham, e as perguntas saem do AskUserQuestion pelo tema (o header). O inicio da leva o tira
+// da tela; terminado tudo, Limpar a tela volta ao repouso, o Claude dormindo.
 
 import { atom, read, update } from 'claude-code'
 
@@ -14,6 +18,29 @@ const PANE = 'faz-painel'
 const FERRAMENTA = 'faz_marco'
 const MARCO = 'mcp__macrex-skills__faz_marco'
 const MARCOS = ['inicio', 'fase', 'tickets', 'ticket', 'portao', 'item', 'fechamento']
+const MARCOS_DO_GRILL = ['grill', 'entendimento']
+// O mascote do Claude Code, identico ao do cabecalho, parado; so os z se mexem: cada ronco solta um z que
+// sobe uma linha e anda uma coluna por quadro. Linhas de mesma largura, para o desenho nao pular
+// quando o pane o centraliza.
+const RONCO = 700
+const ZS = [
+  ['          Z', '', ''],
+  ['', '', '        z'],
+  ['', '         z', '        z'],
+  ['          Z', '         z', ''],
+]
+const BONECO = [' ▐▛███▜▌', '▝▜█████▛▘', '  ▘▘ ▝▝']
+// o boneco menor, para o pane baixo: sem as pernas; o corpo fica, e e ele que fecha os olhos por baixo
+const BONECO_MENOR = BONECO.slice(0, 2)
+
+// A frase do repouso: o terminal nao muda o tamanho da fonte, entao ela vai em maiusculas
+// espacadas e em negrito, que leem maiores; so no pane que tem lugar para ela.
+const QUIETO_GRANDE = [...'TUDO QUIETO POR AQUI'].join(' ')
+const LARGURA_DO_GRANDE = QUIETO_GRANDE.length + 2
+// as linhas do corpo do pane que cabem a frase (com a folga), o boneco e os z; e so o boneco e os z
+const LINHAS_DA_FRASE = 12
+const LINHAS_DO_BONECO = 7
+const LARANJA = '#d77757'
 const FASES = ['spec', 'tickets', 'implement', 'revisao', 'correcoes', 'qualidade', 'fechamento']
 const PORTOES = ['verde', 'vermelho']
 const MODOS = ['inline', 'sub-agents', 'workflow']
@@ -32,10 +59,13 @@ const AGENTES = atom({ plugin: 'macrex-skills', key: 'agentes' }, [])
 const SKILLS = atom({ plugin: 'macrex-skills', key: 'skills' }, [])
 // As ultimas levas fechadas do workspace, carregadas do $.store no inicio da sessao.
 const HISTORICO = atom({ plugin: 'macrex-skills', key: 'historico' }, [])
+// O grill do movimento 1, um por workspace no $.store, ate o inicio da leva ou o Limpar a tela.
+const GRILL = atom({ plugin: 'macrex-skills', key: 'grill' }, null)
 const SKILL_DA_FASE = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review' }
 
 const chave = cwd => `leva:${cwd}`
 const chaveDoHistorico = cwd => `levas:${cwd}`
+const chaveDoGrill = cwd => `grill:${cwd}`
 // a skill da fase que esta sessao ainda nao invocou, ou undefined
 const semSkill = (fase, skills) => (skills.includes(SKILL_DA_FASE[fase]) ? undefined : SKILL_DA_FASE[fase])
 // um inicio com o mesmo documento sobre a leva aberta e a retomada dela
@@ -121,12 +151,37 @@ function aplicar(leva, m, agora) {
   }
 }
 
+// Aplica um marco do grill; devolve o grill novo ou { erro } sem tocar no antigo.
+function aplicarNoGrill(grill, m, agora) {
+  if (m.marco === 'grill') {
+    if (typeof m.pedido !== 'string' || !m.pedido.trim()) return { erro: 'grill exige o pedido em poucas palavras' }
+    return { pedido: m.pedido, inicio: agora, perguntas: [] }
+  }
+  if (!grill) return { erro: 'nenhum grill neste workspace: registre o marco grill antes' }
+  if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'entendimento exige documento (titulo da nota ou caminho)' }
+  return { ...grill, documento: m.documento, fim: agora }
+}
+
+// Tira da tela a leva e o grill terminados; o historico fica no store para a proxima fechada.
+async function limpar($) {
+  const cwd = await $.session.cwd()
+  await $.store.delete(chave(cwd))
+  await $.store.delete(chaveDoGrill(cwd))
+  await update($, LEVA, () => null)
+  await update($, GRILL, () => null)
+  await update($, AGENTES, () => [])
+}
+
 // Muda os agentes que `qual` escolhe com o que `como` devolve.
 const mexer = ($, qual, como) => update($, AGENTES, lista => lista.map(a => (qual(a) ? { ...a, ...como(a) } : a)))
 
 const ativa = async $ => {
   const leva = await read($, LEVA)
   return Boolean(leva && !leva.fechada)
+}
+const emGrill = async $ => {
+  const grill = await read($, GRILL)
+  return Boolean(grill && grill.documento == null)
 }
 
 export function register(on) {
@@ -135,8 +190,12 @@ export function register(on) {
     if (salva) await update($, LEVA, () => salva)
     const historico = await $.store.get(chaveDoHistorico(e.cwd))
     if (historico) await update($, HISTORICO, () => historico)
-    // o tempo da fase e dos agentes em curso anda sozinho no pane
-    $.clock.every(10000, () => void ativa($).then(sim => sim && $.ui.invalidate('ui.render')))
+    const grill = await $.store.get(chaveDoGrill(e.cwd))
+    if (grill) await update($, GRILL, () => grill)
+    // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane
+    $.clock.every(10000, async () => ((await ativa($)) || (await emGrill($))) && $.ui.invalidate('ui.render'))
+    // no repouso, o ronco: so o pane montado redesenha
+    $.clock.every(RONCO, async () => !(await read($, LEVA)) && !(await read($, GRILL)) && $.ui.invalidate('ui.render'))
     await $.command.register({
       name: PANE,
       description: '(macrex-skills) Abre ou fecha o painel da leva ao lado da conversa',
@@ -147,12 +206,14 @@ export function register(on) {
       description:
         'Registra um marco da leva (/faz leva) no painel da leva do Claude Code. Chame em: inicio (com documento), ' +
         'cada fase, tickets publicados, inicio de cada ticket, resultado de cada portao e fechamento. ' +
-        'Erro aqui nunca para a leva.',
+        'No interrogatorio do /faz: grill (com pedido) antes da primeira pergunta e entendimento (com documento) ' +
+        'quando o documento estiver gravado. Erro aqui nunca para a leva.',
       inputSchema: {
         type: 'object',
         properties: {
-          marco: { type: 'string', enum: MARCOS },
-          documento: { type: 'string', description: 'inicio: o documento da leva (titulo da nota ou caminho)' },
+          marco: { type: 'string', enum: [...MARCOS, ...MARCOS_DO_GRILL] },
+          documento: { type: 'string', description: 'inicio e entendimento: o documento da leva (titulo da nota ou caminho)' },
+          pedido: { type: 'string', maxLength: 60, description: 'grill: o pedido em poucas palavras' },
           fase: { type: 'string', enum: FASES },
           modo: { type: 'string', enum: MODOS, description: 'fase implement: como o implement roda' },
           tickets: {
@@ -179,10 +240,22 @@ export function register(on) {
   })
 
   on('tool.call', { tool: MARCO }, async ($, e) => {
+    if (MARCOS_DO_GRILL.includes(e.marco)) {
+      const grill = aplicarNoGrill(await read($, GRILL), e, await $.clock.now())
+      if (grill.erro) return { deny: grill.erro }
+      await $.store.set(chaveDoGrill(await $.session.cwd()), grill)
+      await update($, GRILL, () => grill)
+      return { result: `marco registrado; ${e.marco}` }
+    }
     const antes = await read($, LEVA)
     const leva = aplicar(antes, e, await $.clock.now())
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
+    if (e.marco === 'inicio') {
+      // a leva comeca (ou retoma): o grill sai da tela
+      await $.store.delete(chaveDoGrill(await $.session.cwd()))
+      await update($, GRILL, () => null)
+    }
     if (retoma(antes, e)) {
       const tickets = leva.tickets.map(({ id, titulo, estado, notas }) => ({ id, titulo, estado, notas }))
       const estado = JSON.stringify({ fase: leva.fase, tickets, sujos: leva.sujos ?? [] }, null, 2)
@@ -224,6 +297,26 @@ export function register(on) {
     const nome = String(e.skill ?? '').split(':').pop()
     if (Object.values(SKILL_DA_FASE).includes(nome)) await update($, SKILLS, lista => (lista.includes(nome) ? lista : [...lista, nome]))
     return next(e)
+  })
+
+  // as rodadas do grill pelo CLI: cada pergunta entra pelo tema e espera a resposta.
+  // ponytail: o canal tela (grill-tela) responde por fora do AskUserQuestion e nao aparece aqui
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    if (!(await emGrill($))) return next(e)
+    const id = e.tool_use_id
+    const novas = e.questions.map(q => ({ id, pergunta: q.question, tema: q.header || q.question }))
+    await update($, GRILL, g => ({ ...g, perguntas: [...g.perguntas, ...novas] }))
+    const r = await next(e)
+    const respostas = r.result?.answers ?? {}
+    const grill = await read($, GRILL)
+    if (!grill) return r
+    const respondido = {
+      ...grill,
+      perguntas: grill.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
+    }
+    await $.store.set(chaveDoGrill(await $.session.cwd()), respondido)
+    await update($, GRILL, () => respondido)
+    return r
   })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
@@ -312,10 +405,31 @@ export function register(on) {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const leva = await read($, LEVA)
-    // o fundo pinta o pane inteiro, nao so as linhas com texto: a raiz ocupa a altura do viewport
-    const raiz = { flexDirection: 'column', backgroundColor: FUNDO, minHeight: e.viewport?.rows }
+    const grill = await read($, GRILL)
+    // o tamanho do corpo do pane; o viewport e o da tela inteira, e centralizar por ele joga o
+    // desenho para baixo, fora do pane baixo
+    const linhas = e.props?.scroll?.bodyRows ?? e.viewport?.rows
+    const colunas = e.props?.bodyColumns ?? e.viewport?.columns
+    // o fundo pinta o pane inteiro, nao so as linhas com texto: a raiz ocupa a altura do corpo
+    const raiz = { flexDirection: 'column', backgroundColor: FUNDO, minHeight: linhas }
+    // o repouso: so o Claude dormindo, no meio do pane; a caixa de dentro mantem o desenho alinhado
+    if (!grill && !leva) {
+      const zs = ZS[Math.floor((await $.clock.now()) / RONCO) % ZS.length]
+      const alto = (linhas ?? LINHAS_DA_FRASE) >= LINHAS_DO_BONECO
+      const comFrase = (linhas ?? LINHAS_DA_FRASE) >= LINHAS_DA_FRASE && (colunas ?? LARGURA_DO_GRANDE) >= LARGURA_DO_GRANDE
+      // no pane baixo, o boneco menor e so os dois z de baixo
+      const desenho = (alto ? [...zs, ...BONECO] : [...zs.slice(1), ...BONECO_MENOR]).map(l => l.padEnd(11))
+      const dosZs = alto ? 3 : 2
+      return h(
+        Box,
+        { ...raiz, justifyContent: 'center', alignItems: 'center' },
+        comFrase && h(Box, { marginBottom: 2 }, h(Text, { bold: true, color: 'gray' }, QUIETO_GRANDE)),
+        h(Box, { flexDirection: 'column' }, ...desenho.map((l, i) => h(Text, { color: LARANJA, dimColor: i < dosZs }, l))),
+      )
+    }
+    const limparATela = h(Button, { key: 'limpar', hotkey: 'l', onPress: () => void limpar($) }, 'Limpar a tela')
     // cada secao e um cartao de borda arredondada: separa as partes em qualquer tema do terminal
     const cartao = (titulo, ...filhos) =>
       h(
@@ -333,10 +447,29 @@ export function register(on) {
         .filter(Boolean)
         .join(' · ')
     }
-    // o historico so aparece sem leva aberta: com ela, o espaco e do andamento
+    // o historico so aparece sob a leva fechada: com ela aberta, o espaco e do andamento
     const cartaoDoHistorico = historico.length > 0 && cartao('Histórico', ...historico.map(l => h(Text, { dimColor: true }, passada(l))))
-    if (!leva) return h(Box, raiz, h(Text, { dimColor: true }, 'nenhuma leva neste workspace'), cartaoDoHistorico)
     const agora = await $.clock.now()
+    // o grill e sempre mais novo que a leva na tela: o inicio de uma leva o apaga
+    if (grill) {
+      const respondidas = grill.perguntas.filter(p => p.resposta != null).length
+      const pergunta = p =>
+        p.resposta == null
+          ? h(Text, {}, `▸ ${p.tema} — aguardando`)
+          : h(Text, { color: p.resposta === 'sem resposta' ? undefined : 'green' }, `${p.resposta === 'sem resposta' ? '·' : '✓'} ${p.tema} — ${p.resposta}`)
+      return h(
+        Box,
+        raiz,
+        cartao(
+          `Grill · ${grill.pedido}`,
+          h(Text, { dimColor: true }, `${grill.documento ? 'concluído' : 'em curso'} · ${duracao((grill.fim ?? agora) - grill.inicio)}`),
+        ),
+        // ponytail: as 15 ultimas; um grill mais longo que o pane rola para fora por cima
+        grill.perguntas.length > 0 && cartao(`Perguntas · ${respondidas}/${grill.perguntas.length} respondidas`, ...grill.perguntas.slice(-15).map(pergunta)),
+        grill.documento &&
+          cartao('Entendimento', h(Text, { color: 'green' }, grill.documento), h(Text, { dimColor: true }, 'cole a linha da leva numa sessão nova'), limparATela),
+      )
+    }
     const ate = leva.fim ?? agora
     // uma fase dura da sua entrada ate a entrada seguinte, ou ate agora (o fim, se fechada)
     const entradas = leva.entradas ?? {}
@@ -368,6 +501,7 @@ export function register(on) {
           (leva.cpv == null
             ? h(Text, { color: 'yellow' }, 'leva fechada, falta o /cpv')
             : h(Text, { color: 'green' }, 'leva fechada, /cpv rodou')),
+        leva.fechada && limparATela,
       ),
       cartao(
         `Fases · etapa ${FASES.indexOf(leva.fase) + 1}/${FASES.length}`,

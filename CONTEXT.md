@@ -23,7 +23,7 @@ A verificação que decide se um ticket fechou: verde ou vermelho, com até dois
 _Evitar_: gate, check
 
 **Painel da leva**:
-O pane que um mod do Claude Code abre ao lado da conversa, como o do `/diff`, e que mostra o estado da leva enquanto ela roda. Só existe no Claude Code.
+O pane que um mod do Claude Code abre ao lado da conversa, como o do `/diff`, e que mostra o grill do `/faz <pedido>` e depois o estado da leva enquanto ela roda; sem nenhum dos dois, o repouso. Só existe no Claude Code.
 _Evitar_: dashboard, monitor, statusline, TUI
 
 **Agentes da leva**:

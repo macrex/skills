@@ -46,7 +46,10 @@ cumpri-lo **é** invocá-la.
   sub-agente e de novo, com `portao` e o número de achados em `detalhe`, quando o relatório
   chegar; nas correções, um com a contagem de aplicadas e recusadas; na qualidade, um por
   verificador, com a contagem em `detalhe` (até 60 caracteres); `fechamento` no fim, que guarda a
-  leva no Histórico de levas do painel. No modo workflow a sessão não vê cada ticket começar:
+  leva no Histórico de levas do painel. No interrogatório (movimento 1), `grill` com o `pedido` em
+  poucas palavras (até 60 caracteres) logo depois de invocar `grilling` e `domain-modeling`, e
+  `entendimento` com o `documento` assim que ele estiver gravado; as perguntas do
+  `AskUserQuestion` entram sozinhas, pelo `header`, que por isso nomeia o tema da pergunta. No modo workflow a sessão não vê cada ticket começar:
   quando a notificação do fim do workflow chegar, registre `ticket` e `portao` de cada ticket pelo
   relatório dele. Ferramenta ausente ou erro dela nunca para a leva: siga sem o marco.
 - **Retomada:** resposta do `inicio` que começa com `retomada na fase` quer dizer que a leva

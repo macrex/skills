@@ -51,8 +51,26 @@ export type LevaAgente = {
   taskId?: string
 }
 
+// Uma pergunta do grill pelo tema (o header do AskUserQuestion); sem resposta ainda, aguardando.
+export type GrillPergunta = {
+  id: string
+  pergunta: string
+  tema: string
+  resposta?: string
+}
+
+// O grill do movimento 1 do /faz (marcos grill e entendimento).
+export type Grill = {
+  pedido: string
+  inicio: number
+  perguntas: GrillPergunta[]
+  // o documento do entendimento gravado, e a hora em que o grill terminou
+  documento?: string
+  fim?: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    'macrex-skills': { leva: Leva | null; agentes: LevaAgente[]; skills: string[]; historico: LevaHistorico[] }
+    'macrex-skills': { leva: Leva | null; agentes: LevaAgente[]; skills: string[]; historico: LevaHistorico[]; grill: Grill | null }
   }
 }

@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.14
+# Versao: 3.15
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o trabalho, esta só
@@ -69,6 +69,9 @@ As duas valem **ao mesmo tempo**, nunca em sequência: o `grilling` conduz as ro
 `domain-modeling` afia o vocabulário dentro delas — termo vago vira canônico na hora em que
 aparece. Não invoque o `grill-with-docs` nem substitua as duas por perguntas suas: as skills dele
 conduzem.
+
+No harness com painel da leva ("Painel da leva" em `references/harness.md`), registre o marco
+`grill` antes da primeira pergunta e o `entendimento` quando o documento estiver gravado.
 
 Rodadas de perguntas numeradas, cada uma com resposta recomendada, até a fronteira esvaziar.
 Então consolide o entendimento numa tabela e peça o **sim do usuário** — a única confirmação de
