@@ -67,10 +67,52 @@ export type Grill = {
   // o documento do entendimento gravado, e a hora em que o grill terminou
   documento?: string
   fim?: number
+  // a linha da leva que o /faz imprimiu ao fim do grill (marco linha)
+  linha?: string
+  // fora da aba Painel (o inicio da leva ou o /clear); a aba Grill o guarda
+  fora?: boolean
+}
+
+// A base da aba Codigo, tirada no inicio da sessao.
+export type CodigoBase = {
+  raiz: string
+  // o commit do working tree de entao (git stash create), ou o HEAD se estava limpo
+  commit: string
+  // os nao rastreados de entao, que ficam fora da lista
+  soltos: string[]
+}
+
+// Um arquivo que a sessao mudou: os hunks do diff contra a base.
+export type CodigoArquivo = {
+  caminho: string
+  mais: number
+  menos: number
+  diff: string
+}
+
+// Os tokens de um loop (o principal ou um sub-agente) somados turno a turno, e o modelo do ultimo.
+export type UsoDoLoop = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+  modelo: string
 }
 
 declare module 'claude-code' {
   interface PluginState {
-    'macrex-skills': { leva: Leva | null; agentes: LevaAgente[]; skills: string[]; historico: LevaHistorico[]; grill: Grill | null }
+    'macrex-skills': {
+      leva: Leva | null
+      agentes: LevaAgente[]
+      skills: string[]
+      historico: LevaHistorico[]
+      grill: Grill | null
+      aba: 'painel' | 'codigo' | 'grill' | 'tickets' | 'uso'
+      // por loop: 'sessao' para o principal, o agentId para cada sub-agente
+      uso: Record<string, UsoDoLoop>
+      base: CodigoBase | null
+      codigo: CodigoArquivo[]
+      abertos: string[]
+    }
   }
 }

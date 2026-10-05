@@ -44,11 +44,15 @@ cumpri-lo **é** invocá-la.
   (até 500 caracteres); `item` em cada passo da revisão, das correções e da qualidade, para o
   painel não parar no implement: um por eixo da revisão (`Standards`, `Spec`) ao abrir o
   sub-agente e de novo, com `portao` e o número de achados em `detalhe`, quando o relatório
-  chegar; nas correções, um com a contagem de aplicadas e recusadas; na qualidade, um por
-  verificador, com a contagem em `detalhe` (até 60 caracteres); `fechamento` no fim, que guarda a
+  chegar; nas correções, `Achados da revisão`, com a contagem de aplicadas e recusadas; na
+  qualidade, um por verificador, nomeado por ele (`Testes`, `Build`, `Download real`), com a
+  contagem em `detalhe` (até 60 caracteres). O nome do item nunca repete o da fase, que já é o
+  título do cartão; `fechamento` no fim, que guarda a
   leva no Histórico de levas do painel. No interrogatório (movimento 1), `grill` com o `pedido` em
-  poucas palavras (até 60 caracteres) logo depois de invocar `grilling` e `domain-modeling`, e
-  `entendimento` com o `documento` assim que ele estiver gravado; as perguntas do
+  poucas palavras (até 60 caracteres) logo depois de invocar `grilling` e `domain-modeling`,
+  `entendimento` com o `documento` assim que ele estiver gravado, e `linha` com a linha da leva
+  inteira, como foi impressa (até 4000 caracteres), logo depois de imprimi-la, para a aba Grill do
+  painel guardá-la; as perguntas do
   `AskUserQuestion` entram sozinhas, pelo `header`, que por isso nomeia o tema da pergunta. No modo workflow a sessão não vê cada ticket começar:
   quando a notificação do fim do workflow chegar, registre `ticket` e `portao` de cada ticket pelo
   relatório dele. Ferramenta ausente ou erro dela nunca para a leva: siga sem o marco.

@@ -52,7 +52,8 @@ describe('painel da leva', () => {
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ text: /▐▛███▜▌/ })).toBeDefined()
-      expect(await ui.find({ text: /leva|grill/i })).toBeUndefined()
+      // o rotulo da aba Grill e Button, nao Text
+      expect(await ui.find({ type: 'Text', text: /leva|grill/i })).toBeUndefined()
       await ui.unmount()
     }
   })
@@ -129,6 +130,56 @@ describe('painel da leva', () => {
     expect((await marco({ marco: 'entendimento', documento: '2026-10-04 Grill no painel' })).deny).toBeUndefined()
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect(await ui.find({ text: /2026-10-04 Grill no painel/ })).toBeDefined()
+  })
+
+  test('a aba Grill guarda cada pergunta com a resposta e a linha da leva num bloco de codigo, mesmo depois do inicio', async ($, on) => {
+    sessaoNova(on, {}, 'D:/ws/a')
+    on('ui.toast', () => ({ value: undefined }))
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({
+      result: { questions: e.questions, answers: { 'Onde guardar o estado?': '$.store' } },
+    }) as never)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+    const pergunta = (header: string, question: string) => ({ header, question, multiSelect: false, options: [] })
+    const montar = async (aba: string) => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+      await $.ui.press({ plugin: 'macrex-skills', key: `aba:${aba}` })
+      return ui
+    }
+
+    // sem grill, a aba ja tem o cabecalho: a marca laranja e o nome da aba
+    let ui = await montar('grill')
+    expect((await ui.find({ type: 'Text', text: /^Grill$/ }))?.props.color).toBe('#d77757')
+    expect(await ui.find({ type: 'Text', text: /^Nenhum grill neste workspace$/ })).toBeDefined()
+    await ui.unmount()
+
+    await marco({ marco: 'grill', pedido: 'abas no painel' })
+    await $.tool.call({ tool: 'AskUserQuestion', questions: [pergunta('Estado', 'Onde guardar o estado?'), pergunta('Botão', 'Botão ou atalho?')] } as never)
+    await marco({ marco: 'entendimento', documento: 'doc das abas' })
+    expect((await marco({ marco: 'linha', linha: '/faz leva doc das abas até o fim\r\n— sem commitar nada.' })).deny).toBeUndefined()
+
+    ui = await montar('grill')
+    expect((await ui.find({ type: 'Text', text: /^Grill$/ }))?.props.color).toBe('#d77757')
+    expect(await ui.find({ type: 'Text', text: /^abas no painel$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Onde guardar o estado\?$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^✓ \$\.store$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Botão ou atalho\?$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^· sem resposta$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Code' }))?.props.source).toBe('/faz leva doc das abas até o fim\n— sem commitar nada.')
+    await ui.unmount()
+
+    // o inicio da leva tira o grill da aba Painel; a aba Grill o guarda, inclusive numa sessao nova
+    await marco({ marco: 'inicio', documento: 'doc das abas' })
+    await $.session.start({ cwd: 'D:/ws/a', surface: 'terminal', isInteractive: true })
+    ui = await montar('grill')
+    expect(await ui.find({ type: 'Text', text: /^Onde guardar o estado\?$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Code' })).toBeDefined()
+    await ui.unmount()
+    ui = await montar('painel')
+    expect(await ui.find({ text: /abas no painel/ })).toBeUndefined()
+    expect(await ui.find({ text: /Leva · doc das abas/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^Painel$/ }))?.props.color).toBe('#d77757')
+
+    expect((await marco({ marco: 'linha' })).deny).toMatch(/linha/)
   })
 
   test('entendimento sem grill e grill sem pedido voltam como erro', async ($, on) => {
@@ -295,9 +346,12 @@ describe('painel da leva', () => {
     await relogio.advance(segundos(80))
     await marco({ marco: 'item', item: 'Standards', portao: 'verde', detalhe: '1 achado' })
     await marco({ marco: 'fase', fase: 'qualidade' })
+    await relogio.advance(segundos(30))
+    // gravado uma vez so, ja com o portao: o tempo conta da entrada na fase
     await marco({ marco: 'item', item: 'claude plugin test .', portao: 'vermelho', detalhe: '15/16' })
 
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^claude plugin test \./ }))?.text).toMatch(/15\/16 ✗\s+30s$/)
     expect(await ui.find({ type: 'Text', text: /^Revisão$/ })).toBeDefined()
     const standards = await ui.find({ type: 'Text', text: /Standards/ })
     expect(standards?.text).toMatch(/^Standards\s+1 achado ✓\s+1m20s$/)
@@ -311,6 +365,8 @@ describe('painel da leva', () => {
     expect((await marco({ marco: 'item', item: 'x', fase: 'implement' })).deny).toMatch(/fase/)
     expect((await marco({ marco: 'item', item: 'x', detalhe: 'y'.repeat(61) })).deny).toMatch(/detalhe/)
     expect((await marco({ marco: 'item', item: 'x', portao: 'amarelo' })).deny).toMatch(/portao/)
+    // o item repetindo o titulo do cartao nao diz nada: a ferramenta pede o nome do passo
+    expect((await marco({ marco: 'item', item: 'Qualidade', portao: 'verde' })).deny).toMatch(/titulo do cartao/)
   })
 
   test('com a leva ativa, o tempo da fase anda sozinho no pane, sem marco novo', async ($, on) => {
@@ -650,5 +706,132 @@ describe('painel da leva', () => {
 
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     expect((await ui.find({ type: 'Text', text: /haiku-conta-hooks/ }))?.text).toMatch(/concluído\s+25s$/)
+  })
+
+  test('a aba Tickets mostra cada ticket com o portao, os testes, os reparos e as notas do que entregou', async ($, on) => {
+    const { relogio } = mundo(on)
+    const marco = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never)
+    const montar = async () => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+      await $.ui.press({ plugin: 'macrex-skills', key: 'aba:tickets' })
+      return ui
+    }
+
+    let ui = await montar()
+    expect((await ui.find({ type: 'Text', text: /^Tickets$/ }))?.props.color).toBe('#d77757')
+    expect(await ui.find({ type: 'Text', text: /^Nenhuma leva neste workspace$/ })).toBeDefined()
+    await ui.unmount()
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await relogio.advance(segundos(30))
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', reparos: 1, testes: '3/4', notas: 'Pane com abas; o Code desenha o diff.' })
+    await marco({ marco: 'ticket', ticket: '02' })
+
+    ui = await montar()
+    expect(await ui.find({ type: 'Text', text: /^1\/2$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^01 / }))?.text).toMatch(/^01 +Mod do painel\s+portão 3\/4 ✓ · 1 reparo\s+30s$/)
+    expect(await ui.find({ type: 'Text', text: /^Pane com abas; o Code desenha o diff\.$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^02 / }))?.text).toMatch(/^02 +Ferramenta faz_marco\s+em curso ◐/)
+    expect(await ui.find({ type: 'Text', text: /^sem notas ainda$/ })).toBeDefined()
+  })
+
+  test('a aba Uso soma os tokens de cada turno por modelo e por agente, desde o inicio da leva', async ($, on) => {
+    mundo(on)
+    on('turn.complete', () => ({ text: '' }))
+    on('tool.call', { tool: 'Agent' }, () => ({
+      result: { status: 'completed', agentId: 'ag1', resolvedModel: 'claude-sonnet-5-5', totalDurationMs: 1000 },
+    }) as never)
+    const turno = (model: string, entrada: number, saida: number, lido: number, criado: number, agentId?: string) =>
+      $.turn.complete({
+        answer: '', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer', ...(agentId ? { agentId } : {}),
+        usage: { model, input_tokens: entrada, output_tokens: saida, cache_read_input_tokens: lido, cache_creation_input_tokens: criado },
+      } as never)
+
+    // o turno de antes da leva fica fora: o inicio zera a conta
+    await turno('claude-opus-5-5', 999, 1, 0, 0)
+    await $.tool.call({ tool: MARCO, marco: 'inicio', documento: 'doc' } as never)
+    await turno('claude-opus-5-5', 1000, 200, 30000, 0)
+    await turno('claude-opus-5-5', 500, 300, 0, 1500)
+    await $.tool.call({ tool: 'Agent', name: 'sonnet-review', description: 'r', prompt: 'p', model: 'sonnet' } as never)
+    await turno('claude-sonnet-5-5', 2500, 1000, 0, 0, 'ag1')
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await $.ui.press({ plugin: 'macrex-skills', key: 'aba:uso' })
+    expect((await ui.find({ type: 'Text', text: /^Uso$/ }))?.props.color).toBe('#d77757')
+    expect(await ui.find({ type: 'Text', text: /^doc$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^37,0k$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^claude-opus-5-5 / }))?.text).toMatch(/^claude-opus-5-5\s+1,5k\s+500\s+31,5k$/)
+    expect((await ui.find({ type: 'Text', text: /^claude-sonnet-5-5 / }))?.text).toMatch(/^claude-sonnet-5-5\s+2,5k\s+1,0k\s+0$/)
+    expect((await ui.find({ type: 'Text', text: /^sessão principal/ }))?.text).toMatch(/claude-opus-5-5\s+33,5k$/)
+    expect((await ui.find({ type: 'Text', text: /^sonnet-review/ }))?.text).toMatch(/claude-sonnet-5-5\s+3,5k$/)
+  })
+
+  test('a aba Codigo lista o que a sessao mudou desde o inicio e abre o diff de cada arquivo', async ($, on) => {
+    sessaoNova(on, {}, 'D:/ws/a')
+    // o git do repositorio: o velho.txt ja estava solto no inicio e fica fora da lista
+    const git = {
+      diff: [
+        'diff --git a/hooks/register.js b/hooks/register.js',
+        'index 1111111..2222222 100644',
+        '--- a/hooks/register.js',
+        '+++ b/hooks/register.js',
+        '@@ -10,3 +10,4 @@ export function register(on) {',
+        ' const a = 1',
+        '-const b = 2',
+        '+const b = 3',
+        '+const c = 4',
+        ' const d = 5',
+        '',
+      ].join('\n'),
+      soltos: ['velho.txt'],
+    }
+    const novo = (n: number) => ['diff --git a/novo.md b/novo.md', 'new file mode 100644', '--- /dev/null', '+++ b/novo.md', `@@ -0,0 +1,${n} @@`, ...Array.from({ length: n }, (_, i) => `+linha ${i}`), ''].join('\n')
+    let linhasDoNovo = 0
+    on('process.run', ($, e) => {
+      const a = e.argv.join(' ')
+      const saida = /rev-parse --show-toplevel/.test(a) ? 'D:/ws/a\n'
+        : /stash create/.test(a) ? 'abc123\n'
+        : /ls-files/.test(a) ? [...git.soltos, ...(linhasDoNovo ? ['novo.md'] : [])].map(c => `${c}\0`).join('')
+        : /--no-index/.test(a) ? novo(linhasDoNovo)
+        : /diff .*abc123/.test(a) ? git.diff
+        : ''
+      return { value: { exitCode: /--no-index/.test(a) ? 1 : 0, stdout: saida, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'Write' }, () => ({ result: {} }) as never)
+    await $.session.start({ cwd: 'D:/ws/a', surface: 'terminal', isInteractive: true })
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Button', text: /Painel/ })).toBeDefined()
+    await $.ui.press({ plugin: 'macrex-skills', key: 'aba:codigo' })
+    expect(await ui.find({ text: /▐▛███▜▌/ })).toBeUndefined()
+    expect((await ui.find({ type: 'Text', text: /^Diff$/ }))?.props.color).toBe('#d77757')
+    expect(await ui.find({ type: 'Text', text: /^a$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^1 arquivo alterado$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: /› hooks\/register\.js/ })).toBeDefined()
+    expect(await ui.find({ text: /velho/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Code' })).toBeUndefined()
+
+    // clicar no arquivo abre o diff dele, no Code de diff, com o cabecalho do hunk
+    await $.ui.press({ plugin: 'macrex-skills', key: 'arquivo:0' })
+    const code = await ui.find({ type: 'Code' })
+    expect(code?.props.format).toBe('diff')
+    expect(code?.props.source).toMatch(/^@@ -10,3 \+10,4 @@ export function register/)
+    expect(await ui.find({ type: 'Button', text: /⌄ hooks\/register\.js/ })).toBeDefined()
+
+    // a ferramenta que muda arquivo refaz a lista; o arquivo novo e grande vira varios Code,
+    // cada um no limite do Code e com o cabecalho recontado
+    linhasDoNovo = 2000
+    await $.tool.call({ tool: 'Write', file_path: 'D:/ws/a/novo.md', content: 'x' } as never)
+    expect(await ui.find({ type: 'Text', text: /^2 arquivos alterados$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^\+2002 -1$/ }))).toBeDefined()
+    await $.ui.press({ plugin: 'macrex-skills', key: 'arquivo:1' })
+    const doNovo = (await ui.findAll({ type: 'Code' })).slice(1)
+    expect(doNovo.length).toBeGreaterThan(1)
+    expect(doNovo.every(c => String(c.props.source).length <= 10000)).toBe(true)
+    expect(doNovo[0].props.source).toMatch(/^@@ -0,0 \+1,\d+ @@\n\+linha 0\n/)
+    const [, n] = /^@@ -0,0 \+1,(\d+) @@/.exec(String(doNovo[0].props.source)) ?? []
+    expect(doNovo[1].props.source).toMatch(new RegExp(`^@@ -0,0 \\+${Number(n) + 1},\\d+ @@\\n\\+linha ${n}\\n`))
   })
 })

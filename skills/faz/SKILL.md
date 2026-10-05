@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.15
+# Versao: 3.16
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do
 [Matt Pocock](https://github.com/mattpocock/skills): as skills dele fazem o trabalho, esta só
@@ -71,7 +71,8 @@ aparece. Não invoque o `grill-with-docs` nem substitua as duas por perguntas su
 conduzem.
 
 No harness com painel da leva ("Painel da leva" em `references/harness.md`), registre o marco
-`grill` antes da primeira pergunta e o `entendimento` quando o documento estiver gravado.
+`grill` antes da primeira pergunta, o `entendimento` quando o documento estiver gravado e a
+`linha` logo depois de imprimir a linha da leva.
 
 Rodadas de perguntas numeradas, cada uma com resposta recomendada, até a fronteira esvaziar.
 Então consolide o entendimento numa tabela e peça o **sim do usuário** — a única confirmação de
