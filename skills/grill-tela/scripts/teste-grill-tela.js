@@ -2,7 +2,8 @@
 'use strict';
 // Checagem do programa da grill-tela pelos subcomandos que o agente usa e pela API que a
 // pagina usa, com as preferencias numa pasta temporaria:
-//   1. iniciar sobe o servidor e imprime a URL; pedido sem o token e recusado;
+//   1. iniciar sobe o servidor e imprime a URL; pedido sem o token e recusado; o topo da pagina
+//      traz a logo do repositorio e GRILL;
 //   2. rodada e final recusam o JSON malformado com codigo 1 e aceitam o valido;
 //   3. aguardar devolve as respostas da pagina (tabela e JSON), o ajuste e o sim;
 //   4. respostas com questao sem marca sao recusadas;
@@ -97,6 +98,8 @@ const RODADA = {
   const pagina = await pedir(url);
   assert.strictEqual(pagina.status, 200);
   assert.match(pagina.txt, /<html/);
+  assert.match(pagina.txt, /class="marca">\s*<svg[^>]*aria-label="macrex skills"[\s\S]*?<\/svg>\s*GRILL\s*</, 'logo e GRILL no topo');
+  assert.doesNotMatch(pagina.txt, /<span class="marca">grill</, 'sem o grill antigo no topo');
   let estado = (await pedir(api(url, 'estado'))).json;
   assert.strictEqual(estado.fase, 'inicio');
   assert.strictEqual(estado.projeto, 'teste');

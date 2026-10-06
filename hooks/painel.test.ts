@@ -8,16 +8,18 @@ const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'faz-paine
 const SURFACES = ['terminal', 'desktop'] as const
 const MARCO = 'mcp__macrex-skills__faz_marco'
 
-// O mundo sob o mod: o workspace `cwd`, o store em memoria (com o que ja estiver gravado), o
-// relogio parado e a tela que aceita toast; e os atalhos do teste: o marco da leva, uma sessao
-// nova e o /clear.
+// O mundo sob o mod: o workspace `cwd` (a raiz do projeto), o store em memoria (com o que ja
+// estiver gravado), o relogio parado e a tela que aceita toast; e os atalhos do teste: o marco da
+// leva, uma sessao nova, o /clear e o cd do shell, que move o cwd da sessao e nao a raiz.
 function mundo($: Engine, on: On, store: Record<string, unknown> = {}, cwd = 'D:/ws/a') {
   const toasts: string[] = []
+  let shell = cwd
   mock.store(on, store)
   const relogio = mock.clock(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
-  on('session.cwd', () => ({ value: cwd }))
+  on('session.cwd', () => ({ value: shell }))
+  on('session.root', () => ({ value: cwd }))
   on('command.register', () => ({ value: undefined }))
   on('tool.register', () => ({ value: undefined }))
   on('ui.toast', ($, e) => { toasts.push(e.text); return { value: undefined } })
@@ -27,6 +29,7 @@ function mundo($: Engine, on: On, store: Record<string, unknown> = {}, cwd = 'D:
     marco: (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never),
     sessao: () => $.session.start({ cwd, surface: 'terminal', isInteractive: true }),
     clear: () => $.session.end({ reason: 'clear', sessionId: 's', resume: { id: 's' } } as never),
+    cd: (pasta: string) => { shell = pasta },
   }
 }
 
@@ -173,6 +176,26 @@ describe('painel da leva', () => {
     expect(await quadro(ui)).toMatch(/\[ grill \] {2}—/)
   })
 
+  test('o grilling invocado pelo /faz abre o grill no painel mesmo sem o marco grill', async ($, on) => {
+    const { marco } = mundo($, on)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    const grilling = (args: string) => $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args } as never)
+    const ui = await $.ui.mount(PANE)
+
+    // o grilling solto, fora do /faz, nao vai ao pane
+    await grilling('um grill qualquer')
+    expect(await ui.find({ text: /Grill ·/ })).toBeUndefined()
+
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    await grilling('o datalake nao deve consultar sempre a delegacao de perfil, so se nao for usuario de servico')
+    expect(await ui.find({ text: /Grill · o datalake nao deve consultar sempre a delegacao de perfil,…/ })).toBeDefined()
+
+    // o marco grill que chega na mesma leva de chamadas so troca o pedido
+    await marco({ marco: 'grill', pedido: 'delegacao so para SPE e SPF' })
+    expect(await ui.find({ text: /Grill · delegacao so para SPE e SPF/ })).toBeDefined()
+  })
+
   test('a aba Grill guarda cada pergunta com a resposta e a linha da leva num bloco de codigo, que o Copiar leva exata, mesmo depois do inicio', async ($, on) => {
     const { marco, sessao, toasts } = mundo($, on)
     const copias: string[] = []
@@ -224,6 +247,38 @@ describe('painel da leva', () => {
     await sessao()
     const ui = await $.ui.mount(PANE)
     expect(await ui.find({ text: /Grill · grill do store/ })).toBeDefined()
+  })
+
+  test('a sessao nova aberta numa subpasta carrega o grill, a leva e o historico gravados pela raiz', async ($, on) => {
+    const fechada = { documento: 'antiga', fase: 'fechamento', fases: ['spec'], tickets: [], fechada: true, inicio: 0, fim: segundos(30), modelos: [] }
+    const { cd } = mundo($, on, {
+      'grill:D:/ws/a': { pedido: 'grill da raiz', inicio: 0, fim: 1000, documento: 'antiga', perguntas: [], fora: true },
+      'leva:D:/ws/a': fechada,
+      'levas:D:/ws/a': [fechada],
+    })
+    cd('D:/ws/a/src')
+    await $.session.start({ cwd: 'D:/ws/a/src', surface: 'terminal', isInteractive: true })
+    const ui = await $.ui.mount(PANE)
+    expect((await ui.find({ type: 'Text', text: /^antiga · / }))?.text).toMatch(/total 30s/)
+    expect(await ui.find({ type: 'Text', text: /^Hist/ })).toBeDefined()
+    await ui.press({ key: 'aba:grill' })
+    expect(await ui.find({ text: /grill da raiz/ })).toBeDefined()
+  })
+
+  test('o grill fechado pelo prompt do localizador para de redesenhar o painel a cada segundo', async ($, on) => {
+    const { marco, relogio, sessao } = mundo($, on)
+    let redesenhos = 0
+    on('ui.invalidate', ($, e) => { if (e.event === 'ui.render') redesenhos++; return { value: undefined } })
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: 'rode /macrex-skills:faz leva doc até o fim.\n', stderr: '' } }) as never)
+    await sessao()
+    await marco({ marco: 'grill', pedido: 'grill' })
+    await relogio.advance(segundos(3))
+    expect(redesenhos).toBeGreaterThan(0)
+
+    await $.tool.call({ tool: 'Bash', command: 'node "D:/ws/skills/faz/scripts/skills-do-matt.js" --linha "doc" "da sessão" "da sessão"' } as never)
+    redesenhos = 0
+    await relogio.advance(segundos(3))
+    expect(redesenhos).toBe(0)
   })
 
   test('o /clear nao limpa o painel; so o Limpar da aba Painel, ao lado do titulo, tira o grill de todas as abas', async ($, on) => {
@@ -327,13 +382,43 @@ describe('painel da leva', () => {
 
     // a sessao nova abre na mesma aba, com os tokens, a leva e o grill de antes (o estado simulado
     // nao avisa quem le, entao o teste redesenha depois de cada troca)
-    expect(await quadro(ui)).toMatch(/\n ❯▁ {2}USO {2}tokens\ndoc {2}1,5k\n/)
+    expect(await quadro(ui)).toMatch(/\nUso {2}tokens\ndoc {2}1,5k\n/)
     await ui.press({ key: 'aba:painel' })
     await ui.redraw()
     expect(await quadro(ui)).toMatch(/\nLeva · doc {2}\[ Limpar \] {2}0s\n[\s\S]*\[ grill \] {2}0s ✓/)
     await ui.press({ key: 'aba:grill' })
     await ui.redraw()
-    expect(await quadro(ui)).toMatch(/\n ❯▁ {2}GRILL {2}concluído\ngrill de antes {2}0s\n/)
+    expect(await quadro(ui)).toMatch(/\nGrill {2}concluído\ngrill de antes {2}0s\n/)
+  })
+
+  test('o /clear depois de um cd no shell traz o grill e a leva de volta, e o Limpar os apaga: o store e da raiz do projeto', async ($, on) => {
+    const novaSessao = estadoPorSessao(on)
+    const { marco, clear, cd } = mundo($, on)
+    on('classic.SessionStart', () => ({}) as never)
+    const ui = await $.ui.mount(PANE)
+    const depoisDoClear = async () => {
+      await clear()
+      novaSessao()
+      await $.classic.SessionStart({ source: 'clear' } as never)
+      await ui.redraw()
+    }
+
+    cd('D:/ws/a/src/main/java')
+    await marco({ marco: 'grill', pedido: 'grill com cd' })
+    cd('D:/ws/a')
+    await depoisDoClear()
+    expect(await quadro(ui)).toMatch(/Grill · grill com cd/)
+
+    await marco({ marco: 'entendimento', documento: 'doc' })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    cd('D:/ws/a/outra')
+    await depoisDoClear()
+    expect(await quadro(ui)).toMatch(/Leva · doc/)
+
+    await ui.press({ key: 'painel:limpar' })
+    cd('D:/ws/a')
+    await depoisDoClear()
+    expect(await quadro(ui)).toMatch(/▐▛███▜▌/)
   })
 
   test('o Limpar fica sempre ao lado do titulo e tira o grill e a leva, aberta ou fechada', async ($, on) => {
@@ -396,6 +481,57 @@ describe('painel da leva', () => {
     await marco({ marco: 'entendimento', documento: 'doc' })
     await $.tool.call({ tool: 'Bash', command: comando } as never)
     expect((await ui.find({ type: 'Code' }))?.props.source).toBe(PROMPT)
+  })
+
+  test('o prompt do localizador fecha o grill que nao recebeu o marco entendimento: o tempo para e o documento vem do prompt', async ($, on) => {
+    const { marco, relogio } = mundo($, on)
+    // o localizador imprime o documento que recebeu, ja expandido pelo shell; o \r\n e o do
+    // PowerShell no Windows
+    let expandido = ''
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: `rode /macrex-skills:faz leva ${expandido} até o fim.\r\nO documento é o entendimento\r\n`, stderr: '' } }) as never)
+    const localizador = (argumento: string, documento = argumento.replace(/^["']|["']$/g, '')) => {
+      expandido = documento
+      return $.tool.call({ tool: 'Bash', command: `node "D:/ws/skills/faz/scripts/skills-do-matt.js" --linha ${argumento} "da sessão" "da sessão"` } as never)
+    }
+    const ui = await $.ui.mount(PANE)
+
+    await marco({ marco: 'grill', pedido: 'grill sem entendimento' })
+    await relogio.advance(segundos(80))
+    await localizador('"doc do comando"')
+    await relogio.advance(segundos(30))
+    expect(await quadro(ui)).toMatch(/\[ grill \] {2}1m20s ✓/)
+    await ui.press({ key: 'aba:grill' })
+    expect(await quadro(ui)).toMatch(/concluído\ngrill sem entendimento {2}1m20s\n/)
+    expect(await ui.find({ type: 'Text', text: /^doc do comando$/ })).toBeDefined()
+
+    // o documento entre aspas simples (PowerShell), sem aspas ou numa variavel do shell fecha igual
+    for (const [argumento, documento] of [["'doc do PowerShell'"], ['doc-sem-aspas'], ['"$DOC"', 'doc da variavel']]) {
+      await marco({ marco: 'grill', pedido: 'outro grill' })
+      await localizador(argumento, documento)
+      expect(await ui.find({ type: 'Text', text: new RegExp(`^${documento ?? argumento.replace(/'/g, '')}$`) })).toBeDefined()
+    }
+
+    // o documento em branco nao fecha o grill, e o prompt entra mesmo assim
+    await marco({ marco: 'grill', pedido: 'grill em branco' })
+    await localizador('" "')
+    expect(await quadro(ui)).not.toMatch(/concluído\ngrill em branco/)
+    expect((await ui.find({ type: 'Code' }))?.props.source).toBe('rode /macrex-skills:faz leva   até o fim.\nO documento é o entendimento')
+
+    // o grill que a leva ja tirou da aba Painel nao e fechado pelo comando
+    await marco({ marco: 'grill', pedido: 'grill fora' })
+    await marco({ marco: 'inicio', documento: 'leva sem entendimento' })
+    await localizador('"doc fora"')
+    expect(await ui.find({ type: 'Text', text: /^doc fora$/ })).toBeUndefined()
+
+    // o entendimento que chegou antes fica: o comando nao troca o documento nem o fim
+    await marco({ marco: 'grill', pedido: 'grill com entendimento' })
+    await relogio.advance(segundos(10))
+    await marco({ marco: 'entendimento', documento: 'doc do marco' })
+    await relogio.advance(segundos(5))
+    await localizador('"doc do comando"')
+    expect(await quadro(ui)).toMatch(/concluído\ngrill com entendimento {2}10s\n/)
+    expect(await ui.find({ type: 'Text', text: /^doc do marco$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^doc do comando$/ })).toBeUndefined()
   })
 
   test('depois do Limpar, os marcos da leva ou do grill que seguem rodando nao recriam o que saiu', async ($, on) => {
@@ -861,7 +997,7 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /haiku-conta-hooks/ }))?.text).toMatch(/concluído\s+25s$/)
   })
 
-  test('toda aba abre com o cabecalho: a marca do repositorio, o nome dela em caixa alta e laranja, e o titulo embaixo, com e sem leva', async ($, on) => {
+  test('toda aba abre com o cabecalho: o nome dela em laranja, sem marca e sem caixa alta, e o titulo embaixo, com e sem leva', async ($, on) => {
     const { marco } = mundo($, on)
     const ui = await $.ui.mount(PANE)
     const conferir = async (semLeva: boolean) => {
@@ -872,9 +1008,11 @@ describe('painel da leva', () => {
         await ui.press({ key: String(aba.key) })
         // a aba Painel sem leva nem grill e o repouso, o Claude dormindo, sem cabecalho de proposito
         if (semLeva && aba.key === 'aba:painel') continue
-        const nome = String(aba.props.label).replace(/ \(\d+\)$/, '').toUpperCase()
-        // a linha 1 e a das abas; a 2 abre com a marca do repositorio e o nome da aba, a 3 com o titulo
-        expect(await quadro(ui)).toMatch(new RegExp(`^.*\\n ❯▁  ${nome}(  .*)?\\n\\S`))
+        const nome = String(aba.props.label).replace(/ \(\d+\)$/, '')
+        // a linha 1 e a das abas; a 2 abre com o nome da aba, como no botao, a 3 com o titulo; a
+        // marca do repositorio fica so na pagina da grill-tela
+        expect(await quadro(ui)).toMatch(new RegExp(`^.*\\n${nome}(  .*)?\\n\\S`))
+        expect(await quadro(ui)).not.toMatch(/❯▁/)
         expect((await ui.find({ type: 'Text', text: new RegExp(`^${nome}$`) }))?.props.color).toBe('#d77757')
       }
     }

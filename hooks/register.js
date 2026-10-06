@@ -210,7 +210,7 @@ async function tirarGrillDaTela($) {
   const grill = await read($, GRILL)
   if (!naTela(grill)) return
   const fora = { ...grill, fora: true }
-  await $.store.set(chaveDoGrill(await $.session.cwd()), fora)
+  await $.store.set(chaveDoGrill(await $.session.root()), fora)
   await update($, GRILL, () => fora)
 }
 
@@ -244,16 +244,17 @@ async function sincronizarTela($) {
     mudou = JSON.stringify(proximo) !== JSON.stringify(grill)
     return mudou ? proximo : grill
   })
-  if (mudou) await $.store.set(chaveDoGrill(await $.session.cwd()), novo)
+  if (mudou) await $.store.set(chaveDoGrill(await $.session.root()), novo)
 }
 
-// O que tem store volta dele: a leva, o historico e o grill do workspace.
-async function carregar($, cwd) {
-  const salva = await $.store.get(chave(cwd))
+// O que tem store volta dele: a leva, o historico e o grill do workspace, gravados pela raiz do
+// projeto ($.session.root()), que o cd do shell nao move.
+async function carregar($, raiz) {
+  const salva = await $.store.get(chave(raiz))
   if (salva) await update($, LEVA, () => salva)
-  const historico = await $.store.get(chaveDoHistorico(cwd))
+  const historico = await $.store.get(chaveDoHistorico(raiz))
   if (historico) await update($, HISTORICO, () => historico)
-  const grill = await $.store.get(chaveDoGrill(cwd))
+  const grill = await $.store.get(chaveDoGrill(raiz))
   if (grill) await update($, GRILL, () => grill)
 }
 
@@ -261,10 +262,10 @@ async function carregar($, cwd) {
 // painel): o grill sai de todas as abas e do store, e a leva, aberta ou fechada, sai com os
 // agentes e o uso dela; o historico fica para a proxima fechada. A leva aberta limpa perde a retomada.
 async function limpar($) {
-  const cwd = await $.session.cwd()
-  await $.store.delete(chaveDoGrill(cwd))
+  const raiz = await $.session.root()
+  await $.store.delete(chaveDoGrill(raiz))
   await update($, GRILL, () => null)
-  await $.store.delete(chave(cwd))
+  await $.store.delete(chave(raiz))
   await update($, LEVA, () => null)
   await update($, AGENTES, () => [])
   await update($, USO, () => ({}))
@@ -369,7 +370,7 @@ const emGrill = async $ => {
 
 export function register(on) {
   on('session.start', async ($, e, next) => {
-    await carregar($, e.cwd)
+    await carregar($, await $.session.root())
     await marcarBase($, e.cwd)
     // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
     // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente
@@ -442,7 +443,7 @@ export function register(on) {
   })
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'clear' || e.source === 'resume') {
-      await carregar($, await $.session.cwd())
+      await carregar($, await $.session.root())
       const antes = herdado
       herdado = null
       if (antes) {
@@ -468,7 +469,7 @@ export function register(on) {
     if (MARCOS_DO_GRILL.includes(e.marco)) {
       const grill = aplicarNoGrill(await read($, GRILL), e, await $.clock.now())
       if (grill.erro) return { deny: grill.erro }
-      await $.store.set(chaveDoGrill(await $.session.cwd()), grill)
+      await $.store.set(chaveDoGrill(await $.session.root()), grill)
       await update($, GRILL, () => grill)
       return { result: `marco registrado; ${e.marco}` }
     }
@@ -484,13 +485,13 @@ export function register(on) {
       return { result: `marco registrado; retomada na fase ${leva.fase}\n${estado}` }
     }
     const falta = ['inicio', 'fase'].includes(e.marco) && semSkill(leva.fase, await read($, SKILLS))
-    const cwd = await $.session.cwd()
-    await $.store.set(chave(cwd), leva)
+    const raiz = await $.session.root()
+    await $.store.set(chave(raiz), leva)
     await update($, LEVA, () => leva)
     if (e.marco === 'fechamento' && !antes.fechada) {
       const modelos = [...new Set((await read($, AGENTES)).map(a => a.modelo).filter(Boolean))]
-      const historico = [{ ...leva, modelos }, ...((await $.store.get(chaveDoHistorico(cwd))) ?? [])].slice(0, NO_HISTORICO)
-      await $.store.set(chaveDoHistorico(cwd), historico)
+      const historico = [{ ...leva, modelos }, ...((await $.store.get(chaveDoHistorico(raiz))) ?? [])].slice(0, NO_HISTORICO)
+      await $.store.set(chaveDoHistorico(raiz), historico)
       await update($, HISTORICO, () => historico)
       // zera no fechamento, nao no inicio: a proxima leva invoca as reservadas antes do inicio
       await update($, SKILLS, () => [])
@@ -506,19 +507,31 @@ export function register(on) {
   // o /cpv digitado depois do fechamento fecha a leva no git: o painel para de pedi-lo.
   // ponytail: marca quando o /cpv expande, nao quando termina; um repo que ele pulou nao desmarca
   on('skill.prompt', async ($, e, next) => {
+    if (e.skill.split(':').pop() === 'faz') noFaz = true
     const leva = await read($, LEVA)
     if (e.skill.split(':').pop() === 'cpv' && leva?.fechada && leva.cpv == null) {
       const feita = { ...leva, cpv: await $.clock.now() }
-      await $.store.set(chave(await $.session.cwd()), feita)
+      await $.store.set(chave(await $.session.root()), feita)
       await update($, LEVA, () => feita)
     }
     return next(e)
   })
 
-  // casa pelo sufixo depois do `:`: mattpocock-skills:to-spec e to-spec contam igual
+  // casa pelo sufixo depois do `:`: mattpocock-skills:to-spec e to-spec contam igual. O grilling
+  // que o /faz invoca abre o grill no painel com o pedido dele, sem esperar o marco grill, que o
+  // agente pode esquecer; o marco que chega depois so troca o pedido pelo resumo
+  let noFaz = false
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const nome = String(e.skill ?? '').split(':').pop()
     if (Object.values(SKILL_DA_FASE).includes(nome)) await update($, SKILLS, lista => (lista.includes(nome) ? lista : [...lista, nome]))
+    const pedido = String(e.args ?? '').trim()
+    if (nome === 'grilling' && noFaz && pedido && !(await emGrill($))) {
+      noFaz = false
+      limpo = false
+      const grill = aplicarNoGrill(null, { marco: 'grill', pedido: pedido.length > 60 ? `${pedido.slice(0, 59)}…` : pedido }, await $.clock.now())
+      await $.store.set(chaveDoGrill(await $.session.root()), grill)
+      await update($, GRILL, () => grill)
+    }
     return next(e)
   })
 
@@ -536,7 +549,7 @@ export function register(on) {
       ...g,
       perguntas: g.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
     })
-    if (respondido) await $.store.set(chaveDoGrill(await $.session.cwd()), respondido)
+    if (respondido) await $.store.set(chaveDoGrill(await $.session.root()), respondido)
     return r
   })
 
@@ -622,7 +635,8 @@ export function register(on) {
 
   // a ferramenta que muda arquivo refaz a aba Diff, se e ela que esta na tela; o comando da
   // grill-tela que leva a URL da pagina liga a consulta das rodadas dela no grill em curso; o
-  // prompt que o localizador gera (--linha) entra no grill sem depender do marco linha
+  // prompt que o localizador gera (--linha) entra no grill sem depender do marco linha e, sem o
+  // marco entendimento, fecha o grill na tela com o documento do prompt: senao o tempo nao para
   on('tool.call', async ($, e, next) => {
     const r = await next(e)
     if (MUDAM.includes(e.tool) && (await read($, ABA)) === 'codigo') await atualizarCodigo($)
@@ -634,10 +648,16 @@ export function register(on) {
     const linha = /skills-do-matt\.js["']?\s+--linha/.test(e.command ?? '') && String(r?.result?.stdout ?? '').trim()
     const grill = linha && (await read($, GRILL))
     if (grill) {
-      const comLinha = aplicarNoGrill(grill, { marco: 'linha', linha }, await $.clock.now())
-      if (!comLinha.erro) {
-        await $.store.set(chaveDoGrill(await $.session.cwd()), comLinha)
-        await update($, GRILL, () => comLinha)
+      const agora = await $.clock.now()
+      const comLinha = aplicarNoGrill(grill, { marco: 'linha', linha }, agora)
+      // o documento vem da abertura do prompt, ja expandido pelo shell (skills-do-matt.js, linhaDaLeva),
+      // lida no prompt sem o \r que o PowerShell poe
+      const documento = /^rode \S+ leva (.+) até o fim\.$/m.exec(comLinha.linha ?? '')?.[1]
+      const fechado = !comLinha.erro && naTela(comLinha) && comLinha.documento == null && documento && aplicarNoGrill(comLinha, { marco: 'entendimento', documento }, agora)
+      const novo = fechado && !fechado.erro ? fechado : comLinha
+      if (!novo.erro) {
+        await $.store.set(chaveDoGrill(await $.session.root()), novo)
+        await update($, GRILL, () => novo)
       }
     }
     return r
@@ -707,17 +727,14 @@ export function register(on) {
       )
     }
     const apagado = texto => h(Text, { color: APAGADO }, texto)
-    // a marca do repositorio, o >_ do logo (assets/logo.svg): o sinal na cor do texto e o traco em
-    // laranja, num tom acima do fundo
-    const marca = h(Text, { backgroundColor: CHIP, bold: true }, h(Text, { color: TEXTO }, ' ❯'), h(Text, { color: LARANJA }, '▁ '))
-    // a marca e o nome da aba em caixa alta e laranja, com o titulo embaixo, a esquerda; o rotulo e
-    // o valor grande (o total) a direita
+    // o nome da aba em laranja, com o titulo embaixo, a esquerda; o rotulo e o valor grande (o
+    // total) a direita. A marca do repositorio fica so na pagina da grill-tela
     const negrito = texto => h(Text, { bold: true, color: TEXTO }, texto)
     const cabecalho = (titulo, rotulo, valor) =>
       h(
         Box,
         { justifyContent: 'space-between', alignItems: 'flex-end' },
-        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, {}, marca, ' ', h(Text, { color: LARANJA, bold: true }, ABAS[aba].toUpperCase())), typeof titulo === 'string' ? negrito(titulo) : titulo),
+        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, { color: LARANJA }, ABAS[aba]), typeof titulo === 'string' ? negrito(titulo) : titulo),
         h(Box, { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 2 }, apagado(rotulo), negrito(valor)),
       )
     // a aba desenhada: as abas, o cabecalho e as secoes
