@@ -37,12 +37,16 @@ strong{font-weight:600}
 .muted{color:var(--muted)}
 
 /* topo */
-.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top{background:var(--surface);border-bottom:1px solid var(--line);border-top:4px solid hsl(var(--h) 55% 45%)}
+/* o projeto ganha uma cor própria, tirada do nome: identifica a janela entre vários grills abertos */
+.projeto{font-size:15px;font-weight:600;padding:3px 12px;border-radius:999px;background:light-dark(hsl(var(--h) 60% 93%),hsl(var(--h) 35% 20%));
+  color:light-dark(hsl(var(--h) 60% 24%),hsl(var(--h) 70% 82%));border:1px solid light-dark(hsl(var(--h) 45% 78%),hsl(var(--h) 35% 34%))}
 .top-in{max-width:1320px;margin:0 auto;padding:6px 32px;min-height:56px;display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap}
 .marca{font:600 16px var(--mono);letter-spacing:.06em;display:inline-flex;align-items:center;gap:8px}
 .marca svg{width:24px;height:24px;flex:none}
 .passos{display:flex;align-items:center;gap:10px;list-style:none;margin:0;padding:0;font-size:13px;color:var(--muted)}
-.passos .feito{color:var(--rec)}.passos .agora{color:var(--ink);font-weight:600}
+.passos .feito{color:var(--rec)}
+.passos .agora{background:var(--sel);color:var(--sel-ink);font-size:14px;font-weight:600;padding:5px 14px;border-radius:999px}
 .passos .traco{width:16px;height:1px;background:var(--line)}
 .acoes{margin-left:auto;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:2px;background:var(--bg);margin-right:6px}
@@ -56,14 +60,15 @@ strong{font-weight:600}
 .sublink:hover{color:var(--ink)}
 
 .wrap{max-width:1320px;margin:0 auto;padding:28px 32px 40px}
-.cabeca{display:flex;align-items:flex-end;justify-content:space-between;gap:16px 24px;flex-wrap:wrap;margin-bottom:20px}
 .h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
 .sub{margin:4px 0 0;color:var(--muted)}
 .envio{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
 .resumo{font:12.5px var(--mono);color:var(--muted)}
 .btn{border:1px solid transparent;border-radius:8px;font-weight:600;padding:0 20px;min-height:44px}
-.btn.pri{background:var(--sel);color:var(--sel-ink)}.btn.pri:disabled{opacity:.35}
+.btn.pri{background:var(--sel);color:var(--sel-ink)}.btn:disabled{opacity:.35}
 .btn.ok{background:var(--rec);color:var(--rec-ink)}
+.btn.ok-l{background:var(--surface);color:var(--rec);border-color:var(--rec)}
+.btn .kbd{color:inherit;border-color:currentColor;opacity:.7;margin:0 0 0 8px}
 .btn.sec{background:var(--surface);border-color:var(--pill-line);font-weight:500}
 .erro{color:var(--troca);font-size:13px}
 .caixa{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -116,7 +121,19 @@ strong{font-weight:600}
 .kbd{font:11px var(--mono);border:1px solid var(--pill-line);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--muted);flex:none;margin-top:2px}
 .estrela{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:500;color:var(--rec);margin-left:6px}
 .rotulo{display:block;margin:16px 0 0;font-size:12.5px;font-weight:500;color:var(--muted)}
-.navega{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+.abre{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.pill.nota-p{background:var(--nota-soft);color:var(--nota);border-color:var(--nota-line)}
+
+/* barra fixa da rodada: progresso, navegação e envio sempre à vista */
+.wrap.com-barra{padding-bottom:120px}
+.barra{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 20px light-dark(rgba(0,0,0,.05),rgba(0,0,0,.35))}
+.barra-in{max-width:1320px;margin:0 auto;padding:12px 32px;display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap}
+.pontos{display:flex;gap:6px;flex-wrap:wrap}
+.ponto{width:36px;height:36px;border-radius:8px;font:600 12px var(--mono);border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0}
+.ponto.aceito{background:var(--rec-soft);color:var(--rec);border-color:var(--rec-soft)}
+.ponto.outra{background:var(--troca-soft);color:var(--troca);border-color:var(--troca)}
+.ponto.on{background:var(--sel);color:var(--sel-ink);border-color:var(--sel)}
+.barra .fim{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 
 /* histórico */
 .hist{margin-top:16px}
@@ -148,6 +165,9 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
   .c-tema{flex-basis:100%;display:flex;gap:8px;align-items:baseline;padding-right:92px}
   .c-nota{position:absolute;top:6px;right:12px}
   .lado{max-width:none}
+  .barra-in{padding:10px 16px}
+  .barra .fim{margin-left:0;width:100%}.barra .fim .btn{flex:1}
+  .btn .kbd{display:none}
 }
 </style>
 </head>
@@ -281,11 +301,18 @@ const campoProp = (q,i) => { const a=resp(q); return a.abreProp||a.propria
 const campoCom = (q,i) => { const a=resp(q); return a.abreCom||a.com
   ? `<input class="campo nota" data-campo="abreCom-${i}" aria-label="Nota sobre ${esc(q.id)}" placeholder="Nota para o agente…" value="${esc(a.com)}" oninput="comentar(${i},this.value)">` : ''; };
 
-function cabecaRodada(sub){
-  const t=Q().length, n=nProntas();
-  return `<div class="cabeca"><div><h1 class="h1">Rodada ${R().rodada}</h1><p class="sub">${sub}</p></div>
-    <div class="envio">${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}<span class="resumo" id="resumo">${resumoTexto()}</span>
-    <button class="btn pri" id="enviar" ${n<t?'disabled':''} onclick="enviar()">Enviar rodada ${R().rodada}</button></div></div>`;
+// a barra fixa no rodapé: os dois modos têm o progresso, a navegação e o Enviar no mesmo lugar, sempre à vista
+const pontos = () => Q().map((q,k)=>{ const m=marca(q);
+  return `<button class="ponto ${m||''} ${V==='B'&&k===S.foco?'on':''}" title="${esc(q.cabecalho)}" onclick="irPara(${k})"
+    aria-label="${esc(q.id)}, ${esc(q.cabecalho)}: ${m==='aceito'?'aceita':m==='outra'?'trocada':'sem resposta'}">${k+1}</button>`; }).join('');
+function irPara(k){ if(V==='B'){ S.foco=k; render(); } else document.querySelector(`[data-lin="${k}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}); }
+function barra(){
+  const t=Q().length, n=nProntas(), i=S.foco, umaPorVez=V==='B', ultima=!umaPorVez||i===t-1;
+  return `<div class="barra"><div class="barra-in"><div class="pontos" id="pontos" role="group" aria-label="Questões da rodada">${pontos()}</div>
+    <span class="resumo" id="resumo">${resumoTexto()}</span>${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}
+    <div class="fim">${umaPorVez?`<button class="btn sec" ${i?'':'disabled'} onclick="S.foco--;render()">← Anterior</button>
+     ${i<t-1?`<button class="btn pri" onclick="S.foco++;render()">Próxima →<span class="kbd">Enter</span></button>`:''}`:''}
+     <button class="btn ${ultima?'ok':'ok-l'}" id="enviar" ${n<t?'disabled':''} onclick="enviar()">Enviar rodada ${R().rodada}<span class="kbd">Ctrl Enter</span></button></div></div></div>`;
 }
 function historico(){
   if(!E.historico.length) return '';
@@ -296,9 +323,7 @@ function historico(){
     </table></details>`;
 }
 function modoPanorama(){
-  const n=Q().length;
-  return cabecaRodada(`${n} ${n===1?'questão':'questões'}. A recomendada de cada uma já vem marcada: troque só o que discordar.`)
-   + `<div class="caixa"><div class="cols" aria-hidden="true"><span class="c-tema">Tema</span><span class="c-perg">Pergunta</span><span class="c-resp">Resposta</span><span class="c-nota">Nota</span></div>
+  return `<div class="caixa"><div class="cols" aria-hidden="true"><span class="c-tema">Tema</span><span class="c-perg">Pergunta</span><span class="c-resp">Resposta</span><span class="c-nota">Nota</span></div>
    ${Q().map((q,i)=>{ const a=resp(q); return `<div class="lin ${marca(q)==='outra'?'troca':''}" data-lin="${i}">
      <div class="c-tema"><div class="qid">${esc(q.id)}</div><div class="cab">${esc(q.cabecalho)}</div><div class="st" data-marca="${i}">${statusHTML(q)}</div></div>
      <div class="c-perg"><div class="tit">${md(q.titulo)}</div>${q.contexto?`<div class="ctx">${md(q.contexto)}</div>`:''}</div>
@@ -316,8 +341,7 @@ function ladoHTML(q,i){
 }
 function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Enter
   const ps=Q(), q=ps[S.foco], i=S.foco, a=resp(q);
-  return cabecaRodada(`Uma questão por vez, com a descrição de cada opção. Teclas 1–${Math.min(9,Math.max(...ps.map(p=>p.opcoes.length)))} escolhem, Enter avança.`)
-   + `<div class="foco">
+  return `<div class="foco">
    <nav class="caixa lado" aria-label="Questões da rodada">${ps.map((p,k)=>`<button class="${k===i?'on':''}" data-lado="${k}" onclick="S.foco=${k};render()">${ladoHTML(p,k)}</button>`).join('')}</nav>
    <section class="caixa cartao">
     <div style="display:flex;align-items:center;gap:10px"><span class="qid">${esc(q.id)} · ${esc(q.cabecalho)}</span><span class="st" data-marca="${i}">${statusHTML(q)}</span>
@@ -325,12 +349,9 @@ function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Ente
     <h2>${md(q.titulo)}</h2>${q.contexto?`<div class="ctx" style="font-size:14px">${md(q.contexto)}</div>`:''}
     <div class="opts">${q.opcoes.map((o,j)=>`<button class="opt ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}" onclick="escolher(${i},${j})">
       <span class="kbd">${j+1}</span><span><span class="lab">${md(o.rotulo)}</span>${o.recomendada?`<span class="estrela">${ESTRELA} recomendada</span>`:''}${o.descricao?`<span class="d">${md(o.descricao)}</span>`:''}</span></button>`).join('')}</div>
-    <label class="rotulo" for="prop-${i}">Ou escreva a sua resposta</label>
-    <input id="prop-${i}" class="campo" style="margin-top:6px" value="${esc(a.propria)}" oninput="propria(${i},this.value)">
-    <label class="rotulo" for="com-${i}">Nota para o agente</label>
-    <input id="com-${i}" class="campo nota" style="margin-top:6px" value="${esc(a.com)}" oninput="comentar(${i},this.value)">
-    <div class="navega"><button class="btn sec" ${i?'':'disabled'} onclick="S.foco--;render()">← Anterior</button>
-     ${i<ps.length-1?`<button class="btn pri" onclick="S.foco++;render()">Próxima →</button>`:'<span></span>'}</div>
+    <div class="abre"><button class="pill outra-p ${a.opcao===null?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null}" onclick="abrir(${i},'abreProp')">+ Outra resposta</button>
+     <button class="pill nota-p" onclick="abrir(${i},'abreCom')">${ICONE_NOTA}Nota para o agente</button></div>
+    ${campoProp(q,i)}${campoCom(q,i)}
    </section></div>` + historico();
 }
 
@@ -344,7 +365,7 @@ function topo(){
   passos.push(`<li class="${fim?'agora':''}">Fechamento${E.fase==='concluido'?' ✓':''}</li>`);
   const ativo = !['concluido','cli'].includes(E.fase) && !S.caiu;
   // a logo é cópia de assets/logo.svg, embutida porque a skill instalada sai sem o repositório: mudou lá, muda aqui
-  return `<header class="top"><div class="top-in"><span class="marca"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="macrex skills"><rect x="2" y="2" width="60" height="60" rx="11" fill="#24283b" stroke="#565f89" stroke-width="2"/><path d="M17 21 L29 32 L17 43" fill="none" stroke="#c0caf5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="33" y="39" width="15" height="5" rx="1.5" fill="#d77757"/></svg>GRILL</span><span class="muted">${esc(E.projeto)}</span>
+  return `<header class="top" style="--h:${matiz(E.projeto)}"><div class="top-in"><span class="marca"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="macrex skills"><rect x="2" y="2" width="60" height="60" rx="11" fill="#24283b" stroke="#565f89" stroke-width="2"/><path d="M17 21 L29 32 L17 43" fill="none" stroke="#c0caf5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="33" y="39" width="15" height="5" rx="1.5" fill="#d77757"/></svg>GRILL</span><span class="projeto">${esc(E.projeto)}</span>
    <ol class="passos">${passos.join('<li class="traco" aria-hidden="true"></li>')}</ol>
    <div class="acoes">
    ${E.fase==='rodada'?`<div class="seg" role="group" aria-label="Modo">${Object.entries(VAR).map(([k,n])=>`<button class="${k===V?'on':''}" aria-pressed="${k===V}" onclick="modo('${k}')">${n}</button>`).join('')}</div>`:''}
@@ -391,12 +412,19 @@ function render(){
     : { inicio:telaAguarde, rodada:telaRodada, aguarde:telaAguarde, final:telaFinal,
     concluido:()=>telaFim('✓','Grill concluído','Volte ao terminal: o agente já tem o seu sim. Pode fechar esta aba.'),
     cli:()=>telaFim('&gt;_','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.') }[E.fase]();
-  document.getElementById('app').innerHTML = topo() + `<main class="wrap">${corpo}</main>`;
+  const naRodada = E.fase==='rodada' && !S.caiu;
+  document.getElementById('app').innerHTML = topo() + `<main class="wrap ${naRodada?'com-barra':''}">${corpo}</main>` + (naRodada ? barra() : '');
+  // a aba diz de que projeto é o grill: o nome no título e a cor do projeto no ícone
+  document.title = `${E.projeto} · Grill`;
+  document.querySelector('link[rel=icon]').href = 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="hsl(${matiz(E.projeto)} 55% 45%)"/></svg>`);
 }
+const matiz = s => [...String(s ?? '')].reduce((h,c)=>(h*31+c.codePointAt(0))%360, 7);
 function atualiza(i){ // resumo, marca, linha, opções e lateral, sem render(), para não roubar o foco do campo de texto
   if(E.fase!=='rodada') return;
   const t=Q().length, n=nProntas(), q=qi(i), a=resp(q), m=marca(q);
   const r=document.getElementById('resumo'); if(r) r.textContent=resumoTexto();
+  const p=document.getElementById('pontos'); if(p) p.innerHTML=pontos();
   const b=document.getElementById('enviar'); if(b) b.disabled=n<t;
   const troca = (sel, html) => document.querySelectorAll(sel).forEach(el=>el.innerHTML=html);
   troca(`[data-marca="${i}"]`, statusHTML(q));
@@ -422,6 +450,7 @@ async function consultar(forcar){
   }catch(e){ if(E){ S.caiu=true; render(); } }
 }
 addEventListener('keydown',e=>{
+  if(e.key==='Enter' && (e.ctrlKey||e.metaKey) && E && E.fase==='rodada'){ e.preventDefault(); enviar(); return; }
   if(e.target.matches('input,textarea,select') || !E || E.fase!=='rodada' || V!=='B') return;
   const q = Q()[S.foco];
   if(/^[1-9]$/.test(e.key) && q.opcoes[+e.key-1]) escolher(S.foco,+e.key-1);
