@@ -30,6 +30,7 @@
     ],
     "SubagentStart": [
       {
+        "matcher": "^(?!.*vault-migrador$)",
         "hooks": [
           {
             "type": "command",

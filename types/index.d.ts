@@ -59,7 +59,7 @@ export type GrillPergunta = {
   resposta?: string
 }
 
-// O grill do movimento 1 do /faz (marcos grill e entendimento).
+// O grill do movimento 1 do /faz (marcos grill, entendimento e linha).
 export type Grill = {
   pedido: string
   inicio: number
@@ -69,11 +69,13 @@ export type Grill = {
   fim?: number
   // a linha da leva que o /faz imprimiu ao fim do grill (marco linha)
   linha?: string
-  // fora da aba Painel (o inicio da leva ou o /clear); a aba Grill o guarda
+  // fora da aba Painel (o inicio da leva); a aba Grill o guarda ate o Limpar do Painel
   fora?: boolean
+  // a URL da pagina da grill-tela que o grill consulta, enquanto ela esta aberta
+  tela?: string
 }
 
-// A base da aba Codigo, tirada no inicio da sessao.
+// A base da aba Diff, tirada no inicio da sessao.
 export type CodigoBase = {
   raiz: string
   // o commit do working tree de entao (git stash create), ou o HEAD se estava limpo

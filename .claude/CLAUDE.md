@@ -1,0 +1,3 @@
+- Vocabulário (leva, marco, portão, painel da leva): `GLOSSARY.md`.
+- Painel da leva: `hooks/register.js`, testes em `hooks/painel.test.ts` (`claude plugin test .`; o `quadro(ui)` mostra uma aba como texto). API do mod: `.claude-plugin/types/claude-code/index.d.ts`, que o Claude Code gera ao carregar o mod.
+- Antes de entregar: `python scripts/validar_repo.py`, que reprova a skill mexida sem subir a `# Versao` do `SKILL.md` e o plugin mexido sem subir a minor do `.claude-plugin/plugin.json` (uma vez por leva; a major, só com autorização do usuário).

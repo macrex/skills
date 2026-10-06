@@ -1,31 +1,18 @@
 # Esqueleto do Workflow de implementação
 
-Este esqueleto vale quando a terceira parada do `/faz` escolheu **workflow**; o
-`PREAMBULO` abaixo é o dos três modos. Quem invoca `implement` (nome do localizador)
-é o `/faz`, uma vez, antes de montar o workflow; este esqueleto é como o que ela
-manda é cumprido, e os agentes por ticket não a invocam de novo — o preâmbulo já
-carrega o que ela pede, e o portão é quem cobra.
+Vale quando a terceira parada do `/faz` escolheu **workflow**; o `PREAMBULO` abaixo é o dos
+três modos. O `/faz` já invocou a `implement`; os agentes por ticket não a invocam de novo — o
+preâmbulo carrega o que ela pede, e o portão é quem cobra.
 
-Um agente por ticket, **em cadeia**: os tickets de uma leva quase sempre tocam
-os mesmos arquivos (o módulo central, o ponto de entrada, o esquema), e dois
-agentes na mesma working tree se sobrescrevem. O ganho do Workflow aqui é
-contexto fresco por ticket, sequência determinística, portão de verificação e
-retomada — não paralelismo.
+Um agente por ticket, **em cadeia**: os tickets de uma leva quase sempre tocam os mesmos
+arquivos, e dois agentes na mesma working tree se sobrescrevem.
 
-Duas armadilhas já pagas:
-
-- **Portão compara booleano, nunca prosa.** `r.typecheck !== 'limpo'` parou uma
-  cadeia inteira no primeiro ticket, que estava verde, porque o agente respondeu
-  `"limpo (TYPECHECK_EXIT=0)"`. Peça `testsPass` e `checksPass` como `boolean` no
-  schema e decida só por eles.
-- **As notas de cada ticket alimentam o próximo.** Sem isso o agente seguinte
-  refaz ou conflita com o que já existe.
-
-Três coisas você preenche antes de rodar, e todas saem do projeto, não daqui:
-onde os tickets estão (o tracker que o `/faz` já escolheu), **os comandos de
-verificação do projeto** (a suíte, e o que mais o repositório oferece — tipos,
-lint, build; um projeto que só tem teste tem só teste), e uma dica por ticket
-que economize exploração ao agente.
+Três coisas você preenche antes de rodar, e todas saem do projeto, não daqui: onde os tickets
+estão (o tracker que o `/faz` já escolheu), **os comandos de verificação do projeto** (a suíte,
+e o que mais o repositório oferece — tipos, lint, build), e uma dica por ticket que economize
+exploração ao agente. Ao adaptá-lo, o portão segue decidindo só por `testsPass` e `checksPass`
+(comparar prosa já parou uma cadeia verde), e as `notes` de cada ticket seguem alimentando o
+próximo.
 
 ```js
 export const meta = {
@@ -90,6 +77,5 @@ return { entregues, parou: null }
 O `<modelo do implement>` da linha entra em `model` de cada `agent()`; o da
 sessão é `model` omitido.
 
-Cadeia interrompida com o trabalho já verde na árvore? Rode a verificação você
-mesmo, semeie `entregues` com as notas do ticket fechado e relance a partir do
-próximo — mais barato que reexecutar o que já está certo.
+Cadeia interrompida com o trabalho já verde na árvore? Rode a verificação você mesmo, semeie
+`entregues` com as notas do ticket fechado e relance a partir do próximo.

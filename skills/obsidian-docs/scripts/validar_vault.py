@@ -37,7 +37,7 @@ def main():
     ap.add_argument("--vault", default=None,
                     help="pasta de projetos do vault (senao OBSIDIAN_VAULT)")
     ap.add_argument("--resumo", action="store_true", help="so o placar")
-    ap.add_argument("--tipo", default=None, help="orfas | frontmatter | links | hub")
+    ap.add_argument("--tipo", default=None, help="frontmatter | links | orfas | hub | padrao")
     ap.add_argument("--projeto", default=None, help="so as notas deste projeto")
     args = ap.parse_args()
 

@@ -37,14 +37,10 @@ Sem confirmação, nada é copiado.
 
 **NUNCA dois projetos em paralelo**: é um vault só, e dois lotes abertos viram um commit com notas
 misturadas. Para cada projeto confirmado, na ordem: subagent `vault-migrador` em **modo
-migração** com a lista confirmada (mesma regra de modelo), ou o próprio agente inline. O fluxo é
-o do modo `migrar`: `visao_geral` (hub existente ganha), uma `salvar_nota` por arquivo com
-`lote=true`, **um** `sincronizar` fechando o lote do projeto, `validar projeto=<projeto>` e a
-checagem graphify. O agente só devolve depois do `sincronizar`; a linha `GIT:` do retorno é a saída
-dele. Inline, só passe ao próximo projeto depois do `sincronizar` deste.
-
-**O repo do projeto NUNCA é tocado**: migração é cópia, nunca recorte. Sem `git rm`, sem apagar,
-sem commit no projeto.
+migração** com a lista confirmada (mesma regra de modelo), ou o próprio agente inline, pelos
+passos 3 a 5 de `procedimento-migrar.md`; sempre **um** `sincronizar` fecha o lote do projeto. O
+agente só devolve depois do `sincronizar`; a linha `GIT:` do retorno é a saída dele. Inline, só
+passe ao próximo projeto depois do `sincronizar` deste.
 
 ## 5. Relatório final
 

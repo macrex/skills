@@ -91,7 +91,7 @@ const semSecao = await semVault.disparar('before_agent_start', { systemPromptOpt
 assert.deepEqual(semSecao.evento.systemPromptOptions.sections, {}, 'sem vault, nenhuma secao entra no system prompt');
 console.log('ok: sem OBSIDIAN_VAULT, zero ferramentas, um aviso e nenhuma secao');
 
-// ---------- 2. com vault: as 12 ferramentas ----------
+// ---------- 2. com vault: todas as ferramentas do servidor ----------
 
 const vault = mkdtempSync(join(tmpdir(), 'vault-docs-teste-'));
 const pidsAntes = pidsDoServidor();
@@ -103,7 +103,7 @@ await criarExtensao(pi);
 assert.deepEqual(
   [...pi.ferramentas.keys()].sort(),
   FERRAMENTAS.map((nome) => PREFIXO + nome).sort(),
-  'as 15 ferramentas do servidor entram com o prefixo da rota CLI',
+  'todas as ferramentas do servidor entram com o prefixo da rota CLI',
 );
 assert.equal(pi.avisos.length, 0, 'com vault valido a extensao nao avisa nada');
 const salvar = pi.ferramentas.get(PREFIXO + 'salvar_nota');
@@ -111,7 +111,7 @@ assert.equal(salvar.label, 'salvar_nota', 'o label e o nome nu da ferramenta');
 assert.ok(salvar.description.length > 0, 'a descricao vem do servidor');
 assert.equal(salvar.parameters.type, 'object', 'o esquema vem do servidor, cru');
 assert.ok(salvar.parameters.properties.projeto, 'o esquema do servidor chega inteiro');
-console.log('ok: 15 ferramentas mcp__vault-docs__*, com descricao e esquema do servidor');
+console.log(`ok: ${FERRAMENTAS.length} ferramentas mcp__vault-docs__*, com descricao e esquema do servidor`);
 
 // ---------- 3. chamada com argumentos, ida e volta ----------
 

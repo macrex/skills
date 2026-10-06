@@ -38,6 +38,15 @@ def existe(rel):
     return os.path.exists(os.path.join(sv.VAULT, *rel.split("/")))
 
 
+def recusa(msg, trecho, fn, *args, **kwargs):
+    """fn(*args, **kwargs) tem de levantar ErroUso com `trecho` na mensagem."""
+    try:
+        fn(*args, **kwargs)
+        confere(False, f"deveria recusar: {msg}")
+    except sv.ErroUso as e:
+        confere(trecho in str(e), msg)
+
+
 def chamada(nome, **args):
     """tools/call pelo protocolo, devolvendo (texto, isError)."""
     saida = io.StringIO()
@@ -53,11 +62,8 @@ def chamada(nome, **args):
 
 def testes():
     # --- projeto novo: exige descricao; com ela nasce hub, Home e a nota ---
-    try:
-        sv.salvar_nota("pagamentos", "spec", "Cobranca recorrente", "corpo", resumo="r")
-        confere(False, "projeto novo sem descricao_projeto deveria ser recusado")
-    except sv.ErroUso as e:
-        confere("nao existe no vault" in str(e), "projeto novo sem descricao e recusado")
+    recusa("projeto novo sem descricao e recusado", "nao existe no vault",
+           sv.salvar_nota, "pagamentos", "spec", "Cobranca recorrente", "corpo", resumo="r")
 
     saida = sv.salvar_nota("pagamentos", "spec", "Cobrança recorrente", "Texto da spec.",
                            resumo="spec da cobranca", descricao_projeto="Modulo de pagamentos",
@@ -74,11 +80,8 @@ def testes():
     confere("- [[pagamentos]] — Modulo de pagamentos" in le("Home.md"), "Home lista o projeto")
 
     # --- nota repetida e recusada; sobrescrever regrava ---
-    try:
-        sv.salvar_nota("pagamentos", "spec", "Cobrança recorrente", "outro", resumo="r", data="2026-01-10")
-        confere(False, "nota repetida deveria ser recusada")
-    except sv.ErroUso as e:
-        confere("ja existe" in str(e), "nota repetida e recusada")
+    recusa("nota repetida e recusada", "ja existe",
+           sv.salvar_nota, "pagamentos", "spec", "Cobrança recorrente", "outro", resumo="r", data="2026-01-10")
     sv.salvar_nota("pagamentos", "spec", "Cobrança recorrente", "Regravada.", resumo="r",
                    data="2026-01-10", sobrescrever=True)
     confere("Regravada." in le("pagamentos/Specs/2026-01-10 Cobrança recorrente.md"), "sobrescrever regrava")
@@ -93,20 +96,13 @@ def testes():
                        (dict(data="10/01/2026"), "data deve ser"), (dict(resumo=""), "resumo")):
         base = dict(projeto="pagamentos", tipo="spec", titulo="X", corpo="c", resumo="r")
         base.update(args)
-        try:
-            sv.salvar_nota(**base)
-            confere(False, f"deveria recusar {args}")
-        except sv.ErroUso as e:
-            confere(erro in str(e), f"recusa {args}")
+        recusa(f"recusa {args}", erro, sv.salvar_nota, **base)
     saida = sv.salvar_nota("pagamentos", "plano", "T1 Criar tabela", "c", resumo="r",
                            artefato="2026-01-10 Cobrança recorrente", data="2026-02-02")
     confere("pagamentos/Specs/Tickets - 2026-01-10 Cobrança recorrente/2026-02-02 T1 Criar tabela.md" in saida,
             "ticket cai em Specs/Tickets - <artefato>/")
-    try:
-        sv.salvar_nota("pagamentos", "bug", "B", "c", resumo="r", artefato="x")
-        confere(False, "artefato fora de spec/plano deveria ser recusado")
-    except sv.ErroUso as e:
-        confere("so vale para tipo spec ou plano" in str(e), "artefato so em spec/plano")
+    recusa("artefato so em spec/plano", "so vale para tipo spec ou plano",
+           sv.salvar_nota, "pagamentos", "bug", "B", "c", resumo="r", artefato="x")
 
     # --- caractere que quebra wikilink no Obsidian nao entra no nome ---
     saida = sv.salvar_nota("pagamentos", "analise", "O PR #1 [x] ^y `z`", "c", resumo="r", data="2026-02-04")
@@ -221,11 +217,7 @@ def testes():
                        (dict(nota="pagamentos", status="ativo"), "hub e indice"),
                        (dict(nota="nada disso", status="ativo"), "nao encontrada"),
                        (dict(nota="2026-02-01 Nota bug"), "ao menos um")):
-        try:
-            sv.atualizar_nota(**args)
-            confere(False, f"deveria recusar {args}")
-        except sv.ErroUso as e:
-            confere(erro in str(e), f"atualizar_nota recusa {args}")
+        recusa(f"atualizar_nota recusa {args}", erro, sv.atualizar_nota, **args)
 
     # --- protocolo ---
     saida = io.StringIO()
@@ -347,11 +339,7 @@ def testes_reorganizar():
     for args, erro in ((dict(nota="pagamentos", novo_titulo="x"), "hub e mapa"),
                        (dict(nota="2026-02-01 Nota adr", novo_titulo="Nota bug"), "ja existe"),
                        (dict(nota="2026-02-05 Vizinha", novo_titulo="Vizinha"), "ja se chama")):
-        try:
-            sv.renomear_nota(**args)
-            confere(False, f"deveria recusar {args}")
-        except sv.ErroUso as e:
-            confere(erro in str(e), f"renomear recusa {args}")
+        recusa(f"renomear recusa {args}", erro, sv.renomear_nota, **args)
 
     # --- dividir: Enorme (## A, ## B) vira abertura + indice, e dois anexos fora do hub ---
     saida = sv.dividir_nota("2026-02-07 Enorme")
@@ -376,11 +364,7 @@ def testes_reorganizar():
     confere("Parte de [[2026-02-07 Enorme]]" in con and "Backlinks: nenhum" in con and "- pagamentos/Specs/2026-02-07 Enorme.md" not in con,
             "conexoes do anexo aponta a mae numa linha, sem lista-la como relacionada")
     for args, erro in ((dict(nota="2026-02-07 Enorme"), "ja dividida"), (dict(nota="2026-02-05 Vizinha"), "ao menos duas")):
-        try:
-            sv.dividir_nota(**args)
-            confere(False, f"deveria recusar {args}")
-        except sv.ErroUso as e:
-            confere(erro in str(e), f"dividir recusa {args}")
+        recusa(f"dividir recusa {args}", erro, sv.dividir_nota, **args)
 
 
 def testes_git():
@@ -409,11 +393,7 @@ def testes_git():
     with open(os.path.join(vault, intruso), "w", encoding="utf-8") as f:
         f.write("nao e do lote\n")
     antes = subprocess.run(["git", "-C", vault, "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout.strip()
-    try:
-        sv.sincronizar_lote("")
-        confere(False, "sincronizar sem mensagem deveria ser recusado")
-    except sv.ErroUso:
-        confere(True, "sincronizar exige mensagem")
+    recusa("sincronizar exige mensagem", "", sv.sincronizar_lote, "")
     saida = sv.sincronizar_lote("loja: lote de 3 specs")
     depois = subprocess.run(["git", "-C", vault, "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout.strip()
     confere(int(depois) == int(antes) + 1 and "commit local" in saida, "sincronizar fecha o lote num commit so")

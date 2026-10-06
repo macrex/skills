@@ -52,7 +52,7 @@ function git(raiz, ...cmd) {
   try {
     return execFileSync('git', ['-C', raiz, ...cmd], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    }).trimEnd();
   } catch {
     return null;
   }
@@ -309,6 +309,19 @@ function ehVault(raiz) {
     || norm(raiz).endsWith('obsidian/projetos');
 }
 
+// As paradas do /cpv que o agente conferiria a mao.
+function bloqueios(raiz, branch) {
+  const marcas = branch === 'HEAD' ? ['HEAD DESTACADO'] : [];
+  const emCurso = (git(raiz, 'rev-parse', '--git-path', 'MERGE_HEAD', '--git-path', 'rebase-merge', '--git-path', 'rebase-apply') ?? '')
+    .split(/\r?\n/).some((c) => c && fs.existsSync(path.resolve(raiz, c)));
+  if (emCurso) marcas.push('MERGE OU REBASE EM ANDAMENTO');
+  // `submodule status` custa ~0,6 s no Windows: so roda onde ha .gitmodules
+  const sujo = fs.existsSync(path.join(raiz, '.gitmodules'))
+    && (git(raiz, 'submodule', 'status') ?? '').split(/\r?\n/).some((l) => l.startsWith('+'));
+  if (sujo) marcas.push('SUBMODULO SUJO');
+  return marcas;
+}
+
 function estado(raiz, origens, raizDoCwd) {
   const porcelain = git(raiz, 'status', '--porcelain') ?? '';
   const pendentes = porcelain ? porcelain.split(/\r?\n/).filter(Boolean) : [];
@@ -324,6 +337,7 @@ function estado(raiz, origens, raizDoCwd) {
     vault: ehVault(raiz),
     doCwd: raiz === raizDoCwd,
     semCommit: git(raiz, 'rev-parse', '--verify', 'HEAD') === null,
+    bloqueios: origens.has('sessao') || raiz === raizDoCwd ? bloqueios(raiz, branch) : [],
     // "Nada a fazer" e limpo E em dia. Limpo mas adiantado ainda pede push, que
     // e metade do que o /cpv promete.
     parado: pendentes.length === 0 && (ahead === 0 || ahead === null && !remoto),
@@ -340,15 +354,9 @@ function texto(repos, info) {
   // o que fechar.
   const fazer = repos.filter((r) => !r.vault && (r.origens.includes('sessao') || (r.doCwd && !r.parado)));
   const vizinhos = repos.filter((r) => !fazer.includes(r) && !r.vault && !r.parado);
-  const pular = repos.filter((r) => !fazer.includes(r) && !vizinhos.includes(r));
 
   const t = info.transcript;
-  const motivo = t.harness === 'outro'
-    ? 'Codex sem rollout recente deste cwd, ou Antigravity, que nao tem transcript legivel'
-    : t.harness;
-  const transcript = t.arquivo ? `${t.harness} ${t.arquivo}` : `nao encontrado (${motivo}) — so a varredura do cwd`;
-  linhas.push(`Sessao: ${info.sessao || '(sem id)'} | transcript: ${transcript}`);
-  linhas.push(`cwd: ${info.cwd}`);
+  linhas.push(`transcript: ${t.arquivo ? t.harness : `nao encontrado (${t.harness}) — so a varredura do cwd`}`);
   linhas.push('');
   linhas.push(`REPOSITORIOS DA LEVA (${fazer.length})`);
   if (!fazer.length) linhas.push('  (nenhum com mudanca pendente)');
@@ -359,7 +367,8 @@ function texto(repos, info) {
     linhas.push(`[${i + 1}] ${r.raiz}   (${r.origens.join('+')})`);
     linhas.push(`    branch ${r.branch} | ${ahead} | ${r.pendentes.length} pendente(s)` +
                 (r.semCommit ? ' | SEM NENHUM COMMIT' : '') +
-                (r.parado ? ' | NADA A COMMITAR (so o vault)' : ''));
+                (r.parado ? ' | NADA A COMMITAR (so o vault)' : '') +
+                r.bloqueios.map((b) => ` | ${b}`).join(''));
     linhas.push(`    origin: ${r.remoto || '(sem remoto)'}`);
     for (const p of r.pendentes.slice(0, 40)) linhas.push(`      ${p}`);
     if (r.pendentes.length > 40) linhas.push(`      ... e mais ${r.pendentes.length - 40}`);
@@ -367,21 +376,10 @@ function texto(repos, info) {
 
   if (vizinhos.length) {
     linhas.push('');
-    linhas.push(`NAO INCLUIDOS — tem mudanca pendente, mas esta sessao nao os tocou (${vizinhos.length})`);
+    linhas.push(`NAO INCLUIDOS (${vizinhos.length}) — pendentes que esta sessao nao tocou: nao commite`);
     for (const r of vizinhos) {
       const adiantado = r.ahead ? `, ${r.ahead} commit(s) sem push` : '';
       linhas.push(`  ${r.raiz} — ${r.pendentes.length} pendente(s)${adiantado}, branch ${r.branch}`);
-    }
-    linhas.push('  Nao commite nenhum destes. E trabalho de outra leva; so entra por ordem expressa.');
-  }
-
-  if (pular.length) {
-    linhas.push('');
-    linhas.push('IGNORADOS');
-    for (const r of pular) {
-      const motivo = r.vault ? 'vault Obsidian (a skill obsidian-docs ja commita sozinha)'
-                             : 'sem mudanca pendente e em dia com o remoto';
-      linhas.push(`  ${r.raiz} — ${motivo}`);
     }
   }
   return linhas.join('\n');

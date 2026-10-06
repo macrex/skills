@@ -125,4 +125,12 @@ assert.strictEqual(antigo.info.transcript.harness, 'outro', 'rollout velho nao v
 assert.strictEqual(antigo.info.transcript.arquivo, null);
 assert.deepStrictEqual(antigo.raizes, [], 'sem transcript so a varredura conta, e o cwd nao e repo');
 
+// 5) as paradas do /cpv saem marcadas na linha do repo: HEAD destacado e merge em andamento
+const solto = repo('solto');
+execFileSync('git', ['-C', solto, 'checkout', '-q', '--detach'], { stdio: 'ignore' });
+const preso = repo('preso');
+fs.writeFileSync(path.join(preso, '.git', 'MERGE_HEAD'), execFileSync('git', ['-C', preso, 'rev-parse', 'HEAD'], { encoding: 'utf8' }));
+fs.writeFileSync(path.join(projetos, 'paradas.jsonl'), [uso('Edit', path.join(solto, 'a.txt')), uso('Edit', path.join(preso, 'a.txt'))].join('\n') + '\n');
+assert.deepStrictEqual(roda(['--sessao', 'paradas'], {}).repos.map((r) => r.bloqueios), [['MERGE OU REBASE EM ANDAMENTO'], ['HEAD DESTACADO']]);
+
 console.log('ok: Read nao marca o repo, Edit marca; repo sem commit aparece marcado; .obsidian marca o vault; Pi e Codex marcam pelo transcript deles');

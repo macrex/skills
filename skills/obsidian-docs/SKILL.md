@@ -17,200 +17,101 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 15.3
+# Versao: 15.4
 
-Todo acesso ao vault é pelo MCP `vault-docs` (`scripts/servidor_vault.py` desta skill). Ele sabe
-onde o vault fica e aplica as convenções (pasta por tipo, nome com data, frontmatter, link e
-entrada no hub, `Home.md`, commit → `pull --rebase` → push). Você decide **o quê** documentar e
-escreve o conteúdo; ele cuida do **como**. Estrutura: `Home.md` → `<projeto>/<projeto>.md` (hub)
-→ pastas por tipo; toda nota linka o hub e está listada nele.
-
-**NUNCA** Read/Grep/Glob/Write/Edit nos arquivos do vault, nem `git` nele: as convenções vivem no
-servidor, e por fora dele nascem notas órfãs.
+Todo acesso ao vault é pelo MCP `vault-docs`, que aplica as convenções (pasta por tipo, nome
+datado, frontmatter, entrada no hub e no `Home.md`, commit → `pull --rebase` → push). Você decide
+**o quê** documentar e escreve o conteúdo; ele cuida do **como**. **NUNCA** Read/Grep/Glob/Write/Edit
+nos arquivos do vault, nem `git` nele: por fora do servidor nascem notas órfãs.
 
 ## Se as ferramentas do vault não estão na sessão
 
-O prefixo depende do harness: `mcp__vault-docs__*` (`npx skills add` no Claude Code, e Pi),
-`mcp__plugin_macrex-skills_vault-docs__*` (plugin), e o prefixo próprio que Codex e Antigravity dão
-ao servidor `vault-docs`. Só faltam de verdade quando **nenhuma** ferramenta do servidor está lá.
-Então:
-
-- **Claude Code**: confira com `claude mcp list`. Skill vinda do plugin (está sob
-  `~/.claude/plugins/cache/`): o plugin já declara o servidor; **não** rode `--instalar` (criaria um
-  segundo `vault-docs`) — falta o reinício, ou a pasta do vault, que o cliente preenche em
-  `/plugin`. Vinda do `npx skills add`: registre com
-  `python <pasta desta skill>/scripts/servidor_vault.py --instalar --vault <pasta de projetos do vault>`.
-  O reinício do Claude Code é do usuário (sessão aberta antes do registro não carrega o servidor).
-- **Pi**: as ferramentas vêm da extensão `vault-docs` do pacote; não há MCP para registrar, e
-  `claude mcp list` e `--instalar` não existem aqui. Faltam por `OBSIDIAN_VAULT` vazia ou pacote
-  fora do `pi list`; diga qual.
-- **Codex** e **Antigravity** (CLI `agy`; um `mcp_config.json` com BOM quebra o `agy mcp`):
-  registre com
-  `<codex|agy> mcp add vault-docs -- python <pasta desta skill>/scripts/servidor_vault.py --vault <pasta de projetos do vault>`
-  (`python3` fora do Windows) e peça o reinício.
-
-Em todos: faça tudo que não depende do vault, diga que a gravação ficou pendente e encerre o
-turno com isso claro.
+Qualquer ferramenta do servidor `vault-docs` conta, seja qual for o prefixo do harness. Sem
+nenhuma, leia `references/registrar-mcp.md` (o que conferir e como registrar no Claude Code, no Pi,
+no Codex e no Antigravity), faça tudo que não depende do vault, diga que a gravação ficou pendente
+e encerre o turno com isso claro.
 
 ## Quando usar cada ferramenta
 
-- Nome do projeto incerto → `visao_geral`.
-- Entrar num projeto → `contexto_projeto X`: descrição, contagens, última evolução (abertura e
-  pendências) e notas recentes por seção com resumo, com teto fixo. O hub inteiro (`ler_nota X`)
-  só para o índice completo.
-- Achar → `buscar` (cada resultado traz o resumo do hub) → `conexoes` na nota certa (vizinhas com
-  resumo, sem hub e Home) → `ler_nota`, com `secao=<título>` quando basta uma parte (seção
-  inexistente devolve a lista) ou `max_chars` para cortar. Nota grande devolve o esboço;
-  `integral=true` lê mesmo assim.
-- Nota nova → `salvar_nota`; existente → `atualizar_nota`. Última evolução →
-  `listar_notas projeto=X tipo=evolucao limite=1`.
-- Código → `mapa_codigo` antes de mexer, `consultar_codigo` para arquitetura, `gerar_mapa` após o
-  graphify.
-
-Cada leitura entra no contexto de tudo que vem depois: `contexto_projeto` → nota certa → `secao=`.
-O que cada ferramenta aceita está na descrição dela no MCP.
+Leia em funil, porque cada leitura entra no contexto de tudo que vem depois: `contexto_projeto`
+para entrar num projeto (`visao_geral` se o nome é incerto; o hub inteiro só para o índice
+completo), `buscar` e `conexoes` para achar, e só então `ler_nota` na nota certa, com `secao=`
+quando basta uma parte. O porquê de uma decisão está no vault; o que o código é agora, no grafo do
+graphify, que é opcional (`mapa_codigo` antes de mexer, `consultar_codigo` para arquitetura).
 
 ## Regra dura
 
-- Todo artefato `.md` de documentação vai para o vault via `salvar_nota`. NUNCA criar nem commitar
-  doc no repo do projeto. Ficam no repo só os operacionais que ferramentas leem em lugar fixo:
-  `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `README.md`, configs.
-- Doc existente que muda → `atualizar_nota` in-place. Nunca recriar no repo, nunca cópia local.
+- Todo artefato `.md` de documentação nasce no vault via `salvar_nota`, e o que já existe muda
+  in-place com `atualizar_nota`. No repo do projeto ficam só os operacionais que ferramentas leem
+  em lugar fixo: `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `README.md`, configs.
 - Projeto = nome da pasta do repo git, minúsculo, sem acento. **Hub existente sempre ganha**: na
   primeira gravação da sessão num projeto, `contexto_projeto` (ou `visao_geral`) para não duplicar
   — repo `pagamentos-repo` pertence ao hub `pagamentos` que já existe. Projeto novo de verdade →
   `salvar_nota` com `descricao_projeto` (1 linha) e `repo` (caminho local).
 
-## Salvar: o que você passa
+## Escrever uma nota
 
-`salvar_nota(projeto, tipo, titulo, corpo, resumo, …)`:
+O servidor avisa o que foge do padrão (nunca recusa), e `validar tipo=padrao` o lista no vault.
 
 - `tipo` → pasta: `spec`/`plano` → `Specs/`; `bug` → `Bugs/`; `evolucao` → `Evolucoes/`;
   `arquitetura`/`adr` → `Arquitetura/`; `analise` (pesquisa, estudo, relatório, review) →
   `Analises/`; `mapa` → `Mapa do Codigo <projeto>.md` na raiz do projeto (regrava).
-- `titulo`: curto, acento permitido; a nota vira `YYYY-MM-DD <titulo>.md` (hoje, ou `data`).
-- `corpo`: markdown para quem não viu esta sessão — frases completas, um parágrafo por ideia,
-  termos por extenso; sem cadeias de setas, abreviações inventadas ou rótulos desta conversa. Não
-  repita título nem link do hub (o servidor põe `# titulo` e `Projeto: [[projeto]]`). Linke notas
-  relacionadas por `[[nome da nota]]` (só o nome, nunca a pasta): spec que originou o bug,
-  evolução que resolveu, nota anterior — o grafo nasce daí.
-- `resumo`: 1 linha, vira a entrada no hub (e o que `buscar` e `contexto_projeto` mostram).
-- `status`: `rascunho` | `ativo` (padrão) | `resolvido` | `obsoleto`. `tags`: 1-3, kebab-case sem
-  acento, opcional.
+- `titulo` até 80 caracteres, acento permitido, sem data nem sufixo de tipo: a nota vira
+  `YYYY-MM-DD <titulo>.md` (hoje, ou `data`). `resumo`: uma frase de até 200 caracteres com o que a
+  nota decide ou entrega; vira a entrada no hub, e hash de commit vai no corpo. `tags`: 1 a 3.
+- `corpo` para quem não viu esta sessão: frases completas, um parágrafo por ideia, termos por
+  extenso; sem cadeias de setas, abreviações inventadas ou rótulos desta conversa. Abre em prosa e segue nas seções do tipo — `evolucao`: `## O que mudou`,
+  `## Verificação`, `## Pendências`; `bug`: `## Sintoma`, `## Causa`, `## Correção`;
+  `spec`/`plano`: `## Objetivo`, `## Fora de escopo`; `adr`: `## Contexto`, `## Decisão`,
+  `## Consequências`; `analise`: `## Achados`, `## Recomendação`; tickets, `arquitetura`, `mapa` e anexos ficam
+  de fora. Título e
+  link do hub o servidor põe. Toda nota linka por `[[nome da nota]]` (só o nome) as relacionadas
+  que existem: a spec que originou o bug, a evolução que o resolveu, a nota anterior — o grafo
+  nasce daí.
 - `arquivos`: caminhos tocados pela leva (`git diff --name-only`), relativos ao repo; o servidor
-  anexa `## Componentes tocados` a partir do grafo do graphify. Sempre em evolução, bug e spec de
-  mudança.
+  anexa `## Componentes tocados` pelo grafo. Sempre em evolução, bug e spec de mudança.
 - **Ticket** de um artefato (quebra de spec/plano em tarefas, inclusive por `to-tickets`):
-  `tipo=plano` + `artefato=<nome da nota de origem>` → `Specs/Tickets - <artefato>/`, nunca
-  solto em `Specs/`.
-- **Lote** (`lote=true`): várias notas de uma vez (tickets, migração) gravam só em disco e
-  `sincronizar mensagem=<...>` fecha tudo num commit. **Obrigatório fechar**: sem `sincronizar` a
-  nota fica só na máquina local. Nota avulsa não usa lote.
+  `tipo=plano` + `artefato=<nome da nota de origem>`, que o grava em `Specs/Tickets - <artefato>/`.
+- **Lote**: várias notas de uma vez (tickets, migração) levam `lote=true`, e um
+  `sincronizar mensagem=<...>` fecha tudo num commit — sem ele a nota fica só na máquina local.
+  Nota avulsa não usa lote.
+- **Tamanho**: acima de 40.000 caracteres `ler_nota` devolve só o esboço; prefira spec curta mais
+  tickets, ou `dividir_nota`. Nome errado → `renomear_nota`.
 
-## Padrão de nota
+## Ciclo de vida
 
-O servidor avisa ao salvar (nunca recusa) e `validar tipo=padrao` lista no vault:
-
-- **Título** até 80 caracteres, sem data nem sufixo de tipo. **Resumo** até 200, uma frase com o
-  que a nota decide ou entrega; hash de commit vai no corpo. **Tags** 1 a 3, kebab-case.
-- **Corpo**: abertura em prosa e as seções do tipo. `evolucao`: `## O que mudou`,
-  `## Verificação`, `## Pendências`. `bug`: `## Sintoma`, `## Causa`, `## Correção`.
-  `spec`/`plano`: `## Objetivo`, `## Fora de escopo`. `adr`: `## Contexto`, `## Decisão`,
-  `## Consequências`. `analise`: `## Achados`, `## Recomendação`. Tickets, `arquitetura`, `mapa`
-  e anexos ficam de fora.
-- **Ciclo**: a evolução linka a spec, o plano ou o bug que fechou, e eles vão a `status=resolvido`
-  na mesma leva; o servidor lista os que continuam ativos. Toda nota linka uma relacionada além do
-  hub quando ela existe.
-- **Tamanho e nome**: acima de 40.000 caracteres `ler_nota` devolve só o esboço; `dividir_nota`
-  (anexos ao lado, com `parte_de:`) ou spec curta mais tickets. Nome errado → `renomear_nota`,
-  nunca por fora dele.
-
-## Validar
-
-`validar` é o linter do vault (o mesmo de `scripts/validar_vault.py`): frontmatter (E1–E3),
-wikilink quebrado (E4), nota fora do hub (E5), órfã e sem link (A1, A2), projeto sem hub (A3).
-O padrão de nota (A4 entrada de hub sem resumo, A5 nota grande, A6 seções ausentes, A7 tags
-demais, A8 nome longo, A9 resumo longo) só aparece contado; `validar tipo=padrao` lista.
-Rode `validar projeto=<projeto>` ao fechar uma leva e após migração; erro se corrige na hora
-(`atualizar_nota`, ou criar a nota que o link espera), não se relata.
-
-## Lifecycle (`atualizar_nota`)
-
-- Concluiu o que a nota descreve (plano executado, bug corrigido) → `status=resolvido` na hora.
-- Doc substituída por outra → `sucessora=<nome da nova nota>` (fica `obsoleto`, link no topo).
-- `rascunho` → `status=ativo` quando aprovada.
-
-## Evolução (fechar leva/versão)
-
-Uma nota `tipo=evolucao` por leva e por projeto: abre com uma frase do que a leva entregou e segue
-nas seções `## O que mudou` (e por quê, tentativas que falharam), `## Verificação`,
-`## Pendências`. Os títulos fixos importam: `contexto_projeto` mostra a abertura e as pendências da
-última evolução, e `ler_nota secao=Pendências` chega nelas sem carregar a nota. Mesmo tema e
-arquivos da última evolução → `atualizar_nota` nela, não nota nova.
-
-## Duas fontes, cada pergunta na sua
-
-O vault sabe o que foi **decidido e escrito**; o grafo do graphify sabe o que o código **é agora**.
-
-| A pergunta é sobre | Fonte | Como |
-|---|---|---|
-| por que é assim, o que foi descartado, o que a leva mudou | vault | `buscar` → `conexoes` → `ler_nota` (`secao=`) |
-| estrutura do código: quem chama X, caminho de A a B, gargalo | grafo | `consultar_codigo`, `mapa_codigo` |
-| onde mexer num projeto desconhecido | as duas | `contexto_projeto` + `mapa_codigo` |
-
-Sem grafo no projeto as ferramentas de código dizem isso e o vault segue sozinho: graphify é
-opcional.
+- Concluiu o que a nota descreve (plano executado, bug corrigido) → `status=resolvido` na hora;
+  `rascunho` → `status=ativo` quando aprovada; substituída → `sucessora=<nome da nova nota>`.
+- **Evolução**, ao fechar uma leva ou versão: uma nota `tipo=evolucao` por leva e por projeto. Abre
+  com uma frase do que a leva entregou, e `## O que mudou` diz também por quê e o que falhou. Ela
+  linka a spec, o plano ou o bug que fechou, e eles vão a `status=resolvido` na mesma leva (o
+  servidor lista os que seguem ativos). Os títulos fixos importam: `contexto_projeto` mostra a
+  abertura e as pendências da última evolução. Mesmo tema e arquivos da última evolução →
+  `atualizar_nota` nela, não nota nova.
+- Ao fechar a leva e após migração, `validar projeto=<projeto>`: erro se corrige na hora
+  (`atualizar_nota`, ou criar a nota que o link espera), não se relata.
 
 ## Mapa do Codigo (só se o projeto usa graphify)
 
-`graphify-out/` fica no repo, no `.gitignore` e fora do index (`git ls-files graphify-out` vazio;
-se rastreado, `git rm -r --cached graphify-out`) — nunca no vault. O servidor chega nele pela
-linha `Repo:` do hub; hub sem ela → passe `repo=` uma vez e o servidor registra.
-
 Após cada rodada do graphify, sem o usuário pedir (e sob demanda): `gerar_mapa(projeto,
-leitura=<sua prosa>)`. O servidor põe comunidades, god nodes e destaques do GRAPH_REPORT; a
-`leitura` é a parte curada (domínios, o que vale saber, lacunas) e é preservada quando você não a
-passa. PROIBIDO: dump bruto, nota por arquivo de código.
+leitura=<sua prosa>)`. O mapa é essa nota curada, uma por projeto, nunca dump bruto nem nota por
+arquivo de código. `graphify-out/` fica no repo, no `.gitignore` e fora do index — nunca no vault.
 
 ## Migração de docs existentes
 
-### `migrar` (um projeto)
-
-Dispara com `/obsidian-docs migrar` ou "migrar docs". Roda DENTRO do projeto, uma vez (ou quando
-acumular sujeira). Sem projeto no diretório atual (sem `.git`, manifesto ou `CLAUDE.md`/`AGENTS.md`)
-→ avise e sugira `/obsidian-docs migrar tudo`, em vez de falhar em silêncio.
-
-**REGRA DURA — migração é CÓPIA, nunca recorte.** PROIBIDO apagar qualquer arquivo do repo: a nota
-nasce no vault e o original fica. Nada de `git rm`, de mover, nem do commit `docs: migrados para o
-vault Obsidian` — ele não pode ser gerado em projeto nenhum. Achou um
+**Migração é CÓPIA, nunca recorte**: a nota nasce no vault e o original fica. PROIBIDO apagar,
+mover ou dar `git rm` em arquivo do repo, e gerar o commit `docs: migrados para o vault Obsidian`
+em qualquer projeto: remoção automática já apagou arquivos funcionais que só pareciam documentação
+(`LEIA-MODIFICADO.txt` de uma lib vendorizada, instruções de build). Achou esse commit
 (`git log --all --oneline --grep "migrados para o vault Obsidian"`)? Não empurrado, `git reset
 HEAD~1` (mixed: o conteúdo, inclusive a mudança útil que ele carregava, como `graphify-out/` no
 `.gitignore`, fica na working tree); já empurrado, avise o usuário e pare — reescrever histórico
-publicado é decisão dele. Motivo: remoção automática já apagou centenas de arquivos em dezenas de
-repos, inclusive arquivos que só pareciam documentação e eram parte funcional do código
-(`LEIA-MODIFICADO.txt` numa lib vendorizada, registros de modificação de dependência, instruções
-de build). Única exceção, só com `graphify-out/` rastreado: `git rm -r --cached graphify-out`
-(tira do index, mantém em disco) + `.gitignore`.
+publicado é decisão dele. Única exceção, só com `graphify-out/` rastreado:
+`git rm -r --cached graphify-out` (tira do index, mantém em disco) + `.gitignore`.
 
-**Fluxo** (detalhe em `references/procedimento-migrar.md`):
-
-1. Inventário — varrer o repo atrás de doc; nunca arquivo operacional (`README`, `CLAUDE.md`,
-   `SKILL.md`, configs).
-2. Plano — GATE OBRIGATÓRIO: tabela `arquivo → destino → tipo` ao usuário; aguarde confirmação,
-   ele pode excluir itens.
-3. Projeto no vault — `visao_geral`: hub existente ganha; projeto novo → `descricao_projeto` e
-   `repo` na primeira `salvar_nota`.
-4. Copiar — uma `salvar_nota` por arquivo confirmado, **com `lote=true`**: `data` do 1º commit,
-   conteúdo original como `corpo`, `resumo` de 1 linha, wikilinks entre notas relacionadas. Ao fim,
-   `sincronizar mensagem="<projeto>: migração de N notas"` e `validar projeto=<projeto>`.
-5. Checagem graphify (só se o projeto usa) — `graphify-out/` no `.gitignore` e fora do index.
-6. Repo do projeto — NÃO TOCAR.
-7. Relatório — o que foi copiado, o que ficou de fora e por quê.
-
-### `migrar tudo` (workspace inteiro)
-
-Dispara com `/obsidian-docs migrar tudo` ou "migrar todos os projetos". Rode na raiz do workspace.
-Descobre os projetos, inventaria em paralelo (subagent `vault-migrador`, modelo fixo `sonnet`,
-nunca o da sessão), confirma com um GATE único e migra projeto a projeto, sempre sequencial
-(**nunca dois em paralelo**: um vault, um `sincronizar` por projeto), com as regras do modo `migrar`.
-Detalhe em `references/procedimento-migrar-tudo.md`.
+- **`migrar`** (`/obsidian-docs migrar` ou "migrar docs"): rode DENTRO do projeto; sem projeto no
+  diretório atual (sem `.git`, manifesto ou `CLAUDE.md`/`AGENTS.md`), avise e sugira
+  `/obsidian-docs migrar tudo`. Antes de varrer o repo, leia `references/procedimento-migrar.md` e
+  siga os passos; o plano é um GATE: nada é copiado sem o sim do usuário.
+- **`migrar tudo`** (`/obsidian-docs migrar tudo` ou "migrar todos os projetos"): rode na raiz do
+  workspace e siga `references/procedimento-migrar-tudo.md`.

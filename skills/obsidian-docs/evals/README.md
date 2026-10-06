@@ -13,8 +13,4 @@ python -m scripts.run_eval --eval-set <este diretório>/trigger-eval.json \
 Rode **na sua máquina**, num diretório com o MCP `vault-docs` conectado e os repositórios que os
 pedidos citam. O avaliador só conta como disparo quando a primeira ferramenta chamada é `Skill`;
 num ambiente sem esses repositórios o modelo começa por `Glob`/`Bash` e toda consulta sai como
-"não disparou", seja qual for a descrição. Foi o que aconteceu no ambiente remoto onde a
-descrição atual foi escrita: recall perto de zero tanto para a descrição antiga quanto para a
-nova, precisão 100% nas duas. A descrição atual segue o critério do `skill-creator` para
-combater subdisparo (contexto explícito, exclusões nomeadas); a medida de verdade fica para a
-primeira rodada local.
+"não disparou", seja qual for a descrição.

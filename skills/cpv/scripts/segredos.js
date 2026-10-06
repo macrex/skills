@@ -41,19 +41,18 @@ const PUBLICO = /-----BEGIN (CERTIFICATE|PUBLIC KEY|CERTIFICATE REQUEST|DH PARAM
 // Pelo conteudo: padroes com formato fixo (baixo falso-positivo) e as
 // atribuicoes de senha/token com valor literal.
 const CONTEUDO = [
-  [/-----BEGIN (RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/, 'chave privada'],
-  [/\bAKIA[0-9A-Z]{16}\b/, 'AWS access key'],
-  [/\bghp_[A-Za-z0-9]{36}\b/, 'GitHub token'],
-  [/\bgithub_pat_[A-Za-z0-9_]{22,}\b/, 'GitHub fine-grained token'],
-  [/\bgh[ousr]_[A-Za-z0-9]{36}\b/, 'GitHub token'],
-  [/\bsk-ant-[A-Za-z0-9_-]{20,}\b/, 'Anthropic API key'],
-  [/\bsk-(proj-|live_|test_)?[A-Za-z0-9]{20,}\b/, 'API key (sk-)'],
-  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/, 'Slack token'],
-  [/\bAIza[0-9A-Za-z_-]{35}\b/, 'Google API key'],
-  [/\bglpat-[A-Za-z0-9_-]{20,}\b/, 'GitLab token'],
-  [/\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b/, 'SendGrid key'],
-  [/\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/, 'JWT'],
-  [/\b(postgres|postgresql|mysql|mongodb(\+srv)?|redis|amqp):\/\/[^:\s/]+:[^@\s]+@/i, 'URL com senha'],
+  [/-----BEGIN (RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/g, 'chave privada'],
+  [/\bAKIA[0-9A-Z]{16}\b/g, 'AWS access key'],
+  [/\bgh[pousr]_[A-Za-z0-9]{36}\b/g, 'GitHub token'],
+  [/\bgithub_pat_[A-Za-z0-9_]{22,}\b/g, 'GitHub fine-grained token'],
+  [/\bsk-ant-[A-Za-z0-9_-]{20,}\b/g, 'Anthropic API key'],
+  [/\bsk-(proj-|live_|test_)?[A-Za-z0-9]{20,}\b/g, 'API key (sk-)'],
+  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, 'Slack token'],
+  [/\bAIza[0-9A-Za-z_-]{35}\b/g, 'Google API key'],
+  [/\bglpat-[A-Za-z0-9_-]{20,}\b/g, 'GitLab token'],
+  [/\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b/g, 'SendGrid key'],
+  [/\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, 'JWT'],
+  [/\b(postgres|postgresql|mysql|mongodb(\+srv)?|redis|amqp):\/\/[^:\s/]+:[^@\s]+@/gi, 'URL com senha'],
 ];
 
 // Atribuicao com valor literal — o unico padrao que depende do contexto da
@@ -65,7 +64,7 @@ const ATRIBUICAO = [
   // (?<![A-Za-z]) e o sufixo opcional no lugar de \b: `_` e caractere de palavra,
   // entao \b nao existe em DB_PASSWORD nem em client_secret_prd — e o nome
   // composto e a forma dominante em settings.py, compose, manifesto k8s e export.
-  [/(?<![A-Za-z])(password|passwd|pwd|senha|api[_-]?key|apikey|secret|token|access[_-]?key|client[_-]?secret)(?:[_-][A-Za-z0-9]+)*\s*[:=]\s*(?<aspas>["'`]?)(?!\s*["'`]?\s*$)(?![/~])(?![A-Za-z]:[\\/])(?![^\s"'`,;)]*(\.\.\.|…))(?!\$\{?)(?!<)(?!%)(?!\{\{)(?!process\.env)(?!os\.environ)(?!env\()(?!getenv)(?!None\b)(?!null\b)(?!nil\b)(?!true\b)(?!false\b)(?!\*{3,})(?!x{3,})(?!your[_-])(?!changeme)(?!example)(?!placeholder)[^\s"'`,;)]{4,}/i,
+  [/(?<![A-Za-z])(password|passwd|pwd|senha|api[_-]?key|apikey|secret|token|access[_-]?key|client[_-]?secret)(?:[_-][A-Za-z0-9]+)*\s*[:=]\s*(?<aspas>["'`]?)(?![/~])(?![A-Za-z]:[\\/])(?![^\s"'`,;)]*(\.\.\.|…))(?!\$\{?)(?!<)(?!%)(?!\{\{)(?!process\.env)(?!os\.environ)(?!env\()(?!getenv)(?!None\b)(?!null\b)(?!nil\b)(?!true\b)(?!false\b)(?!\*{3,})(?!x{3,})(?!your[_-])(?!changeme)(?!example)(?!placeholder)[^\s"'`,;)]{4,}/gi,
     'atribuicao de senha/token com valor literal'],
 ];
 
@@ -74,8 +73,6 @@ const LINHA_OK = [
   /^\s*(#|\/\/|\*|--|<!--)/,                 // comentario
   /(?<![A-Za-z])(example|sample|dummy|fake|test[es]?|mock|fixture|placeholder|redacted|xxx+|todo)(?![A-Za-z])/i,
   /\b(password|senha|token|secret|api[_-]?key)\b\s*[:=]\s*["'`]?(\$\{?[A-Z_]+\}?|\{\{.*\}\}|<[^>]+>|%[^%]+%)/i,
-  /\btype\s*[:=]\s*["']?password\b/i,        // <input type="password">, schema type: password
-  /\b(password|senha|token|secret)\s*[:=]\s*["'`]?\s*["'`]?\s*$/i, // valor vazio
 ];
 // Arquivo de teste pelo caminho: a fixture entre aspas (`Password: "senha"`) e
 // normal ali, como nas linhas de LINHA_OK. Formato fixo continua valendo.
@@ -167,7 +164,7 @@ function varrerArquivo(raiz, rel) {
     const padroes = teste || LINHA_OK.some((re) => re.test(linha)) ? CONTEUDO : CONTEUDO.concat(ATRIBUICAO);
     for (const [re, motivo] of padroes) {
       // todas as ocorrencias: a primeira sem aspas nao pode esconder uma literal adiante
-      const m = [...linha.matchAll(new RegExp(re.source, re.flags + 'g'))]
+      const m = [...linha.matchAll(re)]
         .find((x) => !(codigo && x.groups?.aspas === ''));
       if (m) { achados.push({ arquivo: rel, linha: i + 1, motivo, trecho: mascarar(m[0]) }); break; }
     }

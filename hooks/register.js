@@ -1,16 +1,14 @@
-// Painel da leva: o mod do Claude Code que desenha, num pane ao lado da conversa, o estado da
-// leva do workspace. Carregado por "modules" no hooks/hooks.json; os settings hooks seguem la.
-// Sem JSX (o arquivo e .js): as arvores saem do `h` global.
+// Painel da leva: o mod do Claude Code que desenha a leva do workspace num pane ao lado da
+// conversa. Carregado por "modules" no hooks/hooks.json; sem JSX (o arquivo e .js), as arvores
+// saem do `h` global.
 //
-// A leva grava o estado chamando a ferramenta faz_marco (skills/faz/references/harness.md diz
-// quando); o estado fica no $.store do plugin, um por workspace, e sobrevive a reinicio. O
-// desenho le do $.state (types/index.d.ts), que sobrevive a hot reload e redesenha sozinho.
-// O tempo sai da hora de cada marco; os agentes e workflows, dos hooks do Agent, do Workflow,
-// do fim de turno do sub-agente e da notificacao de fim de tarefa.
-//
-// O grill do /faz (movimento 1) vem antes da leva: os marcos grill e entendimento o abrem e o
-// fecham, e as perguntas saem do AskUserQuestion pelo tema (o header). O inicio da leva o tira
-// da tela; o /clear volta ao repouso, o Claude dormindo.
+// A leva grava o estado pela ferramenta faz_marco (quando, dizem skills/faz/references/painel.md
+// e, para os marcos do grill, interrogatorio.md), no $.store do plugin, um por workspace; o
+// desenho le do $.state (types/index.d.ts), que sobrevive a hot reload. Os agentes e workflows vem
+// dos hooks do Agent, do Workflow, do fim de turno e da notificacao de tarefa. O grill do /faz
+// (movimento 1) vem antes da leva: os marcos
+// grill, entendimento e linha, as perguntas do AskUserQuestion pelo tema (o header) e as rodadas
+// da grill-tela pelo estado da pagina dela.
 
 import { atom, read, update } from 'claude-code'
 
@@ -30,8 +28,6 @@ const ZS = [
   ['          Z', '         z', ''],
 ]
 const BONECO = [' ▐▛███▜▌', '▝▜█████▛▘', '  ▘▘ ▝▝']
-// o boneco menor, para o pane baixo: sem as pernas; o corpo fica, e e ele que fecha os olhos por baixo
-const BONECO_MENOR = BONECO.slice(0, 2)
 
 // A frase do repouso: o terminal nao muda o tamanho da fonte, entao ela vai em maiusculas
 // espacadas e em negrito, que leem maiores; so no pane que tem lugar para ela.
@@ -58,8 +54,9 @@ const VERDE = '#9ece6a'
 const AZUL = '#7aa2f7'
 const VERMELHO = '#f7768e'
 const AMARELO = '#e0af68'
+const SKILL_DA_FASE = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review' }
 // o nome de cada fase no chip, o da skill que a cumpre; o fechamento nao vira chip, vira o aviso do /cpv
-const ROTULO = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review', correcoes: 'correções', qualidade: 'qualidade' }
+const ROTULO = { ...SKILL_DA_FASE, correcoes: 'correções', qualidade: 'qualidade' }
 const FIM_DE_TAREFA = { completed: 'concluido', failed: 'falhou', killed: 'parado', stopped: 'parado' }
 const DO_AGENTE = { rodando: ['rodando', LARANJA], concluido: ['concluído', VERDE], falhou: ['falhou', VERMELHO], parado: ['parado', APAGADO] }
 
@@ -71,18 +68,15 @@ const AGENTES = atom({ plugin: 'macrex-skills', key: 'agentes' }, [])
 const SKILLS = atom({ plugin: 'macrex-skills', key: 'skills' }, [])
 // As ultimas levas fechadas do workspace, carregadas do $.store no inicio da sessao.
 const HISTORICO = atom({ plugin: 'macrex-skills', key: 'historico' }, [])
-// O grill do movimento 1, um por workspace no $.store, ate o inicio da leva ou o Limpar a tela.
+// O grill do movimento 1, um por workspace no $.store, ate o proximo grill.
 const GRILL = atom({ plugin: 'macrex-skills', key: 'grill' }, null)
-// A aba do pane, so na sessao: o andamento da leva ou o codigo que a sessao mudou.
+// A aba do pane, so na sessao.
 const ABA = atom({ plugin: 'macrex-skills', key: 'aba' }, 'painel')
-// O ponto de partida da aba Codigo, tirado no inicio da sessao: a raiz do repositorio, o commit do
-// working tree de entao (git stash create; o HEAD, se limpo) e os arquivos nao rastreados de entao.
+// A base da aba Diff, tirada no inicio da sessao; os arquivos que a sessao mudou desde ela, e os abertos.
 const BASE = atom({ plugin: 'macrex-skills', key: 'base' }, null)
-// Os arquivos que a sessao mudou desde a base, com o diff de cada um; e os que estao abertos.
 const CODIGO = atom({ plugin: 'macrex-skills', key: 'codigo' }, [])
 const ABERTOS = atom({ plugin: 'macrex-skills', key: 'abertos' }, [])
-// Os tokens de cada turno desde o inicio da leva (ou da sessao, antes dela), so na sessao: por
-// loop, o principal em 'sessao' e cada sub-agente pelo agentId, com o modelo do ultimo turno.
+// Os tokens de cada turno desde o inicio da leva (ou da sessao, antes dela), so na sessao.
 const USO = atom({ plugin: 'macrex-skills', key: 'uso' }, {})
 const ABAS = { painel: 'Painel', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso' }
 const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']
@@ -90,11 +84,12 @@ const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cac
 const CONTROLE = /[\u0000-\u0008\u000b-\u001f\u007f]/g
 // a linha das abas e a margem embaixo dela
 const LINHAS_DAS_ABAS = 2
-// as ferramentas que mudam arquivo: depois de cada uma, a aba Codigo aberta se refaz
+// as ferramentas que mudam arquivo: depois de cada uma, a aba Diff aberta se refaz
 const MUDAM = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell']
 // o maior source que um Code desenha e 10000; a folga e do cabecalho recontado
 const LIMITE_DO_CODE = 9900
-const SKILL_DA_FASE = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review' }
+// a pagina da grill-tela: todo comando `grill-tela.js <subcomando> <url>` leva a URL dela
+const URL_DA_TELA = /http:\/\/127\.0\.0\.1:\d+\/\?t=[0-9a-f]+/
 
 const chave = cwd => `leva:${cwd}`
 const chaveDoHistorico = cwd => `levas:${cwd}`
@@ -104,6 +99,8 @@ const semSkill = (fase, skills) => (skills.includes(SKILL_DA_FASE[fase]) ? undef
 // um inicio com o mesmo documento sobre a leva aberta e a retomada dela
 const retoma = (leva, m) => m.marco === 'inicio' && Boolean(leva) && !leva.fechada && leva.documento === m.documento
 const dois = n => String(n).padStart(2, '0')
+const verdes = leva => leva.tickets.filter(t => t.estado === 'verde').length
+const somar = (a = {}, b) => Object.fromEntries(TOKENS.map(k => [k, (a[k] ?? 0) + (b[k] ?? 0)]))
 
 // a contagem de tokens curta, com a virgula do portugues: 999, 1,5k, 2,3M
 function tokens(n) {
@@ -132,6 +129,7 @@ function aplicar(leva, m, agora) {
   }
   if (!MARCOS.includes(m.marco)) return { erro: `marco desconhecido: ${m.marco}; use ${MARCOS.join(', ')}` }
   if (!leva) return { erro: 'nenhuma leva neste workspace: registre o marco inicio antes' }
+  if (['ticket', 'portao'].includes(m.marco) && !leva.tickets.some(t => t.id === String(m.ticket))) return { erro: `ticket inexistente: ${m.ticket}` }
   // a fase guarda a hora da primeira entrada; voltar a ela nao zera o tempo
   const fase = f => ({
     ...leva,
@@ -139,7 +137,6 @@ function aplicar(leva, m, agora) {
     fases: leva.fases.includes(f) ? leva.fases : [...leva.fases, f],
     entradas: { [f]: agora, ...leva.entradas },
   })
-  const achar = id => leva.tickets.find(t => t.id === String(id))
   switch (m.marco) {
     case 'fase':
       if (!FASES.includes(m.fase)) return { erro: `fase fora do vocabulario: ${m.fase}; use ${FASES.join(', ')}` }
@@ -152,13 +149,11 @@ function aplicar(leva, m, agora) {
       }
       return { ...leva, tickets: m.tickets.map(t => ({ id: String(t.id), titulo: t.titulo, estado: 'pendente' })) }
     case 'ticket':
-      if (!achar(m.ticket)) return { erro: `ticket inexistente: ${m.ticket}` }
       return {
         ...leva,
         tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, estado: 'em-curso', inicioEm: t.inicioEm ?? agora } : t)),
       }
     case 'portao': {
-      if (!achar(m.ticket)) return { erro: `ticket inexistente: ${m.ticket}` }
       if (!PORTOES.includes(m.portao)) return { erro: `portao deve ser verde ou vermelho, veio ${m.portao}` }
       if (m.reparos != null && ![0, 1, 2].includes(m.reparos)) return { erro: `reparos vai de 0 a 2, veio ${m.reparos}` }
       if (m.testes != null && String(m.testes).length > 20) return { erro: `testes cabe em 20 caracteres, veio ${m.testes}` }
@@ -201,17 +196,16 @@ function aplicarNoGrill(grill, m, agora) {
   if (!grill) return { erro: 'nenhum grill neste workspace: registre o marco grill antes' }
   if (m.marco === 'linha') {
     if (typeof m.linha !== 'string' || !m.linha.trim() || m.linha.length > 4000) return { erro: 'linha exige a linha da leva inteira, ate 4000 caracteres' }
-    // o Code da aba Grill recusa caractere de controle alem de tab e quebra de linha
     return { ...grill, linha: m.linha.replace(CONTROLE, '') }
   }
   if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'entendimento exige documento (titulo da nota ou caminho)' }
   return { ...grill, documento: m.documento, fim: agora }
 }
 
-// o grill que a aba Painel mostra: o que o inicio da leva e o /clear nao tiraram de la
+// o grill que a aba Painel mostra: o que o inicio da leva nao tirou de la
 const naTela = grill => (grill && !grill.fora ? grill : null)
 
-// Tira o grill da aba Painel; a aba Grill o guarda ate o proximo grill do workspace.
+// Tira o grill da aba Painel quando a leva comeca; a aba Grill o guarda ate o Limpar.
 async function tirarGrillDaTela($) {
   const grill = await read($, GRILL)
   if (!naTela(grill)) return
@@ -220,15 +214,60 @@ async function tirarGrillDaTela($) {
   await update($, GRILL, () => fora)
 }
 
-// Tira da tela o grill e a leva fechada; o historico fica no store para a proxima fechada. A leva
-// aberta fica: a retomada numa sessao nova le os tickets dela do store.
+// As rodadas da grill-tela no grill, pelo estado da pagina: a rodada aberta entra aguardando, a
+// respondida traz a escolha (e o comentario); a pergunta que ja esta no grill muda no lugar, a
+// nova entra no fim. A pagina que voltou ao CLI, terminou ou parou encerra a consulta.
+// ponytail: uma falha da consulta encerra; o servidor e local, e falhar e ter parado
+async function sincronizarTela($) {
+  const url = (await read($, GRILL))?.tela
+  if (!url) return
+  let estado = null
+  try {
+    const r = await $.http.fetch(url.replace('/?t=', '/api/estado?t='))
+    if (r.ok) estado = JSON.parse(r.text)
+  } catch {}
+  const abertas = estado?.fase === 'rodada' && estado.rodada ? [{ rodada: estado.rodada }] : []
+  const daTela = [...(estado?.historico ?? []), ...abertas].flatMap(({ rodada, respostas }) =>
+    rodada.questoes.map(q => {
+      const r = respostas?.find(x => x.id === q.id)
+      return { id: `tela:${rodada.rodada}:${q.id}`, pergunta: q.titulo, tema: q.cabecalho, ...(r && { resposta: r.comentario ? `${r.escolha} (${r.comentario})` : r.escolha }) }
+    }),
+  )
+  // a mescla e sobre o grill de agora: o que chegou durante a consulta (o entendimento, o fora do
+  // inicio, o Limpar) fica
+  let mudou = false
+  const novo = await update($, GRILL, grill => {
+    if (grill?.tela !== url) return grill
+    const { tela, ...resto } = grill
+    const perguntas = [...grill.perguntas.map(p => daTela.find(t => t.id === p.id) ?? p), ...daTela.filter(t => !grill.perguntas.some(p => p.id === t.id))]
+    const proximo = { ...resto, perguntas, ...(estado && !['cli', 'concluido'].includes(estado.fase) && { tela }) }
+    mudou = JSON.stringify(proximo) !== JSON.stringify(grill)
+    return mudou ? proximo : grill
+  })
+  if (mudou) await $.store.set(chaveDoGrill(await $.session.cwd()), novo)
+}
+
+// O que tem store volta dele: a leva, o historico e o grill do workspace.
+async function carregar($, cwd) {
+  const salva = await $.store.get(chave(cwd))
+  if (salva) await update($, LEVA, () => salva)
+  const historico = await $.store.get(chaveDoHistorico(cwd))
+  if (historico) await update($, HISTORICO, () => historico)
+  const grill = await $.store.get(chaveDoGrill(cwd))
+  if (grill) await update($, GRILL, () => grill)
+}
+
+// O botao Limpar da aba Painel, sempre ao lado do titulo e o unico que limpa (o /clear nao mexe no
+// painel): o grill sai de todas as abas e do store, e a leva, aberta ou fechada, sai com os
+// agentes e o uso dela; o historico fica para a proxima fechada. A leva aberta limpa perde a retomada.
 async function limpar($) {
   const cwd = await $.session.cwd()
-  await tirarGrillDaTela($)
-  if (await ativa($)) return
+  await $.store.delete(chaveDoGrill(cwd))
+  await update($, GRILL, () => null)
   await $.store.delete(chave(cwd))
   await update($, LEVA, () => null)
   await update($, AGENTES, () => [])
+  await update($, USO, () => ({}))
 }
 
 // O stdout do git na pasta `cwd`, ou '' quando sai com codigo acima de `aceito` (o diff
@@ -239,7 +278,7 @@ async function git($, cwd, args, aceito = 0) {
 }
 const naoRastreados = async ($, raiz) => (await git($, raiz, ['ls-files', '--others', '--exclude-standard', '-z'])).split('\0').filter(Boolean)
 
-// Tira a base da aba Codigo uma vez por sessao: o hot reload roda o session.start de novo.
+// Tira a base da aba Diff uma vez por sessao: o hot reload roda o session.start de novo.
 // ponytail: um repositorio por sessao, o do cwd do inicio; o nao rastreado de antes que a sessao
 // mudou fica fora
 async function marcarBase($, cwd) {
@@ -254,8 +293,7 @@ async function marcarBase($, cwd) {
   } catch {}
 }
 
-// O diff do git em arquivos: o caminho, as linhas somadas e tiradas, e os hunks. O Code recusa
-// caractere de controle alem de tab e quebra de linha, entao o \r e os outros saem.
+// O diff do git em arquivos: o caminho, as linhas somadas e tiradas, e os hunks sem CONTROLE (o \r inclusive).
 function arquivosDoDiff(texto) {
   return texto.split(/^diff --git /m).slice(1).map(bloco => {
     const limpo = bloco.replace(CONTROLE, '')
@@ -299,7 +337,7 @@ function pedacos(diff) {
   return fora
 }
 
-// Refaz a lista da aba Codigo: o working tree contra a base, e os nao rastreados novos inteiros.
+// Refaz a lista da aba Diff: o working tree contra a base, e os nao rastreados novos inteiros.
 async function atualizarCodigo($) {
   const base = await read($, BASE)
   if (!base) return
@@ -318,7 +356,6 @@ const trocarAba = async ($, aba) => {
   if (aba === 'codigo') await atualizarCodigo($)
 }
 
-// Muda os agentes que `qual` escolhe com o que `como` devolve.
 const mexer = ($, qual, como) => update($, AGENTES, lista => lista.map(a => (qual(a) ? { ...a, ...como(a) } : a)))
 
 const ativa = async $ => {
@@ -332,15 +369,14 @@ const emGrill = async $ => {
 
 export function register(on) {
   on('session.start', async ($, e, next) => {
-    const salva = await $.store.get(chave(e.cwd))
-    if (salva) await update($, LEVA, () => salva)
-    const historico = await $.store.get(chaveDoHistorico(e.cwd))
-    if (historico) await update($, HISTORICO, () => historico)
-    const grill = await $.store.get(chaveDoGrill(e.cwd))
-    if (grill) await update($, GRILL, () => grill)
+    await carregar($, e.cwd)
     await marcarBase($, e.cwd)
-    // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane
-    $.clock.every(1000, async () => ((await ativa($)) || (await emGrill($))) && $.ui.invalidate('ui.render'))
+    // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
+    // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente
+    $.clock.every(1000, async () => {
+      if (await emGrill($)) await sincronizarTela($)
+      if ((await ativa($)) || (await emGrill($))) $.ui.invalidate('ui.render')
+    })
     // no repouso, o ronco: so o pane montado redesenha
     $.clock.every(RONCO, async () => !(await read($, LEVA)) && !naTela(await read($, GRILL)) && $.ui.invalidate('ui.render'))
     await $.command.register({
@@ -351,18 +387,16 @@ export function register(on) {
     await $.tool.register({
       name: FERRAMENTA,
       description:
-        'Registra um marco da leva (/faz leva) no painel da leva do Claude Code. Chame em: inicio (com documento), ' +
-        'cada fase, tickets publicados, inicio de cada ticket, resultado de cada portao e fechamento. ' +
-        'No interrogatorio do /faz: grill (com pedido) antes da primeira pergunta, entendimento (com documento) ' +
-        'quando o documento estiver gravado e linha (com a linha da leva inteira) logo depois de imprimi-la. ' +
-        'Erro aqui nunca para a leva.',
+        'Registra um marco da leva (/faz) no painel da leva do Claude Code; quando chamar cada marco, e com que ' +
+        'campos, esta em references/painel.md da /faz (os do grill, em references/interrogatorio.md). ' +
+        'A recusa diz o campo que falta: corrija e chame de novo. Erro aqui nunca para a leva.',
       inputSchema: {
         type: 'object',
         properties: {
           marco: { type: 'string', enum: [...MARCOS, ...MARCOS_DO_GRILL] },
           documento: { type: 'string', description: 'inicio e entendimento: o documento da leva (titulo da nota ou caminho)' },
           pedido: { type: 'string', maxLength: 60, description: 'grill: o pedido em poucas palavras' },
-          linha: { type: 'string', maxLength: 4000, description: 'linha: a linha da leva que o /faz imprimiu ao fim do grill, inteira' },
+          linha: { type: 'string', maxLength: 4000, description: 'linha: a linha da leva que o /faz imprimiu ao fim do grill, inteira e com as mesmas quebras' },
           fase: { type: 'string', enum: FASES },
           modo: { type: 'string', enum: MODOS, description: 'fase implement: como o implement roda' },
           tickets: {
@@ -388,13 +422,49 @@ export function register(on) {
     return next(e)
   })
 
-  // o /clear limpa a tela; nenhum session.start vem depois dele
+  // O /clear e o /resume trocam a sessao: o processo segue com outro id e um $.state vazio, e
+  // nenhum session.start vem. O que so a sessao guarda (a aba, o Diff, o Uso, os agentes) passa da
+  // que acaba para a nova por esta variavel; a leva, o historico e o grill voltam do store. A
+  // conferencia das skills recomeca, como numa retomada. So o Limpar limpa o painel.
+  let herdado = null
   on('session.end', async ($, e, next) => {
-    if (e.reason === 'clear') await limpar($)
+    if (e.reason === 'clear' || e.reason === 'resume') {
+      herdado = {
+        aba: await read($, ABA),
+        base: await read($, BASE),
+        codigo: await read($, CODIGO),
+        abertos: await read($, ABERTOS),
+        uso: await read($, USO),
+        agentes: await read($, AGENTES),
+      }
+    }
+    return next(e)
+  })
+  on('classic.SessionStart', async ($, e, next) => {
+    if (e.source === 'clear' || e.source === 'resume') {
+      await carregar($, await $.session.cwd())
+      const antes = herdado
+      herdado = null
+      if (antes) {
+        await update($, ABA, () => antes.aba)
+        await update($, BASE, () => antes.base)
+        await update($, CODIGO, () => antes.codigo)
+        await update($, ABERTOS, () => antes.abertos)
+        await update($, USO, () => antes.uso)
+        await update($, AGENTES, () => antes.agentes)
+      }
+    }
     return next(e)
   })
 
+  // o Limpar tirou do painel uma leva ou um grill que o agente ainda toca: os marcos dela seguem sem
+  // recusa (a recusa o faria recriar o que saiu), ate um inicio ou um grill novo
+  let limpo = false
   on('tool.call', { tool: MARCO }, async ($, e) => {
+    if (e.marco === 'inicio' || e.marco === 'grill') limpo = false
+    else if (limpo && !(MARCOS_DO_GRILL.includes(e.marco) ? await read($, GRILL) : await read($, LEVA))) {
+      return { result: 'o usuario limpou o painel: siga sem registrar os marcos desta leva' }
+    }
     if (MARCOS_DO_GRILL.includes(e.marco)) {
       const grill = aplicarNoGrill(await read($, GRILL), e, await $.clock.now())
       if (grill.erro) return { deny: grill.erro }
@@ -406,10 +476,8 @@ export function register(on) {
     const leva = aplicar(antes, e, await $.clock.now())
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
-    if (e.marco === 'inicio') {
-      // a leva comeca (ou retoma): o grill sai da aba Painel
-      await tirarGrillDaTela($)
-    }
+    // a leva comeca (ou retoma): o grill sai da aba Painel
+    if (e.marco === 'inicio') await tirarGrillDaTela($)
     if (retoma(antes, e)) {
       const tickets = leva.tickets.map(({ id, titulo, estado, notas }) => ({ id, titulo, estado, notas }))
       const estado = JSON.stringify({ fase: leva.fase, tickets, sujos: leva.sujos ?? [] }, null, 2)
@@ -454,8 +522,8 @@ export function register(on) {
     return next(e)
   })
 
-  // as rodadas do grill pelo CLI: cada pergunta entra pelo tema e espera a resposta.
-  // ponytail: o canal tela (grill-tela) responde por fora do AskUserQuestion e nao aparece aqui
+  // as rodadas do grill pelo CLI: cada pergunta entra pelo tema e espera a resposta (as da
+  // grill-tela chegam pelo estado da pagina, em sincronizarTela)
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
     if (!(await emGrill($))) return next(e)
     const id = e.tool_use_id
@@ -463,14 +531,12 @@ export function register(on) {
     await update($, GRILL, g => ({ ...g, perguntas: [...g.perguntas, ...novas] }))
     const r = await next(e)
     const respostas = r.result?.answers ?? {}
-    const grill = await read($, GRILL)
-    if (!grill) return r
-    const respondido = {
-      ...grill,
-      perguntas: grill.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
-    }
-    await $.store.set(chaveDoGrill(await $.session.cwd()), respondido)
-    await update($, GRILL, () => respondido)
+    // o Limpar apertado com a pergunta aberta ja tirou o grill
+    const respondido = await update($, GRILL, g => g && {
+      ...g,
+      perguntas: g.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
+    })
+    if (respondido) await $.store.set(chaveDoGrill(await $.session.cwd()), respondido)
     return r
   })
 
@@ -510,15 +576,11 @@ export function register(on) {
     return r
   })
 
-  // fim de um sub-agente em background: o turno do loop dele termina
+  // o fim de cada turno: soma os tokens do loop para a aba Uso e fecha o sub-agente em background
   on('turn.complete', async ($, e, next) => {
     if (e.usage) {
       const loop = e.agentId ?? 'sessao'
-      await update($, USO, uso => {
-        const antes = uso[loop] ?? {}
-        const somado = Object.fromEntries(TOKENS.map(k => [k, (antes[k] ?? 0) + (e.usage[k] ?? 0)]))
-        return { ...uso, [loop]: { ...somado, modelo: e.usage.model ?? antes.modelo ?? '' } }
-      })
+      await update($, USO, uso => ({ ...uso, [loop]: { ...somar(uso[loop], e.usage), modelo: e.usage.model ?? uso[loop]?.modelo ?? '' } }))
     }
     if (e.agentId) {
       const fim = await $.clock.now()
@@ -558,10 +620,26 @@ export function register(on) {
     return next(e)
   })
 
-  // a ferramenta que muda arquivo refaz a aba Codigo, se e ela que esta na tela
+  // a ferramenta que muda arquivo refaz a aba Diff, se e ela que esta na tela; o comando da
+  // grill-tela que leva a URL da pagina liga a consulta das rodadas dela no grill em curso; o
+  // prompt que o localizador gera (--linha) entra no grill sem depender do marco linha
   on('tool.call', async ($, e, next) => {
     const r = await next(e)
     if (MUDAM.includes(e.tool) && (await read($, ABA)) === 'codigo') await atualizarCodigo($)
+    const tela = /grill-tela\.js/.test(e.command ?? '') && URL_DA_TELA.exec(e.command)?.[0]
+    if (tela && (await emGrill($))) {
+      await update($, GRILL, g => ({ ...g, tela }))
+      await sincronizarTela($)
+    }
+    const linha = /skills-do-matt\.js["']?\s+--linha/.test(e.command ?? '') && String(r?.result?.stdout ?? '').trim()
+    const grill = linha && (await read($, GRILL))
+    if (grill) {
+      const comLinha = aplicarNoGrill(grill, { marco: 'linha', linha }, await $.clock.now())
+      if (!comLinha.erro) {
+        await $.store.set(chaveDoGrill(await $.session.cwd()), comLinha)
+        await update($, GRILL, () => comLinha)
+      }
+    }
     return r
   })
 
@@ -579,10 +657,11 @@ export function register(on) {
     const leva = await read($, LEVA)
     // a aba Grill mostra o ultimo grill do workspace; a aba Painel, so o que ainda esta na tela
     const ultimoGrill = await read($, GRILL)
-    const grill = naTela(ultimoGrill)
+    // sem leva, o grill que o inicio tirou daqui volta, para o Limpar alcanca-lo
+    const grill = leva ? naTela(ultimoGrill) : ultimoGrill
     const aba = await read($, ABA)
     const arquivos = await read($, CODIGO)
-    // as abas no topo, a da tela em destaque; 1 e 2 trocam com o foco no pane
+    // as abas no topo, a da tela em destaque; o numero de cada uma a troca com o foco no pane
     const abas = h(
       Box,
       { gap: 1, marginBottom: 1, flexWrap: 'wrap' },
@@ -611,8 +690,9 @@ export function register(on) {
       const livres = linhas == null ? LINHAS_DA_FRASE : linhas - LINHAS_DAS_ABAS
       const alto = livres >= LINHAS_DO_BONECO
       const comFrase = livres >= LINHAS_DA_FRASE && (colunas ?? LARGURA_DO_GRANDE) >= LARGURA_DO_GRANDE
-      // no pane baixo, o boneco menor e so os dois z de baixo
-      const desenho = (alto ? [...zs, ...BONECO] : [...zs.slice(1), ...BONECO_MENOR]).map(l => l.padEnd(11))
+      // no pane baixo, so os dois z de baixo e o boneco sem as pernas: o corpo fica, e e ele que
+      // fecha os olhos por baixo
+      const desenho = (alto ? [...zs, ...BONECO] : [...zs.slice(1), ...BONECO.slice(0, 2)]).map(l => l.padEnd(11))
       const dosZs = alto ? 3 : 2
       return h(
         Box,
@@ -626,17 +706,25 @@ export function register(on) {
         ),
       )
     }
-    // o nome da aba em laranja e o titulo a esquerda; o rotulo e o valor grande (o total) a direita
+    const apagado = texto => h(Text, { color: APAGADO }, texto)
+    // a marca do repositorio, o >_ do logo (assets/logo.svg): o sinal na cor do texto e o traco em
+    // laranja, num tom acima do fundo
+    const marca = h(Text, { backgroundColor: CHIP, bold: true }, h(Text, { color: TEXTO }, ' ❯'), h(Text, { color: LARANJA }, '▁ '))
+    // a marca e o nome da aba em caixa alta e laranja, com o titulo embaixo, a esquerda; o rotulo e
+    // o valor grande (o total) a direita
+    const negrito = texto => h(Text, { bold: true, color: TEXTO }, texto)
     const cabecalho = (titulo, rotulo, valor) =>
       h(
         Box,
         { justifyContent: 'space-between', alignItems: 'flex-end' },
-        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, { color: LARANJA }, ABAS[aba]), h(Text, { bold: true, color: TEXTO }, titulo)),
-        h(Box, { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 2 }, h(Text, { color: APAGADO }, rotulo), h(Text, { bold: true, color: TEXTO }, valor)),
+        h(Box, { flexDirection: 'column', flexShrink: 1 }, h(Text, {}, marca, ' ', h(Text, { color: LARANJA, bold: true }, ABAS[aba].toUpperCase())), typeof titulo === 'string' ? negrito(titulo) : titulo),
+        h(Box, { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 2 }, apagado(rotulo), negrito(valor)),
       )
-    // cada secao e um cartao preenchido um tom abaixo do fundo, com o titulo apagado
+    // a aba desenhada: as abas, o cabecalho e as secoes
+    const tela = (titulo, rotulo, valor, ...secoes) => h(Box, raiz, abas, cabecalho(titulo, rotulo, valor), ...secoes)
+    // cada secao e um cartao preenchido um tom abaixo do fundo, com o titulo apagado (ou o elemento dado)
     const cartao = (titulo, ...filhos) =>
-      h(Box, { flexDirection: 'column', backgroundColor: CARTAO, paddingX: 2, paddingY: 1, marginTop: 1 }, titulo && h(Text, { color: APAGADO }, titulo), ...filhos)
+      h(Box, { flexDirection: 'column', backgroundColor: CARTAO, paddingX: 2, paddingY: 1, marginTop: 1 }, typeof titulo === 'string' ? apagado(titulo) : titulo, ...filhos)
     // uma linha de `larg` colunas: as partes da esquerda, espaco, as da direita; cada parte e
     // [texto, props]; sem lugar, a ultima parte da esquerda encolhe com …
     const linhaLarga = (larg, esquerda, direita, props = {}) => {
@@ -646,13 +734,10 @@ export function register(on) {
       const parte = ([t, p]) => h(Text, p ?? {}, t)
       return h(Text, { color: TEXTO, ...props }, ...esq.map(parte), h(Text, {}, ' '.repeat(Math.max(1, larg - tam(esq) - tam(direita)))), ...direita.map(parte))
     }
-    // um chip da grade das fases: o fundo um tom acima do cartao, o nome a esquerda, o tempo a direita
-    const chip = (larg, esquerda, direita, props) => h(Box, { backgroundColor: CHIP, paddingX: 1, width: larg }, linhaLarga(larg - 2, esquerda, direita, props))
-    // a aba Codigo: um chip por arquivo, o caminho que abre e fecha o diff, e as linhas somadas e tiradas
+    // a aba Diff: um chip por arquivo, o caminho que abre e fecha o diff, e as linhas somadas e tiradas
     if (aba === 'codigo') {
       const base = await read($, BASE)
       const abertos = await read($, ABERTOS)
-      const contagem = (mais, menos) => [h(Text, { color: VERDE }, `+${mais}`), ' ', h(Text, { color: VERMELHO }, `-${menos}`)]
       const arquivo = (a, i) => {
         const aberto = abertos.includes(a.caminho)
         const alternar = () => update($, ABERTOS, l => (l.includes(a.caminho) ? l.filter(c => c !== a.caminho) : [...l, a.caminho]))
@@ -663,45 +748,26 @@ export function register(on) {
             Box,
             { justifyContent: 'space-between', paddingX: 1 },
             h(Button, { key: `arquivo:${i}`, plain: true, label: `${aberto ? '⌄' : '›'} ${a.caminho}`, onPress: alternar }),
-            h(Text, { wrap: 'truncate-end' }, ...contagem(a.mais, a.menos)),
+            h(Text, { wrap: 'truncate-end' }, h(Text, { color: VERDE }, `+${a.mais}`), ' ', h(Text, { color: VERMELHO }, `-${a.menos}`)),
           ),
           ...(!aberto
             ? []
             : a.diff
               ? pedacos(a.diff).map(source => h(Code, { source, format: 'diff', path: a.caminho }))
-              : [h(Text, { color: APAGADO }, '  binário, sem diff de texto')]),
+              : [apagado('  binário, sem diff de texto')]),
         )
       }
       const mais = arquivos.reduce((n, a) => n + a.mais, 0)
       const menos = arquivos.reduce((n, a) => n + a.menos, 0)
-      const repositorio = base?.raiz.split(/[\\/]/).pop()
-      return h(
-        Box,
-        raiz,
-        abas,
-        cabecalho(
-          repositorio ?? 'Fora de um repositório git',
-          `${arquivos.length} ${arquivos.length === 1 ? 'arquivo alterado' : 'arquivos alterados'}`,
-          `+${mais} -${menos}`,
-        ),
+      return tela(
+        base?.raiz.split(/[\\/]/).pop() ?? 'Fora de um repositório git',
+        `${arquivos.length} ${arquivos.length === 1 ? 'arquivo alterado' : 'arquivos alterados'}`,
+        `+${mais} -${menos}`,
         !base
-          ? cartao(null, h(Text, { color: APAGADO }, 'a sessão não começou num repositório git: não há com o que comparar'))
-          : arquivos.length === 0
-            ? cartao(null, h(Text, { color: APAGADO }, 'nenhum arquivo alterado nesta sessão'))
-            : cartao(null, ...arquivos.map(arquivo)),
+          ? cartao(null, apagado('a sessão não começou num repositório git: não há com o que comparar'))
+          : cartao(null, ...(arquivos.length > 0 ? arquivos.map(arquivo) : [apagado('nenhum arquivo alterado nesta sessão')])),
       )
     }
-    const historico = await read($, HISTORICO)
-    const passada = l => {
-      const verdes = l.tickets.filter(t => t.estado === 'verde').length
-      const reparos = l.tickets.reduce((soma, t) => soma + (t.reparos ?? 0), 0)
-      const total = l.inicio != null && l.fim != null && `total ${duracao(l.fim - l.inicio)}`
-      return [l.documento, total, l.modo, `${verdes}/${l.tickets.length} verdes`, `reparos ${reparos}`, ...(l.modelos ?? [])]
-        .filter(Boolean)
-        .join(' · ')
-    }
-    // o historico so aparece sob a leva fechada: com ela aberta, o espaco e do andamento
-    const cartaoDoHistorico = historico.length > 0 && cartao('Histórico', ...historico.map(l => h(Text, { color: APAGADO }, passada(l))))
     const agora = await $.clock.now()
     // ticket e item: o portao (verde ✓, vermelho ✗, em curso ◐) e o tempo, alinhados a direita
     const tempoDe = t => (t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? duracao((t.fimEm ?? agora) - t.inicioEm) : '')
@@ -719,10 +785,7 @@ export function register(on) {
     const item = i => linha(i, [[i.titulo]], i.detalhe ? `${i.detalhe} ` : '')
     // a aba Tickets: a linha do ticket, como na aba Painel, e embaixo as notas do que ele entregou
     if (aba === 'tickets') {
-      if (!leva) {
-        return h(Box, raiz, abas, cabecalho('Nenhuma leva neste workspace', 'verdes', '—'), cartao(null, h(Text, { color: APAGADO }, 'os tickets aparecem quando o to-tickets publica')))
-      }
-      const verdes = leva.tickets.filter(t => t.estado === 'verde').length
+      if (!leva) return tela('Nenhuma leva neste workspace', 'verdes', '—', cartao(null, apagado('os tickets aparecem quando o to-tickets publica')))
       const comNotas = (t, i) =>
         h(
           Box,
@@ -730,12 +793,11 @@ export function register(on) {
           ticket(t),
           h(Box, { paddingLeft: 4 }, h(Text, { color: t.notas ? TEXTO : APAGADO }, t.notas ?? 'sem notas ainda')),
         )
-      return h(
-        Box,
-        raiz,
-        abas,
-        cabecalho(leva.documento, 'verdes', `${verdes}/${leva.tickets.length}`),
-        cartao(null, ...(leva.tickets.length > 0 ? leva.tickets.map(comNotas) : [h(Text, { color: APAGADO }, 'nenhum ticket publicado ainda')])),
+      return tela(
+        leva.documento,
+        'verdes',
+        `${verdes(leva)}/${leva.tickets.length}`,
+        cartao(null, ...(leva.tickets.length > 0 ? leva.tickets.map(comNotas) : [apagado('nenhum ticket publicado ainda')])),
       )
     }
     // a aba Uso: os tokens desde o inicio da leva (ou da sessao), por modelo e por agente
@@ -744,72 +806,78 @@ export function register(on) {
       const agentes = await read($, AGENTES)
       const total = u => TOKENS.reduce((n, k) => n + u[k], 0)
       const porModelo = {}
-      for (const [, u] of uso) {
-        const antes = porModelo[u.modelo] ?? {}
-        porModelo[u.modelo] = Object.fromEntries(TOKENS.map(k => [k, (antes[k] ?? 0) + u[k]]))
-      }
-      const colunas = (...valores) => valores.map(v => [v.padStart(9)])
+      for (const [, u] of uso) porModelo[u.modelo] = somar(porModelo[u.modelo], u)
+      const aDireita = (...valores) => valores.map(v => [v.padStart(9)])
       const modelo = ([nome, u]) =>
-        linhaLarga(largura, [[nome || 'modelo desconhecido']], colunas(tokens(u.input_tokens), tokens(u.output_tokens), tokens(u.cache_read_input_tokens + u.cache_creation_input_tokens)))
+        linhaLarga(largura, [[nome || 'modelo desconhecido']], aDireita(tokens(u.input_tokens), tokens(u.output_tokens), tokens(u.cache_read_input_tokens + u.cache_creation_input_tokens)))
       const nomeDo = id => (id === 'sessao' ? 'sessão principal' : (agentes.find(a => a.agentId === id)?.nome ?? `agente ${id.slice(0, 8)}`))
       const loop = ([id, u]) => linhaLarga(largura, [[nomeDo(id)]], [[u.modelo, { color: AZUL }], ['  '], [tokens(total(u)).padStart(7)]])
-      return h(
-        Box,
-        raiz,
-        abas,
-        cabecalho(leva?.documento ?? 'Sessão', 'tokens', tokens(uso.reduce((n, [, u]) => n + total(u), 0))),
+      return tela(
+        leva?.documento ?? 'Sessão',
+        'tokens',
+        tokens(uso.reduce((n, [, u]) => n + total(u), 0)),
         ...(uso.length === 0
-          ? [cartao(null, h(Text, { color: APAGADO }, 'nenhum turno terminou ainda'))]
+          ? [cartao(null, apagado('nenhum turno terminou ainda'))]
           : [
-              cartao('Por modelo', linhaLarga(largura, [['']], colunas('entrada', 'saída', 'cache'), { color: APAGADO }), ...Object.entries(porModelo).map(modelo)),
+              cartao('Por modelo', linhaLarga(largura, [['']], aDireita('entrada', 'saída', 'cache'), { color: APAGADO }), ...Object.entries(porModelo).map(modelo)),
               cartao('Por agente', ...uso.map(loop)),
             ]),
       )
     }
+    const andamento = g => [g.documento ? 'concluído' : 'em curso', duracao((g.fim ?? agora) - g.inicio)]
     // a aba Grill: cada pergunta inteira com a resposta embaixo, o entendimento e a linha da leva
     if (aba === 'grill') {
       const g = ultimoGrill
-      if (!g) {
-        return h(Box, raiz, abas, cabecalho('Nenhum grill neste workspace', 'perguntas', '0'), cartao(null, h(Text, { color: APAGADO }, 'o /faz <pedido> abre um')))
-      }
-      const respondidas = g.perguntas.filter(p => p.resposta != null).length
+      if (!g) return tela('Nenhum grill neste workspace', 'perguntas', '0', cartao(null, apagado('o /faz <pedido> abre um')))
       const resposta = p =>
         p.resposta == null
           ? h(Text, { color: LARANJA }, '▸ aguardando')
           : h(Text, { color: p.resposta === 'sem resposta' ? APAGADO : VERDE }, `${p.resposta === 'sem resposta' ? '·' : '✓'} ${p.resposta}`)
       const par = (p, i) =>
-        h(Box, { flexDirection: 'column', marginTop: i > 0 ? 1 : 0 }, h(Text, { color: APAGADO }, p.tema), h(Text, { bold: true, color: TEXTO }, p.pergunta), resposta(p))
-      return h(
-        Box,
-        raiz,
-        abas,
-        cabecalho(g.pedido, g.documento ? 'concluído' : 'em curso', duracao((g.fim ?? agora) - g.inicio)),
-        cartao(
-          `Perguntas e respostas · ${respondidas}/${g.perguntas.length}`,
-          ...(g.perguntas.length > 0 ? g.perguntas.map(par) : [h(Text, { color: APAGADO }, 'nenhuma pergunta ainda')]),
-        ),
+        h(Box, { flexDirection: 'column', marginTop: i > 0 ? 1 : 0 }, apagado(p.tema), negrito(p.pergunta), resposta(p))
+      const respondidas = g.perguntas.filter(p => p.resposta != null).length
+      return tela(
+        g.pedido,
+        ...andamento(g),
+        cartao(`Perguntas e respostas · ${respondidas}/${g.perguntas.length}`, ...(g.perguntas.length > 0 ? g.perguntas.map(par) : [apagado('nenhuma pergunta ainda')])),
         g.documento && cartao('Entendimento', h(Text, { color: VERDE }, g.documento)),
-        g.linha && cartao('Linha da leva · cole numa sessão nova', h(Code, { source: g.linha })),
+        // o Copiar leva o texto exato: copiado da tela, o terminal parte a linha longa e um nome
+        // de skill partido nao autoriza a skill
+        g.linha &&
+          cartao(
+            h(Box, { gap: 2 }, apagado('Prompt'), h(Button, { key: 'grill:copiar', label: 'Copiar', dimColor: true, onPress: async press => $.ui.toast((await $.ui.copy({ text: g.linha, surface: press.surface })).isCopied ? 'Prompt copiado: cole numa sessão nova' : 'Não deu para copiar o prompt') })),
+            h(Code, { source: g.linha }),
+          ),
       )
     }
-    // o grill e sempre mais novo que a leva na tela: o inicio de uma leva o apaga
-    if (grill) {
-      const respondidas = grill.perguntas.filter(p => p.resposta != null).length
-      const pergunta = p =>
-        p.resposta == null
-          ? h(Text, { color: LARANJA }, `▸ ${p.tema} — aguardando`)
-          : h(Text, { color: p.resposta === 'sem resposta' ? APAGADO : VERDE }, `${p.resposta === 'sem resposta' ? '·' : '✓'} ${p.tema} — ${p.resposta}`)
+    // a grade das fases, com o grill na frente: tres chips por linha onde cabem, senao dois, senao
+    // um. O chip e um tom acima do cartao, com o nome a esquerda e, a direita, o tempo com ◐ na
+    // fase em curso e com ✓ na que passou, ou — na que falta
+    const porLinha = largura >= 68 ? 3 : largura >= 37 ? 2 : 1
+    const larguraDoChip = Math.floor((largura - (porLinha - 1)) / porLinha)
+    const estadoDoChip = (tempo, atual, passou) => (atual ? [`${tempo} ◐`, LARANJA] : passou ? [`${tempo} ✓`, VERDE] : ['—', APAGADO])
+    const chip = (nome, tempo, atual, passou) => {
+      const [estado, cor] = estadoDoChip(tempo, atual, passou)
+      return h(Box, { backgroundColor: CHIP, paddingX: 1, width: larguraDoChip }, linhaLarga(larguraDoChip - 2, nome, [[estado, { color: cor }]], { bold: atual, color: passou ? TEXTO : APAGADO }))
+    }
+    // o grill e a fase antes do spec, em curso ate o entendimento; o nome dele e um botao que leva
+    // a aba Grill, onde estao as perguntas
+    const chipDoGrill = g => {
+      const [estado, cor] = estadoDoChip(g ? duracao((g.fim ?? agora) - g.inicio) : '', Boolean(g && g.documento == null), Boolean(g))
       return h(
         Box,
-        raiz,
-        abas,
-        cabecalho(`Grill · ${grill.pedido}`, grill.documento ? 'concluído' : 'em curso', duracao((grill.fim ?? agora) - grill.inicio)),
-        // ponytail: as 15 ultimas; um grill mais longo que o pane rola para fora por cima
-        grill.perguntas.length > 0 && cartao(`Perguntas · ${respondidas}/${grill.perguntas.length} respondidas`, ...grill.perguntas.slice(-15).map(pergunta)),
-        grill.documento &&
-          cartao('Entendimento', h(Text, { color: VERDE }, grill.documento), h(Text, { color: APAGADO }, grill.linha ? 'a linha da leva está na aba Grill: cole numa sessão nova' : 'cole a linha da leva numa sessão nova')),
+        { backgroundColor: CHIP, paddingX: 1, width: larguraDoChip, justifyContent: 'space-between' },
+        h(Button, { key: 'fase:grill', label: 'grill', plain: true, onPress: () => trocarAba($, 'grill') }),
+        h(Text, { color: cor }, estado),
       )
     }
+    const fases = FASES.filter(f => ROTULO[f])
+    const grade = chips =>
+      cartao('Fases', h(Box, { flexDirection: 'column', gap: 1 }, ...Array.from({ length: Math.ceil(chips.length / porLinha) }, (_, i) => h(Box, { gap: 1 }, ...chips.slice(i * porLinha, (i + 1) * porLinha)))))
+    // o titulo da aba Painel com o botao Limpar ao lado, o unico que limpa o painel
+    const comLimpar = titulo => h(Box, { gap: 2 }, negrito(titulo), h(Button, { key: 'painel:limpar', label: 'Limpar', dimColor: true, onPress: () => { limpo = true; return limpar($) } }))
+    // o grill na tela e sempre mais novo que a leva: o inicio de uma leva o tira de la
+    if (grill) return tela(comLimpar(`Grill · ${grill.pedido}`), ...andamento(grill), grade([chipDoGrill(grill), ...fases.map(f => chip([[ROTULO[f]]], '', false, false))]))
     const ate = leva.fim ?? agora
     // uma fase dura da sua entrada ate a entrada seguinte, ou ate agora (o fim, se fechada)
     const entradas = leva.entradas ?? {}
@@ -819,22 +887,13 @@ export function register(on) {
       return duracao(Math.min(ate, ...Object.values(entradas).filter(t => t > desde)) - desde)
     }
     const skills = await read($, SKILLS)
-    // feita e a fase que a leva ja deixou, ou todas as que passou quando fechada
-    const feita = f => leva.fases.includes(f) && (f !== leva.fase || leva.fechada)
-    // a grade das fases: tres chips por linha onde cabem, senao dois, senao um
-    const porLinha = largura >= 68 ? 3 : largura >= 37 ? 2 : 1
-    const larguraDoChip = Math.floor((largura - (porLinha - 1)) / porLinha)
     const chipDaFase = f => {
-      const atual = f === leva.fase && !leva.fechada
-      const [estado, cor] = feita(f) ? [`${tempoDaFase(f)} ✓`, VERDE] : atual ? [`${tempoDaFase(f)} ◐`, LARANJA] : ['—', APAGADO]
-      const falta = leva.fases.includes(f) && semSkill(f, skills)
-      return chip(larguraDoChip, [[ROTULO[f]], ...(falta ? [[' !', { color: AMARELO, bold: true }]] : [])], [[estado, { color: cor }]], {
-        bold: atual,
-        color: leva.fases.includes(f) ? TEXTO : APAGADO,
-      })
+      const passou = leva.fases.includes(f)
+      const falta = passou && semSkill(f, skills)
+      return chip([[ROTULO[f]], ...(falta ? [[' !', { color: AMARELO, bold: true }]] : [])], tempoDaFase(f), f === leva.fase && !leva.fechada, passou)
     }
-    const fases = FASES.filter(f => ROTULO[f])
-    const linhasDeFases = Array.from({ length: Math.ceil(fases.length / porLinha) }, (_, i) => fases.slice(i * porLinha, (i + 1) * porLinha))
+    // a leva que nasceu do grill guardado (o mesmo documento) mostra a fase dele
+    const doGrill = ultimoGrill?.documento === leva.documento ? ultimoGrill : null
     const agentes = await read($, AGENTES)
     const visiveis = [...agentes.filter(a => a.estado === 'rodando'), ...agentes.filter(a => a.estado !== 'rodando').slice(-5)]
     const agente = a => {
@@ -846,23 +905,26 @@ export function register(on) {
         [duracao(a.duracao ?? agora - a.inicio).padStart(6), { color: APAGADO }],
       ])
     }
-    return h(
-      Box,
-      raiz,
-      abas,
-      cabecalho(`Leva · ${leva.documento}`, 'total', leva.inicio != null ? duracao(ate - leva.inicio) : '—'),
-      leva.fechada &&
-        (leva.cpv == null
-          ? h(Text, { color: AMARELO }, 'leva fechada, falta o /cpv')
-          : h(Text, { color: VERDE }, 'leva fechada, /cpv rodou')),
-      cartao('Fases', h(Box, { flexDirection: 'column', gap: 1 }, ...linhasDeFases.map(fs => h(Box, { gap: 1 }, ...fs.map(chipDaFase))))),
+    const historico = await read($, HISTORICO)
+    const passada = l => {
+      const reparos = l.tickets.reduce((soma, t) => soma + (t.reparos ?? 0), 0)
+      const total = l.inicio != null && l.fim != null && `total ${duracao(l.fim - l.inicio)}`
+      return [l.documento, total, l.modo, `${verdes(l)}/${l.tickets.length} verdes`, `reparos ${reparos}`, ...(l.modelos ?? [])].filter(Boolean).join(' · ')
+    }
+    return tela(
+      comLimpar(`Leva · ${leva.documento}`),
+      'total',
+      leva.inicio != null ? duracao(ate - leva.inicio) : '—',
+      leva.fechada && h(Text, { color: leva.cpv == null ? AMARELO : VERDE }, `leva fechada, ${leva.cpv == null ? 'falta o /cpv' : '/cpv rodou'}`),
+      grade([chipDoGrill(doGrill), ...fases.map(chipDaFase)]),
       leva.tickets.length > 0 && cartao('Tickets', ...leva.tickets.map(ticket)),
       ...Object.entries(FASES_COM_ITENS).map(([f, titulo]) => {
         const itens = (leva.itens ?? []).filter(i => i.fase === f)
         return itens.length > 0 && cartao(titulo, ...itens.map(item))
       }),
       visiveis.length > 0 && cartao('Sub-agentes', ...visiveis.map(agente)),
-      leva.fechada && cartaoDoHistorico,
+      // o historico so aparece sob a leva fechada: com ela aberta, o espaco e do andamento
+      leva.fechada && historico.length > 0 && cartao('Histórico', ...historico.map(l => apagado(passada(l)))),
     )
   })
 }

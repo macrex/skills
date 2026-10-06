@@ -11,7 +11,6 @@
 // nao ha ferramenta de vault na sessao.
 
 import { spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import regrasDoVault from '../hooks/vault-rules.js';
@@ -160,14 +159,7 @@ export default async function (pi: any) {
 
   // A pasta do pacote sai da localizacao deste arquivo, nunca do cwd: o pacote pode
   // estar instalado em qualquer lugar.
-  const script = join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'skills',
-    'obsidian-docs',
-    'scripts',
-    'servidor_vault.py',
-  );
+  const script = fileURLToPath(new URL('../skills/obsidian-docs/scripts/servidor_vault.py', import.meta.url));
 
   const servidor = await subirServidor(vault, script);
   if ('erro' in servidor) {

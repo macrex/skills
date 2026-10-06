@@ -17,27 +17,6 @@ Registro no Claude Code (uma vez, escopo de usuario — vale em todo projeto):
 O caminho do vault vem de `OBSIDIAN_VAULT` (a pasta de projetos, a mesma das
 skills) ou de `--vault`. Caminho nunca e inventado.
 
-Ferramentas:
-  visao_geral     panorama: projetos, contagem por tipo, notas recentes
-  contexto_projeto arranque num projeto com teto fixo: hub resumido, notas recentes
-                  por secao com resumo, ultima evolucao
-  buscar          full-text sem acento/caixa, filtros projeto/tipo/status; cada
-                  resultado traz o resumo da nota no hub
-  listar_notas    metadados das notas, mais recentes primeiro
-  ler_nota        conteudo integral, uma secao (secao=) ou cortado (max_chars=)
-  conexoes        notas relacionadas com resumo: wikilinks de saida e backlinks,
-                  fora os links estruturais (hub e Home)
-  salvar_nota     cria a nota com tudo que a convencao exige (e hub/Home novos)
-  atualizar_nota  corpo, status, tags, sucessora (obsoleta) ou resumo no hub
-  renomear_nota   move a nota, troca o titulo e reescreve os wikilinks do vault
-  dividir_nota    nota grande vira indice + uma nota por secao ao lado (parte_de:)
-  mapa_codigo     mapa do codigo (graphify-out do repo, ponteiro Repo: do hub)
-  consultar_codigo pergunta ao grafo via CLI graphify (query/explain/path)
-  gerar_mapa      regrava a nota Mapa do Codigo preservando a Leitura curada
-  validar         linter: frontmatter, vocabulario, wikilinks quebrados, hub, orfas;
-                  padrao de nota (A4-A9) contado, e listado com tipo=padrao
-  sincronizar     fecha um lote: commit -> pull --rebase -> push de tudo que esta pendente
-
 Vault que e repositorio git: cada gravacao faz commit -> pull --rebase -> push
 (desligue com `--sem-git` no registro). Gravacao em lote: salvar_nota e
 atualizar_nota com lote=true so escrevem em disco, e `sincronizar` fecha o lote
@@ -76,19 +55,14 @@ class ErroUso(Exception):
     """Chamada invalida: vira texto de erro para o modelo, nunca derruba o servidor."""
 
 INSTRUCOES = (
-    "Vault Obsidian com a documentacao dos projetos (specs, planos, ADRs, bugs, "
-    "evolucoes, analises). Estrutura: Home.md -> <projeto>/<projeto>.md (hub) -> "
-    "Specs/, Arquitetura/, Bugs/, Evolucoes/, Analises/. Ler: visao_geral, "
-    "contexto_projeto (arranque num projeto, com teto: use no lugar do hub inteiro), "
-    "buscar, listar_notas, ler_nota (secao= quando so uma parte importa), conexoes "
-    "(relacionadas com resumo). Gravar: salvar_nota (nota nova; faz pasta, "
-    "nome, frontmatter, hub, Home e git) e atualizar_nota (nota existente). Reorganizar: "
-    "renomear_nota (reescreve os wikilinks), dividir_nota (nota grande vira indice + anexos). "
-    "Codigo: mapa_codigo (antes de mexer no projeto), consultar_codigo (arquitetura), "
-    "gerar_mapa (apos o graphify); salvar_nota aceita arquivos= para citar componentes. "
-    "Muitas notas de uma vez (migracao, tickets): lote=true em cada gravacao e "
-    "sincronizar uma vez no fim. validar: linter do vault (rode ao fechar uma leva). "
-    "Nunca escreva ou leia os arquivos do vault por fora destas ferramentas."
+    "Vault Obsidian com a documentacao dos projetos, um hub (<projeto>/<projeto>.md) por "
+    "projeto. Ler: visao_geral, contexto_projeto (arranque num projeto, no lugar do hub "
+    "inteiro), buscar, listar_notas, ler_nota (secao= quando so uma parte importa), conexoes "
+    "(relacionadas com resumo). Gravar: salvar_nota (nota nova; faz pasta, nome, frontmatter, "
+    "hub, Home e git) e atualizar_nota (nota existente); varias notas de uma vez, lote=true em "
+    "cada e sincronizar no fim. Reorganizar: renomear_nota, dividir_nota. Codigo, pelo "
+    "graphify: mapa_codigo, consultar_codigo, gerar_mapa. validar: linter do vault. Nunca leia "
+    "nem escreva os arquivos do vault por fora destas ferramentas."
 )
 
 ERRO_VAULT = (
@@ -172,14 +146,18 @@ def _notas():
     return lista
 
 
+def partir(texto):
+    """(cabeca ate o `---` que fecha o frontmatter, resto); cabeca None sem frontmatter."""
+    fim = texto.find("\n---", 3) if texto.startswith("---") else -1
+    return (None, texto) if fim == -1 else (texto[:fim + 4], texto[fim + 4:])
+
+
 def frontmatter(texto):
-    if not texto.startswith("---"):
-        return None
-    fim = texto.find("\n---", 3)
-    if fim == -1:
+    cabeca, _ = partir(texto)
+    if cabeca is None:
         return None
     campos = {}
-    for linha in texto[3:fim].splitlines():
+    for linha in cabeca[3:-4].splitlines():
         if ":" in linha and not linha.startswith((" ", "-", "\t")):
             k, _, v = linha.partition(":")
             campos[k.strip()] = v.strip()
@@ -188,12 +166,8 @@ def frontmatter(texto):
 
 def corpo_de(nota):
     """Texto da nota sem o frontmatter (para trechos legiveis)."""
-    texto = nota["texto"]
-    if texto.startswith("---"):
-        fim = texto.find("\n---", 3)
-        if fim != -1:
-            return texto[fim + 4:].lstrip("\n")
-    return texto
+    cabeca, resto = partir(nota["texto"])
+    return resto if cabeca is None else resto.lstrip("\n")
 
 
 def data_de(nota):
@@ -301,7 +275,7 @@ def paragrafo_de_abertura(corpo, teto=400):
         if not b or b.startswith(("#", "Projeto: [[", "Substituída por", "Repo:", "- ", "* ",
                                   "|", "```", ">", "![")):
             continue
-        return b if len(b) <= teto else b[:teto].rsplit(" ", 1)[0] + "…"
+        return curto(b, teto)
     return ""
 
 
@@ -391,10 +365,10 @@ def inteiro(v, padrao, teto):
 
 
 def linha_meta(n):
-    fm = n["fm"]
-    proj = fm.get("projeto", n["projeto"] or "-")
-    return (f"projeto: {proj} | tipo: {fm.get('tipo', '-')} | "
-            f"status: {fm.get('status', '-')} | data: {data_de(n)}")
+    """tipo | status, e a data quando o nome nao comeca por ela: o projeto ja esta no caminho."""
+    fm, data = n["fm"], data_de(n)
+    meta = [fm.get("tipo", "-"), fm.get("status", "-")]
+    return " | ".join(meta if n["nome"].startswith(data) else meta + [data])
 
 
 def achar(ref, todas):
@@ -431,13 +405,13 @@ def visao_geral():
               f"{len(projetos)} projeto(s), {len(todas)} nota(s)", ""]
     so_hub = []
     for proj in sorted(projetos):
-        ns = projetos[proj]
-        if len(ns) == 1 and eh_hub(ns[0]):
+        ns = [n for n in projetos[proj] if not eh_hub(n)]
+        if not ns:
             so_hub.append(proj)  # projeto sem nota: uma linha para todos, no fim
             continue
         tipos = Counter(n["fm"].get("tipo") or "?" for n in ns)
         det = ", ".join(f"{t}: {c}" for t, c in sorted(tipos.items()))
-        hub = "" if any(n["nome"] == proj for n in ns) else " | SEM HUB"
+        hub = "" if any(n["nome"] == proj for n in projetos[proj]) else " | SEM HUB"
         linhas.append(f"- {proj} — {len(ns)} nota(s) ({det}){hub}")
     if so_hub:
         linhas.append(f"- {len(so_hub)} projeto(s) so com hub, sem notas: " + ", ".join(so_hub))
@@ -623,7 +597,6 @@ def conexoes(nota=""):
 
 
 TETO_CONTEXTO = 3000
-PENDENCIAS = ("pendencias", "em aberto", "proximos passos")
 
 
 def secao_por_nome(corpo, nomes, teto):
@@ -673,8 +646,7 @@ def contexto_projeto(projeto="", por_secao=None):
                  + ", ".join(f"{s}: {c}" for s, c in status.most_common()))
     mapa = f"Mapa do Codigo {proj}"
     if mapa in por_nome:
-        saida.append(f"Mapa: [[{mapa}]] (mapa_codigo {proj} le o grafo atual; "
-                     "ler_nota secao='Leitura curada' traz so a parte curada)")
+        saida.append(f"Mapa: [[{mapa}]] (ler_nota secao='Leitura curada' traz a parte curada)")
     evolucoes = sorted((n for n in do_projeto if "evolucao" in valores(n["fm"].get("tipo"))),
                        key=data_de, reverse=True)
     if evolucoes:  # antes das secoes: se o teto cortar, cai o fim do indice, nao isto
@@ -923,6 +895,7 @@ SINONIMOS = {
     "achados": ("numeros", "resultado", "conclusao", "tl;dr"),
     "recomendacao": ("proximos passos", "conclusao"),
 }
+PENDENCIAS = ("pendencias",) + SINONIMOS["pendencias"]  # o que contexto_projeto mostra
 TETO_TITULO, TETO_RESUMO, TETO_TAGS = 80, 200, 3
 PADRAO = ("A4", "A5", "A6", "A7", "A8", "A9")  # codigos do validar que o padrao usa
 
@@ -1000,10 +973,7 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
             pasta = f"Specs/Tickets - {nome_de_nota(artefato)}"
     rel = "/".join(p for p in (projeto, pasta, nome + ".md") if p)
     caminho = os.path.join(VAULT, *rel.split("/"))
-    if lote:
-        abrir_lote()
-    else:
-        puxar()
+    abrir_lote() if lote else puxar()
     if os.path.exists(caminho) and not sobrescrever:
         raise ErroUso(f"ja existe: {rel}. Mudar o conteudo: atualizar_nota; "
                       "regravar do zero: sobrescrever=true.")
@@ -1023,8 +993,7 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
     hub = os.path.join(VAULT, projeto, projeto + ".md")
     escrever(hub, inserir_na_secao(ler(hub), secao, f"- [[{nome}]] — {resumo}"))
     linhas = [f"Salva: {rel}",
-              "Hub: " + ("criado e registrado no Home" if hub_novo else "entrada adicionada")
-              + f" ({projeto}/{projeto}.md)"]
+              "Hub: " + ("criado e registrado no Home" if hub_novo else "entrada adicionada")]
     if hub_novo:
         np = normalizar(projeto)
         parecidos = sorted({n["projeto"] for n in todas if n["fm"].get("tipo") == "hub"
@@ -1058,10 +1027,7 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
                    lote=False):
     if corpo is None and status is None and tags is None and not sucessora and not resumo:
         raise ErroUso("informe ao menos um de: corpo, status, tags, sucessora, resumo")
-    if lote:
-        abrir_lote()
-    else:
-        puxar()
+    abrir_lote() if lote else puxar()
     todas = notas()
     alvo, erro = resolver(nota, todas)
     if erro:
@@ -1069,12 +1035,10 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
     if alvo["fm"].get("tipo") == "hub":
         raise ErroUso("hub e indice mantido pelo servidor: grave notas (salvar_nota) ou "
                       "mude o resumo de uma nota (atualizar_nota resumo=...)")
-    texto = alvo["texto"].replace("\r\n", "\n")
-    fim = texto.find("\n---", 3) if texto.startswith("---") else -1
-    if fim == -1:
+    cabeca, resto = partir(alvo["texto"].replace("\r\n", "\n"))
+    if cabeca is None:
         raise ErroUso(f"{alvo['rel']} nao tem frontmatter; regrave com salvar_nota "
                       "(sobrescrever=true)")
-    cabeca, resto = texto[:fim + 4], texto[fim + 4:]
     projeto = alvo["projeto"] or alvo["fm"].get("projeto", "")
     mudou = []
     if corpo is not None:  # a cabeca termina em `---`: a linha em branco vem daqui
@@ -1174,10 +1138,7 @@ def renomear_nota(nota="", novo_titulo="", lote=False):
     novo_titulo = nome_seguro(novo_titulo)
     if not novo_titulo:
         raise ErroUso("novo_titulo e obrigatorio")
-    if lote:
-        abrir_lote()
-    else:
-        puxar()
+    abrir_lote() if lote else puxar()
     todas = notas()
     alvo = alvo_de_escrita(nota, todas)
     m = PREFIXO_DATA_RE.match(alvo["nome"])
@@ -1213,19 +1174,14 @@ def renomear_nota(nota="", novo_titulo="", lote=False):
 def dividir_nota(nota="", lote=False):
     """Nota grande vira abertura + indice, e cada secao ## vira uma nota em
     `Anexos - <nome>/`, ao lado dela. Os anexos nao entram no hub: a nota-mae os lista."""
-    if lote:
-        abrir_lote()
-    else:
-        puxar()
+    abrir_lote() if lote else puxar()
     todas = notas()
     alvo = alvo_de_escrita(nota, todas)
     if alvo["fm"].get("parte_de"):
         raise ErroUso("anexo nao se divide de novo")
-    texto = alvo["texto"]
-    fim_fm = texto.find("\n---", 3) if texto.startswith("---") else -1
-    if fim_fm == -1:
+    cabeca, corpo = partir(alvo["texto"])
+    if cabeca is None:
         raise ErroUso(f"{alvo['rel']} nao tem frontmatter")
-    cabeca, corpo = texto[:fim_fm + 4], texto[fim_fm + 4:]
     secoes, linhas = secoes_de(corpo)
     n2 = [s for s in secoes if s[0] == 2]
     if any(normalizar(t) == "anexos" for _, t, _, _ in n2):
@@ -1680,14 +1636,13 @@ P_STATUS = {"type": "string",
             "description": "Filtra por status: ativo, rascunho, resolvido "
                            "ou obsoleto."}
 P_NOTA = {"type": "string",
-          "description": "Caminho relativo ao vault (projeto/Specs/2026-01-02 "
-                         "X.md) ou nome da nota como em wikilink (2026-01-02 X); trecho "
-                         "do nome, sem acento nem maiuscula, tambem serve."}
+          "description": "Nome da nota como no wikilink (2026-01-02 X), caminho relativo ao "
+                         "vault ou trecho do nome (acento e caixa nao importam)."}
 
 P_PROJ = {"type": "string", "description": "Nome do projeto (pasta no vault)."}
 P_LOTE = {"type": "boolean",
           "description": "true = parte de um lote: grava so em disco, sem pull/commit/push; "
-                         "feche o lote com sincronizar. Padrao false."}
+                         "feche o lote com sincronizar."}
 P_REPO = {"type": "string",
           "description": "Caminho local do repositorio; so se o hub nao tiver a linha "
                          "`Repo:` (fica registrado nele)."}
@@ -1699,10 +1654,9 @@ FERRAMENTAS = [
      "inputSchema": esquema({}),
      "fn": visao_geral},
     {"name": "contexto_projeto",
-     "description": "Arranque num projeto, com teto fixo: descricao e Repo do hub, "
-                    "contagem por tipo e status, a ultima evolucao (abertura e pendencias) "
-                    "e as notas mais recentes de cada secao do hub com o resumo. Use no "
-                    "lugar de ler o hub inteiro; depois ler_nota so na nota que interessar.",
+     "description": "Arranque num projeto, com teto fixo: o hub resumido, a ultima evolucao "
+                    "e as notas recentes de cada secao. Use no lugar de ler o hub inteiro; "
+                    "depois ler_nota so na nota que interessar.",
      "inputSchema": esquema({
          "projeto": P_PROJ,
          "por_secao": {"type": "integer",
@@ -1711,8 +1665,7 @@ FERRAMENTAS = [
      "fn": contexto_projeto},
     {"name": "buscar",
      "description": "Busca full-text nas notas, ignorando acentos e maiusculas; varios "
-                    "termos = todos precisam aparecer. Cada resultado traz caminho, "
-                    "metadados e o resumo da nota no hub (ou um trecho, se nao esta no hub).",
+                    "termos = todos precisam aparecer. Cada resultado traz o resumo da nota no hub.",
      "inputSchema": esquema({
          "consulta": {"type": "string",
                       "description": "Termos de busca (obrigatorio)."},
@@ -1731,10 +1684,8 @@ FERRAMENTAS = [
      }),
      "fn": listar_notas},
     {"name": "ler_nota",
-     "description": "Le uma nota: integral, so uma secao (secao=) ou cortada (max_chars=). "
-                    "Secao inexistente devolve a lista de secoes. Nota acima de "
-                    f"{TETO_NOTA} caracteres devolve o esboco (abertura e secoes com "
-                    "tamanho) em vez do texto; integral=true le mesmo assim.",
+     "description": "Le uma nota. Secao inexistente devolve a lista de secoes; nota acima de "
+                    f"{TETO_NOTA} caracteres devolve o esboco (abertura e secoes com tamanho).",
      "inputSchema": esquema({
          "nota": P_NOTA,
          "secao": {"type": "string",
@@ -1743,7 +1694,7 @@ FERRAMENTAS = [
          "max_chars": {"type": "integer",
                        "description": "Corta o texto neste tamanho (minimo 200)."},
          "integral": {"type": "boolean",
-                      "description": "true = nota grande vem inteira (padrao false)."},
+                      "description": "true = nota grande vem inteira."},
      }, "nota"),
      "fn": ler_nota},
     {"name": "conexoes",
@@ -1754,10 +1705,9 @@ FERRAMENTAS = [
      "fn": conexoes},
     {"name": "salvar_nota",
      "description": "Cria uma nota nova com tudo que a convencao exige: pasta por tipo, nome "
-                    "`YYYY-MM-DD titulo`, frontmatter, `# titulo` e link do hub no corpo, "
-                    "entrada no hub (hub e Home criados se o projeto for novo), commit+push. "
-                    "Ticket: passe `artefato`. tipo=mapa regrava `Mapa do Codigo <projeto>`. "
-                    "Nota que ja existe: atualizar_nota.",
+                    "`YYYY-MM-DD titulo`, frontmatter, entrada no hub (hub e Home criados se "
+                    "o projeto for novo), commit+push. Ticket: passe `artefato`. tipo=mapa "
+                    "regrava `Mapa do Codigo <projeto>`. Nota que ja existe: atualizar_nota.",
      "inputSchema": esquema({
          "projeto": {"type": "string",
                      "description": "Pasta do repo git (minusculo, sem acento). Hub "
@@ -1786,7 +1736,7 @@ FERRAMENTAS = [
                   "description": "Caminho local do repositorio (hub novo, e ponteiro do "
                                  "graphify; registrado no hub se faltar)."},
          "sobrescrever": {"type": "boolean",
-                          "description": "Regrava se ja existir (padrao false)."},
+                          "description": "Regrava se ja existir."},
          "arquivos": {"type": "array", "items": {"type": "string"},
                       "description": "Caminhos tocados pela leva, relativos ao repo: o servidor "
                                      "anexa Componentes tocados a partir do grafo (evolucao, "
@@ -1795,18 +1745,17 @@ FERRAMENTAS = [
      }, "projeto", "tipo", "titulo", "corpo"),
      "fn": salvar_nota},
     {"name": "atualizar_nota",
-     "description": "Altera uma nota existente, in-place: `corpo` (texto apos o frontmatter), "
-                    "`status`, `tags`, `sucessora` (marca obsoleta e linka a substituta) e "
-                    "`resumo` (linha no hub). Commit+push.",
+     "description": "Altera uma nota existente, in-place, nos campos passados. Commit+push.",
      "inputSchema": esquema({
          "nota": P_NOTA,
-         "corpo": {"type": "string", "description": "Novo corpo completo em markdown."},
+         "corpo": {"type": "string", "description": "Novo corpo completo em markdown, o texto apos o frontmatter."},
          "status": {"type": "string",
                     "description": "rascunho | ativo | resolvido | obsoleto"},
          "tags": {"type": "array", "items": {"type": "string"},
                   "description": "Substitui a lista inteira; [] limpa."},
          "sucessora": {"type": "string",
-                       "description": "Nome da nota que substitui esta (sem .md)."},
+                       "description": "Nome da nota que substitui esta (sem .md): marca esta obsoleta "
+                                      "e linka a substituta."},
          "resumo": {"type": "string", "description": "Nova linha de resumo no hub."},
          "lote": P_LOTE,
      }, "nota"),
@@ -1823,9 +1772,8 @@ FERRAMENTAS = [
      "fn": renomear_nota},
     {"name": "dividir_nota",
      "description": "Nota grande vira abertura + indice, e cada secao ## vira uma nota ao lado "
-                    "dela, `<nome> - NN <secao>`, com o mesmo frontmatter mais `parte_de:`. Os "
-                    "anexos nao entram no hub (a nota-mae os lista) e o validar nao os cobra la. "
-                    "Commit+push.",
+                    "dela, `<nome> - NN <secao>`, com o mesmo frontmatter mais `parte_de:`; os "
+                    "anexos ficam fora do hub, listados pela nota-mae. Commit+push.",
      "inputSchema": esquema({"nota": P_NOTA, "lote": P_LOTE}, "nota"),
      "fn": dividir_nota},
     {"name": "sincronizar",
@@ -1838,12 +1786,8 @@ FERRAMENTAS = [
      }, "mensagem"),
      "fn": sincronizar_lote},
     {"name": "validar",
-     "description": "Linter do vault: sem frontmatter (E1), campo ausente (E2), tipo/status "
-                    "fora do vocabulario (E3), wikilink quebrado (E4), nota fora do hub (E5); "
-                    "avisos: orfa (A1), sem link de saida (A2), projeto sem hub (A3). O padrao "
-                    "de nota (A4 hub sem resumo, A5 nota grande, A6 secoes ausentes, A7 tags, "
-                    "A8 nome longo, A9 resumo longo) entra so contado; tipo=padrao lista. Rode "
-                    "ao fechar uma leva.",
+     "description": "Linter do vault: frontmatter, vocabulario, wikilinks, hub e orfas; o padrao "
+                    "de nota (A4-A9) entra so contado. Rode ao fechar uma leva.",
      "inputSchema": esquema({
          "projeto": P_PROJETO,
          "tipo": {"type": "string",
@@ -1851,9 +1795,8 @@ FERRAMENTAS = [
      }),
      "fn": validar},
     {"name": "mapa_codigo",
-     "description": "Mapa do codigo a partir do graphify-out do repo (ponteiro Repo: do hub): "
-                    "frescor do grafo, god nodes, as 20 maiores comunidades e destaques do "
-                    "GRAPH_REPORT. Leia antes de mexer no codigo.",
+     "description": "Mapa do codigo a partir do graphify-out do repo (ponteiro Repo: do hub). "
+                    "Leia antes de mexer no codigo.",
      "inputSchema": esquema({"projeto": P_PROJ, "repo": P_REPO}, "projeto"),
      "fn": mapa_codigo},
     {"name": "consultar_codigo",
@@ -1869,9 +1812,9 @@ FERRAMENTAS = [
      }, "projeto"),
      "fn": consultar_codigo},
     {"name": "gerar_mapa",
-     "description": "Regrava a nota `Mapa do Codigo <projeto>` a partir do graphify-out (god "
-                    "nodes, comunidades, GRAPH_REPORT) preservando a secao Leitura curada; "
-                    "passe `leitura` para atualiza-la. Apos cada rodada do graphify.",
+     "description": "Regrava a nota `Mapa do Codigo <projeto>` a partir do graphify-out, "
+                    "preservando a secao Leitura curada; passe `leitura` para atualiza-la. "
+                    "Apos cada rodada do graphify.",
      "inputSchema": esquema({
          "projeto": P_PROJ,
          "leitura": {"type": "string", "description": "Sua leitura curada (dominios, o que "

@@ -24,14 +24,14 @@ const os = require('os');
 const path = require('path');
 
 const REGRAS = `<vault-obsidian>
-Este projeto documenta no vault Obsidian pelo MCP \`vault-docs\` (skill \`obsidian-docs\`). Prefixo das ferramentas conforme a rota: \`mcp__vault-docs__*\` (\`npx skills add\`) ou \`mcp__plugin_macrex-skills_vault-docs__*\` (plugin; renomeado, o nome dele entra no lugar). **Sem ferramenta de vault na sessao, ignore este bloco inteiro.**
+Este projeto documenta no vault Obsidian pelo MCP \`vault-docs\` (\`mcp__vault-docs__*\` ou \`mcp__plugin_<plugin>_vault-docs__*\`). **Sem nenhuma ferramenta do servidor vault-docs na sessao, seja qual for o prefixo, ignore este bloco.**
 
-- **O vault e a memoria dos projetos, e nada dispara isto sozinho.** ANTES de mexer em codigo: \`contexto_projeto <pasta-do-repo>\` (descricao, contagens, notas recentes por secao e a ultima evolucao, com teto fixo); depois \`ler_nota\` so na nota que interessar (\`secao=\` quando basta uma parte) e \`mapa_codigo <projeto>\` se o projeto usa graphify. Hub inteiro (\`ler_nota <projeto>\`) so para o indice completo. Projeto citado que nao e o do diretorio atual: resolva la primeiro (\`contexto_projeto <projeto>\`; nome incerto, \`buscar\` ou \`visao_geral\` — um hub por projeto, MOCs tematicos em \`MOC/\`). Codigo e git vem depois do vault.
-- **Todo artefato .md de documentacao nasce no vault**, pela skill \`obsidian-docs\`: spec, plano, design, bug, evolucao, ADR, arquitetura, analise, pesquisa, relatorio, inclusive specs e planos de brainstorming do superpowers (no lugar de \`docs/superpowers/specs|plans/\`). NUNCA no repositorio do projeto; la ficam so os operacionais (\`README.md\`, \`CLAUDE.md\`, \`AGENTS.md\`, \`SKILL.md\`, configs).
-- **Ao fechar uma leva ou versao**, registre a evolucao (\`salvar_nota tipo=evolucao\`), com as secoes O que mudou, Verificacao e Pendencias. \`salvar_nota\` avisa titulo, resumo, tags e secoes fora do padrao: corrija na hora, nao ignore.
-- **Migracao para o vault e CÓPIA, nunca recorte.** PROIBIDO apagar ou mover arquivo do repositorio, inclusive o que so parece documentacao (\`LEIA.txt\`, \`HELP\`, notas em biblioteca vendorizada); nunca gere o commit \`docs: migrados para o vault Obsidian (obsidian-docs)\`.
+- **O vault e a memoria dos projetos, e nada dispara isto sozinho.** ANTES de codigo e git: \`contexto_projeto <pasta-do-repo>\` e \`mapa_codigo <projeto>\` se o projeto usa graphify. Projeto citado que nao e o do diretorio atual: \`contexto_projeto <projeto>\` primeiro (nome incerto: \`buscar\` ou \`visao_geral\`; MOCs tematicos em \`MOC/\`).
+- **Todo artefato .md de documentacao nasce no vault**, pela skill \`obsidian-docs\`: spec, plano, design, bug, evolucao, ADR, arquitetura, analise, pesquisa, relatorio, inclusive os do superpowers (no lugar de \`docs/superpowers/specs|plans/\`). No repositorio ficam so os operacionais (\`README.md\`, \`CLAUDE.md\`, \`AGENTS.md\`, \`SKILL.md\`, configs).
+- **Ao fechar uma leva ou versao**, registre a evolucao (\`salvar_nota tipo=evolucao\`) com as secoes O que mudou, Verificacao e Pendencias, e rode \`validar projeto=<projeto>\`. \`salvar_nota\` avisa o que sai do padrao: corrija na hora.
+- **Migracao para o vault e CÓPIA, nunca recorte**: o original fica intocado no repositorio, inclusive o que so parece documentacao (\`LEIA.txt\`, \`HELP\`, notas em biblioteca vendorizada); nunca gere o commit \`docs: migrados para o vault Obsidian (obsidian-docs)\`.
 - **Acesso ao vault so pelas ferramentas do MCP.** NUNCA Read/Grep/Glob/Write/Edit nos arquivos dele, nem git — o servidor ja commita e empurra.
-- Duas fontes, cada pergunta na sua: o que foi decidido e por que, vault (\`buscar\`, \`ler_nota\`); o que o codigo E agora, grafo (\`consultar_codigo\`, \`mapa_codigo\`). graphify e opcional; apos cada rodada dele, SEMPRE \`gerar_mapa <projeto>\` com a sua \`leitura\` curada. \`graphify-out/\` fica no repositorio, no \`.gitignore\` e fora do index — nunca no vault.
+- Duas fontes: o que foi decidido e por que, no vault; o que o codigo e agora, no grafo do graphify. Apos cada rodada do graphify, SEMPRE \`gerar_mapa <projeto>\` com a sua \`leitura\` curada; \`graphify-out/\` fica no repositorio, no \`.gitignore\` e fora do index.
 </vault-obsidian>`;
 
 // Todos os arquivos de configuracao em que o userConfig do plugin pode ter caido.
@@ -48,15 +48,9 @@ function arquivosDeConfig() {
   ];
 }
 
-// null = nao deu para saber (injeta); true/false = o cliente disse.
-function vaultConfigurado() {
-  // A opcao do plugin decide PRIMEIRO: ela e a resposta explicita deste cliente.
-  // Chave presente e vazia = o cliente deixou a pasta em branco de proposito, e
-  // um OBSIDIAN_VAULT esquecido no perfil (rota CLI antiga) nao pode desfazer isso.
-  const opcao = process.env.CLAUDE_PLUGIN_OPTION_VAULT;
-  if (opcao !== undefined) return opcao.trim() !== '';
-  if ((process.env.OBSIDIAN_VAULT || '').trim()) return true;
-  let resposta = null;
+// options.<chave> de cada entrada macrex-skills@ dos settings.json, na ordem de arquivosDeConfig().
+function opcoesNosSettings(chave) {
+  const valores = [];
   for (const arquivo of arquivosDeConfig()) {
     let cfgs;
     try {
@@ -66,20 +60,31 @@ function vaultConfigurado() {
     }
     // a chave carrega o marketplace de onde veio: <plugin>@<marketplace>
     for (const [nome, c] of Object.entries(cfgs || {})) {
-      if (!nome.startsWith('macrex-skills@')) continue;
-      if (String(c && c.options && c.options.vault || '').trim()) return true;
-      resposta = false; // config existe e esta vazia: opt-out deliberado
+      if (nome.startsWith('macrex-skills@')) valores.push(c && c.options && c.options[chave]);
     }
   }
-  return resposta;
+  return valores;
+}
+
+// null = nao deu para saber (injeta); true/false = o cliente disse.
+function vaultConfigurado() {
+  // A opcao do plugin decide PRIMEIRO: ela e a resposta explicita deste cliente.
+  // Chave presente e vazia = o cliente deixou a pasta em branco de proposito, e
+  // um OBSIDIAN_VAULT esquecido no perfil (rota CLI antiga) nao pode desfazer isso.
+  const opcao = process.env.CLAUDE_PLUGIN_OPTION_VAULT;
+  if (opcao !== undefined) return opcao.trim() !== '';
+  if ((process.env.OBSIDIAN_VAULT || '').trim()) return true;
+  const valores = opcoesNosSettings('vault');
+  if (valores.some((v) => String(v || '').trim())) return true;
+  return valores.length ? false : null; // config existe e esta vazia: opt-out deliberado
 }
 
 // REGRAS tem um dono so: a extensao do Pi (extensions/vault-docs.ts) importa este
 // modulo para injetar no Pi o mesmo texto que o hook injeta no Claude Code. Por isso
 // o gate e a escrita em stdout so rodam quando este arquivo E o programa; importado,
-// ele exporta o texto e nao faz mais nada. arquivosDeConfig serve tambem ao gate do
+// ele exporta o texto e nao faz mais nada. opcoesNosSettings serve tambem ao gate do
 // hook do grill (grill-canal.js), que le a opcao dele nos mesmos settings.json.
-module.exports = { REGRAS, arquivosDeConfig };
+module.exports = { REGRAS, opcoesNosSettings };
 
 if (require.main === module) {
   if (vaultConfigurado() === false) process.exit(0);

@@ -11,10 +11,9 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/licen%C3%A7a-MIT-blue" alt="Licença: MIT"></a>
   <a href="https://github.com/macrex/skills/actions/workflows/ci.yml"><img src="https://github.com/macrex/skills/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/macrex/skills/releases/latest"><img src="https://img.shields.io/github/v/release/macrex/skills" alt="Release"></a>
   <img src="https://img.shields.io/badge/funciona%20com-Claude%20Code%20%C2%B7%20Pi%20%C2%B7%20Codex%20%C2%B7%20Antigravity-black" alt="Funciona com Claude Code, Pi, Codex e Antigravity">
 </p>
-
-Depois de instalado, peça do jeito de sempre:
 
 ```
 > /faz exportar os chamados em CSV
@@ -22,8 +21,8 @@ Depois de instalado, peça do jeito de sempre:
 > /cpv
 ```
 
-O `/faz` interroga até o pedido ficar claro e entrega a linha da leva. Numa sessão nova, a leva roda
-sozinha até tudo estar verificado, sem commitar nada, e o `/faz-painel` acompanha cada passo:
+O `/faz` interroga até o pedido ficar claro e entrega a linha da leva. Colada numa sessão nova, a leva
+roda sozinha até tudo estar verificado, sem commitar nada, e o `/faz-painel` acompanha cada passo:
 
 https://github.com/user-attachments/assets/b1894356-3e85-48c4-9da4-b91bd38bb613
 
@@ -33,18 +32,25 @@ https://github.com/user-attachments/assets/b1894356-3e85-48c4-9da4-b91bd38bb613
 
 | Comando | O que faz |
 |---|---|
-| `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva numa sessão nova: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
-| `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, com hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já existe no repositório. Também dispara sozinha quando um documento nasce |
+| `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
+| `/faz-painel` | Abre e fecha o painel da leva ao lado da conversa (só no Claude Code; as abas estão abaixo) |
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
-| `/faz-painel` | Só no Claude Code: abre e fecha, ao lado da conversa, o painel da leva em curso no workspace. No `/faz <pedido>` ele acompanha o grill: o pedido, cada pergunta pelo tema com a resposta e o documento do entendimento; quando a leva começa, a tela troca para ela, que mostra as fases, os tickets com o portão de cada um, o tempo de cada fase e ticket, o total, e os sub-agentes, teammates e workflows da leva com modelo, estado e duração. O `/clear` tira da tela o grill e a leva fechada e volta ao repouso, o Claude dormindo; um toast avisa quando uma leva começa. A aba Diff, ao lado da aba Painel no topo, lista os arquivos que a sessão mudou desde que começou, com as linhas somadas e tiradas, e o clique num arquivo abre o diff dele. A aba Grill guarda o último grill do workspace mesmo depois que a leva começa: cada pergunta com a resposta e, num bloco de código, a linha do `/faz leva` que ele gerou. A aba Tickets mostra cada ticket com o portão e as notas do que ele entregou, e a aba Uso, os tokens desde o início da leva (entrada, saída e cache) por modelo e por agente |
-| `/grill-tela` | Mostra o grill do Matt Pocock numa página HTML local, em vez de perguntar no terminal. O canal tem três modos: `cli` (o padrão, o grill segue no terminal), `perguntar` (o agente pergunta CLI ou tela quando o `grilling` começa) e `tela` (sempre na página). Escolha pela opção **Canal do grill** no Claude Code, por `GRILL_CANAL` no Pi e pela regra no `AGENTS.md` no Codex e no Antigravity |
+| `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, um hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já está no repositório. Também dispara sozinha quando um documento nasce |
+| `/grill-tela` | Faz o grill do Matt Pocock numa página HTML local. O canal do grill é `cli` (o padrão, no terminal), `perguntar` (o agente pergunta no início) ou `tela`: opção **Canal do grill** em `/config` no Claude Code, `GRILL_CANAL` no Pi, regra no `AGENTS.md` no Codex e no Antigravity |
 
-`/faz` e `/cpv` só rodam quando você digita. `/faz` precisa das skills do
-[Matt Pocock](https://github.com/mattpocock/skills); no Codex e no Pi ela usa um `/goal` (nativo
-no Codex, extensão no Pi), e no Antigravity responda `continue` se a sessão parar antes do fim. No Codex
-as skills atendem por `$macrex-skills:faz`, `$macrex-skills:obsidian-docs`, `$macrex-skills:cpv` e
-`$macrex-skills:grill-tela`; nele a grill-tela roda fora do sandbox, que bloqueia a rede local, e
-pede a sua aprovação.
+| Aba do painel | Mostra |
+|---|---|
+| Painel | As fases, do grill à qualidade, cada uma com o estado e o tempo; com a leva, também os tickets com o portão, os passos da revisão, das correções e da qualidade e os sub-agentes, teammates e workflows com modelo e estado; fechada a leva, o lembrete do `/cpv` e o histórico. O grill da grade abre a aba Grill. Só o botão Limpar, sempre ao lado do título, limpa o painel: tira o grill e a leva, aberta ou fechada, com o uso dela (a aberta perde a retomada); o `/clear` não mexe nele |
+| Diff | Os arquivos que a sessão mudou, com as linhas somadas e tiradas; o clique num arquivo abre o diff |
+| Grill | Cada pergunta do último grill com a resposta, venha ela do terminal ou da página da `/grill-tela`, e o prompt do `/faz leva` com o botão Copiar, que leva o texto exato; fica até o Limpar da aba Painel |
+| Tickets | O portão e as notas de cada ticket |
+| Uso | Os tokens desde o início da leva, por modelo e por agente |
+
+`/faz` e `/cpv` só rodam quando você digita. A `/faz` precisa das skills do
+[Matt Pocock](https://github.com/mattpocock/skills). No Codex e no Pi ela segura a sessão com um `/goal`
+(nativo no Codex, extensão no Pi); no Antigravity, responda `continue` se a sessão parar antes do fim.
+No Codex as skills atendem por `$macrex-skills:<nome>`, e a grill-tela roda fora do sandbox, que
+bloqueia a rede local, com a sua aprovação.
 
 ## Instalar
 
@@ -59,14 +65,13 @@ sem Obsidian, pule o que fala de vault.
 /plugin install mattpocock-skills
 ```
 
-Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces,
-`macrex`. O canal do grill é a opção **Canal do grill** em `/config`: `cli` (o padrão, o hook
-fica calado e o grill segue o seu fluxo), `perguntar` (CLI ou tela, a cada grill) ou `tela` (sempre
-na página). O plugin pede o Claude Code 2.1.287 ou mais novo. O `/faz-painel` é um mod do Claude Code e
-não pede configuração, mas só aparece onde a Anthropic já liberou os mods; sem eles, o resto do plugin
-funciona igual. Depois de instalar ou atualizar o plugin, reinicie a sessão (`claude --continue` mantém
-a conversa): até lá, a sessão segue com a versão anterior. No Windows o plugin chama `python3`; se só tem `python`, ponha um `python3` no PATH. Se
-já tinha as skills em `~/.claude/skills`, remova-as, ou elas ganham do plugin.
+- Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces, `macrex`.
+- Pede o Claude Code 2.1.287 ou mais novo. O `/faz-painel` é um mod: só aparece onde a Anthropic já
+  liberou os mods, e sem eles o resto do plugin funciona igual.
+- Depois de instalar ou atualizar, reinicie a sessão (`claude --continue` mantém a conversa); até lá
+  vale a versão anterior.
+- No Windows o plugin chama `python3`: se só existe `python`, ponha um `python3` no PATH.
+- Skills antigas em `~/.claude/skills` ganham do plugin: remova-as.
 
 ### Pi
 
@@ -78,11 +83,11 @@ export OBSIDIAN_VAULT=~/obsidian/projetos      # Windows: setx OBSIDIAN_VAULT D:
 export GRILL_CANAL=perguntar                   # opcional: cli (padrão), perguntar ou tela
 ```
 
-Em `~/.pi/agent/settings.json`, troque a entrada do Matt por
-`{ "source": "https://github.com/mattpocock/skills", "skills": ["skills/engineering/**", "skills/productivity/**"] }`
-para ficar só com as skills que o plugin do Claude Code instala. Para levas de vários tickets, suba
-`continuationLimits.automaticTurns` em `~/.pi/agent/pi-goal.json`. `pi install npm:pi-subagents`
-habilita o modo sub-agents.
+- Em `~/.pi/agent/settings.json`, troque a entrada do Matt por
+  `{ "source": "https://github.com/mattpocock/skills", "skills": ["skills/engineering/**", "skills/productivity/**"] }`,
+  as mesmas skills que o plugin do Claude Code instala.
+- Levas de vários tickets: suba `continuationLimits.automaticTurns` em `~/.pi/agent/pi-goal.json`.
+- `pi install npm:pi-subagents` habilita o modo sub-agents.
 
 ### Codex
 
@@ -93,9 +98,8 @@ codex mcp add vault-docs -- python ~/.codex/skills/macrex/skills/obsidian-docs/s
 ```
 
 Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
-`node ~/.codex/skills/macrex/hooks/grill-canal.js regra >> AGENTS.md` (`regra tela` para ir sempre
-à tela); para voltar ao CLI, apague o bloco `<grill-canal>`. Para atualizar, `git pull`
-nas duas pastas.
+`node ~/.codex/skills/macrex/hooks/grill-canal.js regra >> AGENTS.md` (`regra tela` vai sempre à tela;
+apagar o bloco `<grill-canal>` volta ao CLI). Atualize com `git pull` nas duas pastas.
 
 ### Antigravity (CLI `agy`)
 
@@ -106,19 +110,19 @@ cp -r ~/.gemini/antigravity-cli/macrex/skills/* ~/.gemini/antigravity-cli/mattpo
 agy mcp add vault-docs -- python ~/.gemini/config/skills/obsidian-docs/scripts/servidor_vault.py --vault ~/obsidian/projetos
 ```
 
-O CLI só lê skill que está direto em `~/.gemini/config/skills/` (a pasta global desde o `agy` 1.2.14), daí a cópia. Regras do
-vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
-`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> ~/.gemini/GEMINI.md` (`regra tela` para
-ir sempre à tela); para voltar ao CLI, apague o bloco `<grill-canal>`. Para atualizar,
-`git pull` nos dois clones e repita o `cp`.
+O `agy` só lê skill direto em `~/.gemini/config/skills/` (a pasta global desde a 1.2.14), daí a cópia.
+Regras do vault no `AGENTS.md`: passo 3 de "Outros agentes". Para o grill perguntar o canal,
+`node ~/.gemini/antigravity-cli/macrex/hooks/grill-canal.js regra >> ~/.gemini/GEMINI.md` (`regra tela`
+vai sempre à tela; apagar o bloco `<grill-canal>` volta ao CLI). Atualize com `git pull` nos dois
+clones e repita o `cp`.
 
 ### Outros agentes (Cursor, Gemini CLI, Copilot, OpenCode, Windsurf...)
 
 1. Skills: `npx skills@latest add macrex/skills -g -a cursor` (ou `gemini-cli`, `github-copilot`,
-   `opencode`, `windsurf`, `'*'`). Se também usa o plugin no Claude Code, clone na pasta de skills
-   do agente, como no Codex: o `npx` grava em `~/.agents/skills`, que o Claude Code também lê, e
-   cada skill aparece duas vezes.
-2. MCP `vault-docs`, no config de MCP do agente, como servidor stdio:
+   `opencode`, `windsurf`, `'*'`). Se também usa o plugin no Claude Code, clone na pasta de skills do
+   agente, como no Codex: o `npx` grava em `~/.agents/skills`, que o Claude Code também lê, e cada
+   skill aparece duas vezes.
+2. MCP `vault-docs`, como servidor stdio no config de MCP do agente:
    `python <pasta da skill obsidian-docs>/scripts/servidor_vault.py --vault ~/obsidian/projetos`.
 3. Regras do vault, no `AGENTS.md` ou `CLAUDE.md`:
 

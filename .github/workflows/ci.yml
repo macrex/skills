@@ -11,8 +11,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          # o historico inteiro: a checagem das versoes compara com o commit de antes do push
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -20,11 +26,12 @@ jobs:
         with:
           python-version: "3.9"
 
-      - name: Manifestos, frontmatter das skills e contrato por harness
+      - name: Manifestos, frontmatter das skills, contrato por harness e versoes
+        env:
+          VERSAO_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: python scripts/validar_repo.py
 
       - name: Hook do vault (SessionStart e SubagentStart)
-        shell: bash
         run: |
           node hooks/vault-rules.js SessionStart | grep -q '<vault-obsidian>'
           node hooks/vault-rules.js SubagentStart | python -c "import json,sys; d=json.load(sys.stdin); assert d['hookSpecificOutput']['additionalContext']"
@@ -33,38 +40,55 @@ jobs:
           test "$saida" = "import ok"
 
       - name: Hook do grill (PreToolUse da Skill, regra do AGENTS.md e extensao do Pi)
-        shell: bash
         run: |
           node hooks/teste-grill-canal.js
           node --experimental-strip-types extensions/teste-grill-canal.mjs
 
       - name: Painel da leva (mod do Claude Code)
-        shell: bash
         run: |
           npm install -g @anthropic-ai/claude-code
           claude plugin validate .claude-plugin/plugin.json
           claude plugin test .
 
       - name: Servidor do vault
-        shell: bash
         run: |
           python -m py_compile skills/obsidian-docs/scripts/servidor_vault.py skills/obsidian-docs/scripts/validar_vault.py
           python skills/obsidian-docs/scripts/teste_servidor_vault.py
 
       - name: Extensao do Pi (vault-docs)
-        shell: bash
         run: node --experimental-strip-types extensions/teste-vault-docs.mjs
 
       - name: Descobridor e varredor do /cpv
-        shell: bash
         run: |
           node skills/cpv/scripts/teste-repos-da-leva.js
           node skills/cpv/scripts/teste-segredos.js
 
       - name: Localizador das skills do Matt (/faz)
-        shell: bash
         run: node skills/faz/scripts/teste-skills-do-matt.js
 
       - name: Servidor da grill-tela
-        shell: bash
         run: node skills/grill-tela/scripts/teste-grill-tela.js
+
+  # A versao do plugin.json na main vira a release v<versao> do GitHub, so com os testes verdes;
+  # a release que ja existe fica como esta.
+  release:
+    needs: testes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Release da versao do plugin.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          tag="v$(jq -r .version .claude-plugin/plugin.json)"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "$tag ja publicada"; exit 0; fi
+          # as notas sao os commits desde a release anterior (na primeira, os deste push)
+          desde=$(git describe --tags --abbrev=0 2>/dev/null || echo "$ANTES")
+          git log --format='- %s' "$desde..HEAD" > notas.md 2>/dev/null || git log -1 --format='- %s' > notas.md
+          gh release create "$tag" --title "$tag" --notes-file notas.md --target "$GITHUB_SHA"

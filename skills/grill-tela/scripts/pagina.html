@@ -12,22 +12,16 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#F6F6F3; --surface:#FFFFFF; --surface2:#FAFAF8; --line:#E2E2DC; --line2:#EDEDE8; --ink:#1A1C20; --muted:#5E636B;
-  --rec:#1D6B4F; --rec-ink:#FFFFFF; --rec-soft:#E6F1EC; --sel:#1A1C20; --sel-ink:#FFFFFF; --pill-line:#DADAD3; --pill-ink:#3A3E45;
-  --troca:#9A5B00; --troca-soft:#FFFBF3; --nota:#7A4A00; --nota-soft:#FBF1E1; --nota-line:#F0D9B0; --shadow:0 1px 2px rgba(0,0,0,.06);
+  color-scheme:light dark;
+  --bg:light-dark(#F6F6F3,#121315); --surface:light-dark(#FFF,#1A1B1E); --surface2:light-dark(#FAFAF8,#202125); --line:light-dark(#E2E2DC,#2D2F34);
+  --line2:light-dark(#EDEDE8,#26282C); --ink:light-dark(#1A1C20,#E8E8E3); --muted:light-dark(#5E636B,#9DA1A8); --rec:light-dark(#1D6B4F,#3FA57A);
+  --rec-ink:light-dark(#FFF,#0C1A13); --rec-soft:light-dark(#E6F1EC,#183126); --sel:light-dark(#1A1C20,#E8E8E3); --sel-ink:light-dark(#FFF,#121315);
+  --pill-line:light-dark(#DADAD3,#3A3C42); --pill-ink:light-dark(#3A3E45,#C9CCD1); --troca:light-dark(#9A5B00,#E3A64A); --troca-soft:light-dark(#FFFBF3,#211B11);
+  --nota:light-dark(#7A4A00,#E8B868); --nota-soft:light-dark(#FBF1E1,#2B2213); --nota-line:light-dark(#F0D9B0,#4A3A1E);
+  --shadow:0 1px 2px light-dark(rgba(0,0,0,.06),rgba(0,0,0,.4)); --mono:"IBM Plex Mono",ui-monospace,monospace;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#121315; --surface:#1A1B1E; --surface2:#202125; --line:#2D2F34; --line2:#26282C; --ink:#E8E8E3; --muted:#9DA1A8;
-    --rec:#3FA57A; --rec-ink:#0C1A13; --rec-soft:#183126; --sel:#E8E8E3; --sel-ink:#121315; --pill-line:#3A3C42; --pill-ink:#C9CCD1;
-    --troca:#E3A64A; --troca-soft:#211B11; --nota:#E8B868; --nota-soft:#2B2213; --nota-line:#4A3A1E; --shadow:0 1px 2px rgba(0,0,0,.4);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#121315; --surface:#1A1B1E; --surface2:#202125; --line:#2D2F34; --line2:#26282C; --ink:#E8E8E3; --muted:#9DA1A8;
-  --rec:#3FA57A; --rec-ink:#0C1A13; --rec-soft:#183126; --sel:#E8E8E3; --sel-ink:#121315; --pill-line:#3A3C42; --pill-ink:#C9CCD1;
-  --troca:#E3A64A; --troca-soft:#211B11; --nota:#E8B868; --nota-soft:#2B2213; --nota-line:#4A3A1E; --shadow:0 1px 2px rgba(0,0,0,.4);
-}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
 button{font:inherit;color:inherit;cursor:pointer}
@@ -35,17 +29,17 @@ button:disabled{cursor:not-allowed}
 input,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--pill-line);border-radius:8px;padding:0 12px;width:100%}
 input{min-height:40px}textarea{padding:10px 12px}
 input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--rec);outline-offset:1px}
-code{font:12.5px "IBM Plex Mono",ui-monospace,monospace;background:var(--surface2);border:1px solid var(--line2);padding:0 5px;border-radius:5px}
+code{font:12.5px var(--mono);background:var(--surface2);border:1px solid var(--line2);padding:0 5px;border-radius:5px}
 a{color:var(--rec)}
 .pill code,.opt code,.lado code{background:none;border:none;padding:0;color:inherit;font-size:.95em}
 strong{font-weight:600}
-.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.mono{font-family:var(--mono)}
 .muted{color:var(--muted)}
 
 /* topo */
 .top{background:var(--surface);border-bottom:1px solid var(--line)}
 .top-in{max-width:1320px;margin:0 auto;padding:6px 32px;min-height:56px;display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap}
-.marca{font:500 16px "IBM Plex Mono",ui-monospace,monospace}
+.marca{font:500 16px var(--mono)}
 .passos{display:flex;align-items:center;gap:10px;list-style:none;margin:0;padding:0;font-size:13px;color:var(--muted)}
 .passos .feito{color:var(--rec)}.passos .agora{color:var(--ink);font-weight:600}
 .passos .traco{width:16px;height:1px;background:var(--line)}
@@ -65,7 +59,7 @@ strong{font-weight:600}
 .h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
 .sub{margin:4px 0 0;color:var(--muted)}
 .envio{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
-.resumo{font:12.5px "IBM Plex Mono",ui-monospace,monospace;color:var(--muted)}
+.resumo{font:12.5px var(--mono);color:var(--muted)}
 .btn{border:1px solid transparent;border-radius:8px;font-weight:600;padding:0 20px;min-height:44px}
 .btn.pri{background:var(--sel);color:var(--sel-ink)}.btn.pri:disabled{opacity:.35}
 .btn.ok{background:var(--rec);color:var(--rec-ink)}
@@ -76,12 +70,13 @@ strong{font-weight:600}
 
 /* panorama: uma linha por questão */
 .cols,.lin{display:flex;flex-wrap:wrap;gap:10px 24px}
-.cols{padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--line);font:11px "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.cols,th,.cfg h4{font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.cols{padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--line)}
 .lin{position:relative;align-items:flex-start;padding:14px 20px;border-top:1px solid var(--line2)}
 .lin:first-of-type{border-top:none}
 .lin.troca{background:var(--troca-soft)}
 .c-tema{flex:0 0 150px}.c-perg{flex:1 1 320px;min-width:0}.c-resp{flex:1.35 1 400px;min-width:0}.c-nota{flex:0 0 84px;display:flex;gap:4px;justify-content:flex-end}
-.qid{font:12px "IBM Plex Mono",ui-monospace,monospace;color:var(--muted)}
+.qid{font:12px var(--mono);color:var(--muted)}
 .cab{font-weight:600}
 .st{margin-top:2px;font-size:12px;font-weight:500;color:var(--muted)}
 .st .aceito{color:var(--rec)}.st .outra{color:var(--troca)}.st .com{color:var(--nota)}
@@ -117,7 +112,7 @@ strong{font-weight:600}
 .opt.rec{border-style:dashed;border-color:var(--rec)}
 .opt.sel{background:var(--surface2);border:1.5px solid var(--sel)}
 .opt.sel.rec{border:1.5px solid var(--rec);background:var(--rec-soft)}
-.kbd{font:11px "IBM Plex Mono",ui-monospace,monospace;border:1px solid var(--pill-line);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--muted);flex:none;margin-top:2px}
+.kbd{font:11px var(--mono);border:1px solid var(--pill-line);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--muted);flex:none;margin-top:2px}
 .estrela{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:500;color:var(--rec);margin-left:6px}
 .rotulo{display:block;margin:16px 0 0;font-size:12.5px;font-weight:500;color:var(--muted)}
 .navega{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
@@ -127,7 +122,7 @@ strong{font-weight:600}
 .hist summary{cursor:pointer;padding:12px 20px;font-weight:500;color:var(--muted);min-height:44px;display:flex;align-items:center}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:11px 20px;border-top:1px solid var(--line2);vertical-align:top}
-th{font:11px "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface2);border-top:1px solid var(--line)}
+th{font-weight:500;background:var(--surface2);border-top:1px solid var(--line)}
 
 /* aguarde, final e fim */
 .centro{min-height:60vh;display:grid;place-items:center;text-align:center}
@@ -135,13 +130,13 @@ th{font:11px "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.06em;text-tr
 .spin{width:28px;height:28px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--rec);animation:sp .9s linear infinite;margin:0 auto 18px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @keyframes pu{50%{opacity:.5}}
-.glifo{font:500 34px "IBM Plex Mono",ui-monospace,monospace;color:var(--rec);margin-bottom:10px}
+.glifo{font:500 34px var(--mono);color:var(--rec);margin-bottom:10px}
 details.recebido{margin-top:18px;text-align:left}details.recebido summary{cursor:pointer;color:var(--muted);font-size:13px}
 pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;padding:12px;font-size:12px;overflow:auto;max-height:260px;text-align:left}
 .final{max-width:1040px;margin:0 auto}
 
 .cfg{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 8px 28px rgba(0,0,0,.12);padding:16px;width:260px;margin:0;inset:auto;position:fixed;top:64px;right:max(16px,calc((100vw - 1320px)/2 + 32px))}
-.cfg h4{margin:0 0 12px;font:11px "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.cfg h4{margin:0 0 12px}
 .cfg label{display:flex;justify-content:space-between;font-size:13px;font-weight:500}
 .cfg input[type=range]{padding:0;border:none;min-height:0;accent-color:var(--rec);margin:8px 0 12px}
 .cfg select{width:100%;font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--pill-line);border-radius:8px;padding:8px 10px;margin:8px 0 12px}
@@ -149,8 +144,7 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
 @media (max-width:760px){
   .top-in,.wrap{padding-left:16px;padding-right:16px}
   .cols{display:none}
-  .c-tema{flex-basis:100%;display:flex;gap:8px;align-items:baseline}
-  .c-tema{padding-right:92px}
+  .c-tema{flex-basis:100%;display:flex;gap:8px;align-items:baseline;padding-right:92px}
   .c-nota{position:absolute;top:6px;right:12px}
   .lado{max-width:none}
 }
@@ -325,7 +319,7 @@ function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Ente
    + `<div class="foco">
    <nav class="caixa lado" aria-label="Questões da rodada">${ps.map((p,k)=>`<button class="${k===i?'on':''}" data-lado="${k}" onclick="S.foco=${k};render()">${ladoHTML(p,k)}</button>`).join('')}</nav>
    <section class="caixa cartao">
-    <div class="row" style="display:flex;align-items:center;gap:10px"><span class="qid">${esc(q.id)} · ${esc(q.cabecalho)}</span><span class="st" data-marca="${i}">${statusHTML(q)}</span>
+    <div style="display:flex;align-items:center;gap:10px"><span class="qid">${esc(q.id)} · ${esc(q.cabecalho)}</span><span class="st" data-marca="${i}">${statusHTML(q)}</span>
       <span class="muted" style="margin-left:auto;font-size:13px">${i+1} de ${ps.length}</span>${somBtn(i)}</div>
     <h2>${md(q.titulo)}</h2>${q.contexto?`<div class="ctx" style="font-size:14px">${md(q.contexto)}</div>`:''}
     <div class="opts">${q.opcoes.map((o,j)=>`<button class="opt ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}" onclick="escolher(${i},${j})">

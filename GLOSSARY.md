@@ -1,4 +1,4 @@
-# Contexto
+# Glossário
 
 ## Linguagem
 
@@ -6,12 +6,16 @@
 O trabalho que um `/faz <pedido>` interroga e um `/faz leva <documento>` cumpre, do entendimento até a validação, deixando tudo na working tree para o `/cpv` fechar.
 _Evitar_: tarefa, feature, sprint
 
+**Prompt**:
+O texto que o `/faz <pedido>` imprime ao fim do grill para o usuário colar numa sessão nova: dispara o `/faz leva <documento>` e autoriza as skills reservadas ao usuário.
+_Evitar_: linha da leva, comando
+
 **Fase da leva**:
-Cada etapa em que a leva está: grill, spec, tickets, implement, revisão, correções, qualidade, fechamento. No painel da leva, cada fase aparece pelo nome da skill que a cumpre (`to-spec`, `to-tickets`, `implement`, `code-review`), e o fechamento vira o aviso do `/cpv`.
+O ponto em que a leva está: grill, spec, tickets, implement, revisão, correções, qualidade, fechamento. No painel da leva, cada fase aparece pelo nome da skill que a cumpre (`to-spec`, `to-tickets`, `implement`, `code-review`), e o fechamento vira o aviso do `/cpv`.
 _Evitar_: passo (quando se fala do estado observado), etapa
 
 **Estado da leva**:
-O registro que a própria leva grava dos seus marcos (fase, tickets e portão), lido por quem quiser acompanhá-la.
+O que a própria leva grava dos seus marcos, lido por quem a acompanha.
 _Evitar_: log, progresso
 
 **Marco**:
@@ -23,11 +27,15 @@ A verificação que decide se um ticket fechou: verde ou vermelho, com até dois
 _Evitar_: gate, check
 
 **Painel da leva**:
-O pane que um mod do Claude Code abre ao lado da conversa, como o do `/diff`, e que mostra o grill do `/faz <pedido>` e depois o estado da leva enquanto ela roda; sem nenhum dos dois, o repouso. Só existe no Claude Code.
+O pane do Claude Code que o `/faz-painel` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.
 _Evitar_: dashboard, monitor, statusline, TUI
 
+**Diff da sessão**:
+O que a sessão mudou nos arquivos do repositório: o working tree comparado com a foto tirada quando a sessão começou, inclusive o que mudou por shell e sem o que já estava sujo antes.
+_Evitar_: git status, alterações pendentes
+
 **Agentes da leva**:
-Os sub-agentes e workflows que a leva abriu, com nome, modelo, estado e duração, que o próprio mod observa enquanto há leva ativa e mostra no painel.
+Os sub-agentes, teammates e workflows que a leva abriu, que o próprio mod observa enquanto ela está ativa.
 _Evitar_: Agora, atividade, feed
 
 **Retomada**:

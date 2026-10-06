@@ -5,6 +5,9 @@
 // harness a chama. Roda igual em win/mac/linux, sem dependencia.
 //
 //   node skills-do-matt.js [--json]
+//   node skills-do-matt.js --linha <documento> <modelo do implement> <modelo da revisao>
+//
+// Com --linha imprime o prompt da leva pronto para colar.
 //
 // Sai 1 quando falta alguma: e o portao do movimento 1.
 //
@@ -52,7 +55,7 @@ function raizes(harness, casa) {
       [h('.agents', 'skills'), ''],
       [h('.codex', 'skills'), ''],
       [h('.codex', 'skills', '*', 'skills', '*'), ''],
-      [h('.gemini', 'antigravity-cli', 'skills'), ''],
+      [h('.gemini', 'config', 'skills'), ''],
     ],
   }[harness];
 }
@@ -69,9 +72,9 @@ function harnessCorrente(env) {
 // em ordem decrescente: entre duas versoes do plugin em cache, a mais nova primeiro.
 // ponytail: ordem lexica, nao semver; 1.10.0 perde de 1.9.0 ate alguem se importar.
 function expandir(padrao) {
-  const partes = padrao.split(/[\\/]+/);
-  let atuais = [partes[0] === '' ? path.sep : partes[0] + (partes[0].endsWith(':') ? path.sep : '')];
-  for (const parte of partes.slice(1)) {
+  const { root } = path.parse(padrao);
+  let atuais = [root];
+  for (const parte of padrao.slice(root.length).split(/[\\/]+/)) {
     const proximos = [];
     for (const dir of atuais) {
       if (parte !== '*') {
@@ -109,11 +112,39 @@ function localizar(harness, casa, cwd) {
   });
 }
 
-// A pasta desta skill, dentro do cache de plugin (.claude/plugins/cache/<marketplace>/
-// <plugin>/<versao>/skills/faz), da o prefixo; fora dele a faz se chama so `faz`.
+// O plugin que carrega esta skill da o prefixo: a raiz dele, acima de skills/, tem o
+// .claude-plugin/plugin.json, no cache do Claude Code ou numa pasta de marketplace local.
+// Instalada sem plugin, a faz se chama so `faz`.
 function nomeDaFaz(pasta) {
-  const m = pasta.match(/[\\/]\.claude[\\/]plugins[\\/]cache[\\/][^\\/]+[\\/]([^\\/]+)[\\/][^\\/]+[\\/]skills[\\/][^\\/]+$/);
-  return (m ? m[1] + ':' : '') + path.basename(pasta);
+  try {
+    const { name } = JSON.parse(fs.readFileSync(path.join(pasta, '..', '..', '.claude-plugin', 'plugin.json'), 'utf8'));
+    if (name) return `${name}:${path.basename(pasta)}`;
+  } catch {}
+  return path.basename(pasta);
+}
+
+// A linha da leva pronta, para o agente imprimir como sai: modelo preenchido por um agente fraco
+// troca a abertura e tira o prefixo dos nomes. Cada nome de skill abre uma linha, para a quebra
+// que o terminal faz na linha longa nunca o partir na copia. So o Claude Code tem a abertura aqui;
+// nos outros harnesses ela fica `<abertura>`, para o agente trocar pela da referencia dele.
+function linhaDaLeva(harness, faz, nome, documento, modeloDoImplement, modeloDaRevisao) {
+  const abertura = harness === 'claude-code' ? `rode /${faz} leva ${documento}` : '<abertura>';
+  return [
+    `${abertura} até o fim.`,
+    'O documento é o entendimento já fechado comigo e o insumo',
+    'desta leva. Ela está fechada quando:',
+    `/${nome['to-spec']} expandiu esse documento in-place;`,
+    `/${nome['to-tickets']} publicou os tickets;`,
+    `/${nome.implement} rodou no modo que eu escolhi,`,
+    `com os agentes dele (se houver) no modelo ${modeloDoImplement};`,
+    'antes de executá-lo, me proponha os modos que este harness',
+    'tem (inline, sub-agents, workflow) e a sua recomendação;',
+    `/${nome['code-review']} revisou em dois eixos,`,
+    `com agentes no modelo ${modeloDaRevisao};`,
+    'todas as correções foram aplicadas com esse mesmo modelo,',
+    'o teste de qualidade passou e você me garantiu que está',
+    'tudo funcionando, sem commitar nada.',
+  ].join('\n');
 }
 
 function main() {
@@ -121,15 +152,27 @@ function main() {
   const harness = harnessCorrente(process.env);
   const skills = localizar(harness, os.homedir(), process.cwd());
   const faltam = skills.filter((s) => !s.caminho).map((s) => s.skill);
-  const pasta = path.dirname(__dirname);
+  // o caminho como foi chamado, nao o real: a faz ligada por link fora de um plugin e so `faz`
+  const pasta = path.dirname(path.dirname(process.argv[1]));
   const faz = nomeDaFaz(pasta);
+  const pedeLinha = process.argv.indexOf('--linha');
+  if (pedeLinha > 0) {
+    const [documento, modeloDoImplement, modeloDaRevisao] = process.argv.slice(pedeLinha + 1);
+    if (!documento || !modeloDoImplement || !modeloDaRevisao || faltam.length) {
+      process.stderr.write(faltam.length ? `faltam ${faltam.join(', ')}\n` : 'uso: --linha <documento> <modelo do implement> <modelo da revisao>\n');
+      process.exit(1);
+    }
+    const nome = Object.fromEntries(skills.map((s) => [s.skill, s.nome]));
+    process.stdout.write(linhaDaLeva(harness, faz, nome, documento, modeloDoImplement, modeloDaRevisao) + '\n');
+    process.exit(0);
+  }
   if (json) {
     process.stdout.write(JSON.stringify({ harness, faz, skills, faltam }, null, 2) + '\n');
   } else {
-    const linhas = [`harness: ${harness}`, `${'faz'.padEnd(16)} ${faz.padEnd(34)} ${pasta}`];
-    for (const s of skills) {
-      linhas.push(s.caminho ? `${s.skill.padEnd(16)} ${s.nome.padEnd(34)} ${s.caminho}` : `${s.skill.padEnd(16)} FALTA`);
-    }
+    // no Claude Code a skill se invoca pelo nome; o caminho so serve a quem cumpre o SKILL.md lendo-o
+    const coluna = (nome, caminho) => (harness === 'claude-code' ? nome : `${nome.padEnd(34)} ${caminho}`);
+    const linhas = [`harness: ${harness}`, `${'faz'.padEnd(16)} ${coluna(faz, pasta)}`];
+    for (const s of skills) linhas.push(`${s.skill.padEnd(16)} ${s.caminho ? coluna(s.nome, s.caminho) : 'FALTA'}`);
     if (faltam.length) linhas.push(`faltam ${faltam.length}: ${faltam.join(', ')}`);
     process.stdout.write(linhas.join('\n') + '\n');
   }
