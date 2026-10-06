@@ -645,15 +645,17 @@ export function register(on) {
       await update($, GRILL, g => ({ ...g, tela }))
       await sincronizarTela($)
     }
+    // so o stdout que abre com o prompt (o comando composto que imprime outra coisa antes nao e o
+    // localizador falando), e so no grill na tela: o que a leva tirou de la guarda o prompt dela
     const linha = /skills-do-matt\.js["']?\s+--linha/.test(e.command ?? '') && String(r?.result?.stdout ?? '').trim()
-    const grill = linha && (await read($, GRILL))
+    const grill = linha && /^rode \S+ leva /.test(linha) && naTela(await read($, GRILL))
     if (grill) {
       const agora = await $.clock.now()
       const comLinha = aplicarNoGrill(grill, { marco: 'linha', linha }, agora)
       // o documento vem da abertura do prompt, ja expandido pelo shell (skills-do-matt.js, linhaDaLeva),
       // lida no prompt sem o \r que o PowerShell poe
       const documento = /^rode \S+ leva (.+) até o fim\.$/m.exec(comLinha.linha ?? '')?.[1]
-      const fechado = !comLinha.erro && naTela(comLinha) && comLinha.documento == null && documento && aplicarNoGrill(comLinha, { marco: 'entendimento', documento }, agora)
+      const fechado = !comLinha.erro && comLinha.documento == null && documento && aplicarNoGrill(comLinha, { marco: 'entendimento', documento }, agora)
       const novo = fechado && !fechado.erro ? fechado : comLinha
       if (!novo.erro) {
         await $.store.set(chaveDoGrill(await $.session.root()), novo)

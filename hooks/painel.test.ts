@@ -483,6 +483,33 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Code' }))?.props.source).toBe(PROMPT)
   })
 
+  test('so o prompt do grill na tela entra: o localizador rodado depois do inicio ou num comando composto nao troca o prompt', async ($, on) => {
+    const { marco } = mundo($, on)
+    const PROMPT = 'rode /macrex-skills:faz leva doc até o fim.\nO documento é o entendimento'
+    const CODIGO = '// A linha da leva pronta, para o agente imprimir como\nfunction linhaDaLeva(harness, faz, nome, documento) {'
+    let stdout = PROMPT
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: `${stdout}\n`, stderr: '' } }) as never)
+    const localizador = 'node "D:/ws/skills/faz/scripts/skills-do-matt.js" --linha "doc" "da sessão" "da sessão"'
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:grill' })
+
+    // no grill, o comando composto que imprime outra coisa antes do prompt nao e o prompt
+    await marco({ marco: 'grill', pedido: 'csv' })
+    await marco({ marco: 'entendimento', documento: 'doc' })
+    stdout = `${CODIGO}\n${PROMPT}`
+    await $.tool.call({ tool: 'Bash', command: `sed -n 126,150p skills-do-matt.js; ${localizador}` } as never)
+    expect(await ui.find({ type: 'Code' })).toBeUndefined()
+    stdout = PROMPT
+    await $.tool.call({ tool: 'Bash', command: localizador } as never)
+    expect((await ui.find({ type: 'Code' }))?.props.source).toBe(PROMPT)
+
+    // a leva comecou: o grill saiu da aba Painel, e o localizador rodado de novo nao mexe nele
+    await marco({ marco: 'inicio', documento: 'doc' })
+    stdout = 'rode /macrex-skills:faz leva outro doc até o fim.'
+    await $.tool.call({ tool: 'Bash', command: localizador } as never)
+    expect((await ui.find({ type: 'Code' }))?.props.source).toBe(PROMPT)
+  })
+
   test('o prompt do localizador fecha o grill que nao recebeu o marco entendimento: o tempo para e o documento vem do prompt', async ($, on) => {
     const { marco, relogio } = mundo($, on)
     // o localizador imprime o documento que recebeu, ja expandido pelo shell; o \r\n e o do
