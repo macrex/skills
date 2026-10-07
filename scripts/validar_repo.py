@@ -11,7 +11,7 @@ skills/faz/references/harness/ tem as mesmas linhas, uma secao de instalacao no
 README e o registro do MCP em skills/obsidian-docs/references/registrar-mcp.md — um
 harness novo entra no teste ao ganhar o arquivo, e falha ate os outros dois o conhecerem. Por fim, que a
 pasta de skill mexida subiu a `# Versao` do seu SKILL.md e o plugin mexido subiu a
-minor do plugin.json (checar_versoes). Sai com 1 se algo falhar — e o que a CI roda.
+patch ou a minor do plugin.json (checar_versoes). Sai com 1 se algo falhar — e o que a CI roda.
 """
 import json
 import os
@@ -130,7 +130,7 @@ def versao(texto):
 
 def checar_versoes(plugin):
     """Quem muda sobe a versao: a pasta de skill mexida, a `# Versao` do seu SKILL.md; o plugin
-    mexido, a minor do plugin.json (a major so com autorizacao do usuario), que a CI publica como
+    mexido, a patch ou a minor do plugin.json (a major so com autorizacao do usuario), que a CI publica como
     release. A base e VERSAO_BASE (a CI passa o commit de antes do push ou a base do PR) ou, sem
     ela, o HEAD: confere o working tree."""
     base = os.environ.get("VERSAO_BASE") or "HEAD"
@@ -151,12 +151,12 @@ def checar_versoes(plugin):
     agora = str((plugin or {}).get("version", ""))
     if not all(re.fullmatch(r"\d+\.\d+\.\d+", v) for v in (antes, agora)):
         return
-    M, m, _ = map(int, antes.split("."))
+    M, m, p = map(int, antes.split("."))
     if antes == agora:
         if any(not c.startswith(SO_DO_REPO) for c in mudados):
-            falha(f"{rel}: o plugin mudou desde {base[:12]} e segue na {antes}; suba para {M}.{m + 1}.0")
-    elif agora not in (f"{M}.{m + 1}.0", f"{M + 1}.0.0"):
-        falha(f"{rel}: de {antes} para {agora}; a leva sobe a minor ({M}.{m + 1}.0), e a major ({M + 1}.0.0) so com autorizacao do usuario")
+            falha(f"{rel}: o plugin mudou desde {base[:12]} e segue na {antes}; suba para {M}.{m}.{p + 1} ou {M}.{m + 1}.0")
+    elif agora not in (f"{M}.{m}.{p + 1}", f"{M}.{m + 1}.0", f"{M + 1}.0.0"):
+        falha(f"{rel}: de {antes} para {agora}; a leva sobe a patch ({M}.{m}.{p + 1}) ou a minor ({M}.{m + 1}.0), e a major ({M + 1}.0.0) so com autorizacao do usuario")
 
 
 def main():
