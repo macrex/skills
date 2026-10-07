@@ -196,10 +196,13 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /Grill · delegacao so para SPE e SPF/ })).toBeDefined()
   })
 
-  test('a aba Grill guarda cada pergunta com a resposta e a linha da leva num bloco de codigo, que o Copiar leva exata, mesmo depois do inicio', async ($, on) => {
+  test('a aba Grill guarda cada pergunta com a resposta e a linha da leva num bloco de codigo, que o Executar leva exata a caixa de envio, mesmo depois do inicio', async ($, on) => {
     const { marco, sessao, toasts } = mundo($, on)
-    const copias: string[] = []
-    on('ui.copy', ($, e) => { copias.push(e.text); return { value: { isCopied: true } } })
+    const colados: string[] = []
+    let caixa = true
+    on('prompt.fill', ($, e) => { if (!caixa) return { isFilled: false }; colados.push(e.text); return { isFilled: true } })
+    const comandos: string[] = []
+    on('command.run', ($, e) => { comandos.push(e.command); return { text: '' } })
     on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({
       result: { questions: e.questions, answers: { 'Onde guardar o estado?': '$.store' } },
     }) as never)
@@ -220,10 +223,15 @@ describe('painel da leva', () => {
     expect(await ui.find({ type: 'Text', text: /^Botão ou atalho\?$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^· sem resposta$/ })).toBeDefined()
     expect((await ui.find({ type: 'Code' }))?.props.source).toBe('/faz leva doc das abas até o fim\n— sem commitar nada.')
-    expect(await quadro(ui)).toMatch(/^Prompt {2}\[ Copiar \]$/m)
-    await ui.press({ key: 'grill:copiar' })
-    expect(copias).toEqual(['/faz leva doc das abas até o fim\n— sem commitar nada.'])
-    expect(toasts).toContain('Prompt copiado: cole numa sessão nova')
+    expect(await quadro(ui)).toMatch(/^Prompt {2}\[ Clear \] {2}\[ Executar \]$/m)
+    await ui.press({ key: 'grill:clear' })
+    expect(comandos).toEqual(['clear'])
+    await ui.press({ key: 'grill:colar' })
+    expect(colados).toEqual(['/faz leva doc das abas até o fim\n— sem commitar nada.'])
+    expect(toasts).not.toContain('Não deu para colar o prompt')
+    caixa = false
+    await ui.press({ key: 'grill:colar' })
+    expect(toasts).toContain('Não deu para colar o prompt')
 
     // numa sessao nova sem /clear, a aba Painel ainda mostra o grill
     await sessao()

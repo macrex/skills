@@ -860,11 +860,18 @@ export function register(on) {
         ...andamento(g),
         cartao(`Perguntas e respostas · ${respondidas}/${g.perguntas.length}`, ...(g.perguntas.length > 0 ? g.perguntas.map(par) : [apagado('nenhuma pergunta ainda')])),
         g.documento && cartao('Entendimento', h(Text, { color: VERDE }, g.documento)),
-        // o Copiar leva o texto exato: copiado da tela, o terminal parte a linha longa e um nome
-        // de skill partido nao autoriza a skill
+        // o Executar leva o texto exato a caixa de envio: copiado da tela, o terminal parte a linha
+        // longa e um nome de skill partido nao autoriza a skill. O grill volta do store depois do
+        // /clear do Clear, entao o Executar segue valendo na sessao nova
         g.linha &&
           cartao(
-            h(Box, { gap: 2 }, apagado('Prompt'), h(Button, { key: 'grill:copiar', label: 'Copiar', dimColor: true, onPress: async press => $.ui.toast((await $.ui.copy({ text: g.linha, surface: press.surface })).isCopied ? 'Prompt copiado: cole numa sessão nova' : 'Não deu para copiar o prompt') })),
+            h(
+              Box,
+              { gap: 2 },
+              apagado('Prompt'),
+              h(Button, { key: 'grill:clear', label: 'Clear', dimColor: true, onPress: () => $.command.run({ command: 'clear' }) }),
+              h(Button, { key: 'grill:colar', label: 'Executar', dimColor: true, onPress: async () => (await $.prompt.fill({ text: g.linha })).isFilled || $.ui.toast('Não deu para colar o prompt') }),
+            ),
             h(Code, { source: g.linha }),
           ),
       )

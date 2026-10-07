@@ -42,7 +42,7 @@ https://github.com/user-attachments/assets/b1894356-3e85-48c4-9da4-b91bd38bb613
 |---|---|
 | Painel | As fases, do grill à qualidade, cada uma com o estado e o tempo; com a leva, também os tickets com o portão, os passos da revisão, das correções e da qualidade e os sub-agentes, teammates e workflows com modelo e estado; fechada a leva, o lembrete do `/cpv` e o histórico. O grill da grade abre a aba Grill. Só o botão Limpar, sempre ao lado do título, limpa o painel: tira o grill e a leva, aberta ou fechada, com o uso dela (a aberta perde a retomada); o `/clear` não mexe nele |
 | Diff | Os arquivos que a sessão mudou, com as linhas somadas e tiradas; o clique num arquivo abre o diff |
-| Grill | Cada pergunta do último grill com a resposta, venha ela do terminal ou da página da `/grill-tela`, e o prompt do `/faz leva` com o botão Copiar, que leva o texto exato; fica até o Limpar da aba Painel |
+| Grill | Cada pergunta do último grill com a resposta, venha ela do terminal ou da página da `/grill-tela`, e o prompt do `/faz leva` com os botões Clear, que roda o `/clear`, e Executar, que põe o texto exato na caixa de envio; fica até o Limpar da aba Painel |
 | Tickets | O portão e as notas de cada ticket |
 | Uso | Os tokens desde o início da leva, por modelo e por agente |
 

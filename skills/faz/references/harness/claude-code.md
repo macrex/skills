@@ -16,7 +16,7 @@
 - **Autorização das três reservadas:** só quando a linha as nomeia como **token isolado** —
   `/mattpocock-skills:to-spec` com espaço ou quebra de linha dos dois lados; pontuação colada e
   nome partido cegam a busca. A cópia do terminal leva junto a quebra da linha longa, por isso
-  cada nome abre uma linha do bloco (o Copiar da aba Grill do painel leva o texto exato). Só em
+  cada nome abre uma linha do bloco (o Executar da aba Grill do painel leva o texto exato). Só em
   **texto**: a mensagem que começa com `/` vira comando, e nome nos argumentos de comando não
   autoriza; por isso a abertura começa com `rode`. E só **no turno que a linha abriu**: toda
   mensagem de usuário que não é meta nem resultado de ferramenta abre turno novo — a resposta em
