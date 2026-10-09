@@ -116,6 +116,8 @@ strong{font-weight:600}
 .opt:hover{border-color:var(--muted)}
 .opt .lab{font-weight:600}
 .opt .d{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.previa{margin:8px 0 0;white-space:pre;max-height:none}
+.previas{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}.previas>div{min-width:0;max-width:100%}.previas .lab{font-size:12.5px;font-weight:600}
 .opt.rec{border-style:dashed;border-color:var(--rec)}
 .opt.sel{background:var(--surface2);border:1.5px solid var(--sel)}
 .opt.sel.rec{border:1.5px solid var(--rec);background:var(--rec-soft)}
@@ -361,6 +363,11 @@ function resumoTexto(){
   const naos = [[n('delegado'),'para o agente'], [n('esclarecer'),'a esclarecer'], [n('adiado'),n('adiado')===1?'adiada':'adiadas']].filter(([k])=>k).map(([k,t])=>`${k} ${t}`);
   return [pl(n('aceito'),'aceita','aceitas'), pl(n('outra'),'trocada','trocadas'), ...naos, `${c} com nota`].join(' · ');
 }
+// o desenho da opcao vai como veio: escapado, sem o markdown curto, espacos e quebras preservados
+const previa = o => o.previa ? `<pre class="previa">${esc(o.previa)}</pre>` : '';
+// no Panorama, os desenhos de todas as opcoes lado a lado, cada um com o rotulo, para comparar
+const previas = q => q.opcoes.some(o=>o.previa)
+  ? `<div class="previas">${q.opcoes.filter(o=>o.previa).map(o=>`<div><span class="lab">${md(o.rotulo)}</span>${previa(o)}</div>`).join('')}</div>` : '';
 function descHTML(q){
   const a=resp(q);
   if(a.nao) return { delegado:'O agente decide, e informa a escolha.', esclarecer:'O agente reescreve a questão em termos mais simples na próxima rodada.', adiado:'A questão fica para depois.' }[a.nao];
@@ -409,7 +416,7 @@ function modoPanorama(){
    ${Q().map((q,i)=>{ const a=resp(q); return `<div class="lin ${marca(q)==='outra'?'troca':''}" data-lin="${i}">
      <div class="c-tema"><div class="qid">${esc(q.id)}</div><div class="cab">${esc(q.cabecalho)}</div><div class="st" data-marca="${i}">${statusHTML(q)}</div></div>
      <div class="c-perg"><div class="tit">${md(q.titulo)}</div>${q.contexto?`<div class="ctx">${md(q.contexto)}</div>`:''}</div>
-     <div class="c-resp"><div class="pills">${pills(q,i)}</div><div class="desc" data-desc="${i}">${descHTML(q)}</div>${campoProp(q,i)}${campoCom(q,i)}</div>
+     <div class="c-resp"><div class="pills">${pills(q,i)}</div><div class="desc" data-desc="${i}">${descHTML(q)}</div>${previas(q)}${campoProp(q,i)}${campoCom(q,i)}</div>
      <div class="c-nota">${somBtn(i)}<button class="ico ${a.com.trim()?'tem':''}" data-com="${i}" aria-label="Nota sobre esta questão" title="Nota para o agente" onclick="abrir(${i},'abreCom')">${ICONE_NOTA}</button></div>
    </div>`; }).join('')}</div>
    <p class="nota-rodape">Clique numa opção para trocar a resposta; passe o mouse para ver a descrição. ★ marca a recomendada do agente. Escrever no terminal também assume o grill por lá.</p>` + historico();
@@ -430,7 +437,7 @@ function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Ente
       <span class="muted" style="margin-left:auto;font-size:13px">${i+1} de ${ps.length}</span>${somBtn(i)}</div>
     <h2>${md(q.titulo)}</h2>${q.contexto?`<div class="ctx" style="font-size:14px">${md(q.contexto)}</div>`:''}
     <div class="opts">${q.opcoes.map((o,j)=>`<button class="opt ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}" onclick="escolher(${i},${j})">
-      <span class="kbd">${j+1}</span><span><span class="lab">${md(o.rotulo)}</span>${o.recomendada?`<span class="estrela">${ESTRELA} recomendada</span>`:''}${o.descricao?`<span class="d">${md(o.descricao)}</span>`:''}</span></button>`).join('')}</div>
+      <span class="kbd">${j+1}</span><span><span class="lab">${md(o.rotulo)}</span>${o.recomendada?`<span class="estrela">${ESTRELA} recomendada</span>`:''}${o.descricao?`<span class="d">${md(o.descricao)}</span>`:''}${previa(o)}</span></button>`).join('')}</div>
     <div class="abre"><button class="pill outra-p ${a.opcao===null&&!a.nao?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null&&!a.nao}" onclick="abrir(${i},'abreProp')">+ Outra resposta</button>${naoPills(q,i)}
      <button class="pill nota-p" onclick="abrir(${i},'abreCom')">${ICONE_NOTA}Nota para o agente</button></div>
     ${campoProp(q,i)}${campoCom(q,i)}

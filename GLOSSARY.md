@@ -27,12 +27,16 @@ A verificação que decide se um ticket fechou: verde ou vermelho, com até dois
 _Evitar_: gate, check
 
 **Painel da leva**:
-O pane do Claude Code que o `/faz-painel` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.
+O pane do Claude Code que o `/macrex-painel` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.
 _Evitar_: dashboard, monitor, statusline, TUI
 
 **Diff da sessão**:
 O que a sessão mudou nos arquivos do repositório: o working tree comparado com a foto tirada quando a sessão começou, inclusive o que mudou por shell e sem o que já estava sujo antes.
 _Evitar_: git status, alterações pendentes
+
+**Árvore do projeto**:
+Os arquivos e pastas da raiz do projeto, sem o que o git ignora, que o painel da leva mostra com o nome do arquivo novo em verde e o do alterado em amarelo; a lista muda quando surge arquivo novo, nunca pelo diff da sessão.
+_Evitar_: explorer, files, navegador de arquivos
 
 **Agentes da leva**:
 Os sub-agentes, teammates e workflows que a leva abriu, que o próprio mod observa enquanto ela está ativa.

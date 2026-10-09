@@ -15,7 +15,7 @@
 import { atom, read, update } from 'claude-code'
 import { soComPedido } from './so-com-pedido.js'
 
-const PANE = 'faz-painel'
+const PANE = 'macrex-painel'
 const FERRAMENTA = 'faz_marco'
 const MARCO = 'mcp__macrex-skills__faz_marco'
 const MARCOS = ['inicio', 'fase', 'tickets', 'ticket', 'portao', 'item', 'fechamento']
@@ -87,17 +87,21 @@ const ABA = atom({ plugin: 'macrex-skills', key: 'aba' }, 'painel')
 const BASE = atom({ plugin: 'macrex-skills', key: 'base' }, null)
 const CODIGO = atom({ plugin: 'macrex-skills', key: 'codigo' }, [])
 const ABERTOS = atom({ plugin: 'macrex-skills', key: 'abertos' }, [])
+// A aba Arquivos, so na sessao: a arvore do projeto lida do git, as pastas abertas e o filtro.
+const ARVORE = atom({ plugin: 'macrex-skills', key: 'arvore' }, null)
+const PASTAS = atom({ plugin: 'macrex-skills', key: 'pastas' }, [])
+const FILTRO = atom({ plugin: 'macrex-skills', key: 'filtro' }, '')
 // Os tokens de cada turno desde o inicio da leva (ou da sessao, antes dela), so na sessao.
 const USO = atom({ plugin: 'macrex-skills', key: 'uso' }, {})
 // A ultima medida da sessao (session.measure): o custo, o contexto e a janela de 5 h, so na sessao.
 const MEDIDA = atom({ plugin: 'macrex-skills', key: 'medida' }, null)
-const ABAS = { painel: 'Painel', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso' }
+const ABAS = { painel: 'Painel', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso', arquivos: 'Arquivos' }
 const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']
 // os caracteres de controle que um Code recusa: todos menos tab e quebra de linha
 const CONTROLE = /[\u0000-\u0008\u000b-\u001f\u007f]/g
 // a linha das abas e a margem embaixo dela
 const LINHAS_DAS_ABAS = 2
-// as ferramentas que mudam arquivo: depois de cada uma, a aba Diff aberta se refaz
+// as ferramentas que mudam arquivo: depois de cada uma, a aba Diff ou a Arquivos aberta se refaz
 const MUDAM = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell']
 // o maior source que um Code desenha e 10000; a folga e do cabecalho recontado
 const LIMITE_DO_CODE = 9900
@@ -112,7 +116,17 @@ const semSkill = (fase, skills) => (skills.includes(SKILL_DA_FASE[fase]) ? undef
 // um inicio com o mesmo documento sobre a leva aberta e a retomada dela
 const retoma = (leva, m) => m.marco === 'inicio' && Boolean(leva) && !leva.fechada && leva.documento === m.documento
 const dois = n => String(n).padStart(2, '0')
+// a ultima parte de um caminho, com / ou \: o nome do projeto pela raiz
+const nomeDa = caminho => caminho.split(/[\\/]/).pop()
 const verdes = leva => leva.tickets.filter(t => t.estado === 'verde').length
+// a contagem da faixa e do spinner, uma so: o ticket em curso sobre o total (sem um em curso, o
+// ultimo que comecou); os verdes ficam no painel
+function ticketDaLeva(leva) {
+  const n = leva.tickets.length
+  if (n === 0) return ''
+  const emCurso = leva.tickets.findIndex(t => t.estado === 'em-curso')
+  return `ticket ${emCurso >= 0 ? emCurso + 1 : leva.tickets.filter(t => t.estado !== 'pendente').length}/${n}`
+}
 const somar = (a = {}, b) => Object.fromEntries(TOKENS.map(k => [k, (a[k] ?? 0) + (b[k] ?? 0)]))
 // o custo medido da leva: o da sessao agora menos o do inicio; sem custo na sessao, nada
 const comCusto = (leva, usd) => (usd == null || leva.custoInicio == null ? leva : { ...leva, custo: usd - leva.custoInicio })
@@ -297,7 +311,8 @@ async function sincronizarTela($) {
 // O AskUserQuestion do grill no canal tela: a rodada vai a pagina da grill-tela, que sobe na
 // primeira, e a resposta dela volta no formato do dialogo, com a URL para a tela final da skill;
 // a consulta da pagina a registra no grill. A pagina que nao sobe, recusa a rodada ou volta ao CLI,
-// e a interrupcao, devolvem null: o grill segue pelo dialogo nativo ate o fim.
+// e a interrupcao, devolvem { motivo }: o grill segue pelo dialogo nativo ate o fim, e o toast e o
+// contexto dizem por que.
 // ponytail: multiSelect vira escolha unica, a pagina nao tem outra
 const RECOMENDADA = /\s*\(Recommended\)$/
 // a resposta sem escolha volta com o rotulo do botao que o usuario apertou na pagina
@@ -306,7 +321,19 @@ async function pelaTela($, e, signal) {
   const rodar = (args, init) =>
     $.process.run(['node', `${$.plugin.root}/skills/grill-tela/scripts/grill-tela.js`, ...args], init).catch(() => ({ exitCode: 1, stdout: '' }))
   const grill = await read($, GRILL)
-  const url = grill.tela ?? URL_DA_TELA.exec((await rodar(['iniciar', '--projeto', (await $.session.root()).split(/[\\/]/).pop()])).stdout)?.[0]
+  const projeto = nomeDa(await $.session.root())
+  const iniciar = async (...mais) => URL_DA_TELA.exec((await rodar(['iniciar', '--projeto', projeto, ...mais])).stdout)?.[0]
+  const responde = async u => {
+    try {
+      return (await $.http.fetch(u.replace('/?t=', '/api/estado?t='))).ok
+    } catch {
+      return false
+    }
+  }
+  // a pagina guardada que parou de responder volta pelo --retomar, ou sobe outra; as duas abrem o navegador
+  let url = grill.tela
+  if (!url) url = await iniciar()
+  else if (!(await responde(url))) url = (await iniciar('--retomar')) ?? (await iniciar())
   // a rodada seguinte a ultima que a pagina publicou neste grill
   const n = 1 + Math.max(0, ...grill.perguntas.map(p => Number(/^tela:(\d+):/.exec(p.id)?.[1] ?? 0)))
   const questoes = e.questions.map((q, i) => {
@@ -315,14 +342,17 @@ async function pelaTela($, e, signal) {
       id: `Q${i + 1}`,
       cabecalho: q.header || q.question,
       titulo: q.question,
-      opcoes: q.options.map((o, j) => ({ rotulo: o.label.replace(RECOMENDADA, ''), descricao: o.description, recomendada: j === marcada })),
+      opcoes: q.options.map((o, j) => ({ rotulo: o.label.replace(RECOMENDADA, ''), descricao: o.description, recomendada: j === marcada, ...(o.preview && { previa: o.preview }) })),
     }
   })
   let msg = null
   const textos = [] // o que o usuario escreveu a parte na pagina, com a rodada aberta
-  if (url &&(await rodar(['rodada', url, '-'], { stdin: JSON.stringify({ rodada: n, questoes }) })).exitCode === 0) {
+  const publicada = url && (await rodar(['rodada', url, '-'], { stdin: JSON.stringify({ rodada: n, questoes }) })).exitCode === 0
+  if (publicada) {
     await update($, GRILL, g => g && { ...g, tela: url })
     await sincronizarTela($)
+    // o aviso de onde a rodada esta, antes de esperar: o navegador pode nao ter aberto
+    $.ui.toast(`Grill na tela: ${url}`)
     // cada volta do aguardar e um $ e nao conta no orcamento do hook; a interrupcao nao espera a volta
     const parou = new Promise(ok => (signal.aborted ? ok(null) : signal.addEventListener('abort', () => ok(null), { once: true })))
     do {
@@ -348,6 +378,16 @@ async function pelaTela($, e, signal) {
     return { result: { questions: e.questions, answers }, context: [`A rodada foi respondida na grill-tela, em ${url}: a tela final do grill vai a esta URL.`, ...aParte] }
   }
   // de volta ao CLI: a pagina e avisada, e a rodada que ficou aberta nela sai da aba Grill
+  const motivo = !url
+    ? 'a página da grill-tela não subiu'
+    : !publicada
+      ? 'a página recusou a rodada'
+      : signal.aborted
+        ? 'a rodada foi interrompida'
+        : msg?.tipo === 'cli'
+          ? 'o usuário voltou ao terminal pela página'
+          : 'a página parou de responder'
+  $.ui.toast(`Grill de volta ao terminal: ${motivo}`)
   if (url) await rodar(['cli', url])
   const novo = await update($, GRILL, g => {
     if (!g) return g
@@ -355,7 +395,7 @@ async function pelaTela($, e, signal) {
     return { ...resto, canal: 'cli', perguntas: g.perguntas.filter(p => p.resposta != null || !p.id.startsWith(`tela:${n}:`)) }
   })
   if (novo) await $.store.set(chaveDoGrill(await $.session.root()), novo)
-  return null
+  return { motivo }
 }
 
 // O que tem store volta dele: a leva, o historico e o grill do workspace, gravados pela raiz do
@@ -401,9 +441,10 @@ async function limpar($) {
 }
 
 // O stdout do git na pasta `cwd`, ou '' quando sai com codigo acima de `aceito` (o diff
-// --no-index sai 1 quando ha diferenca); quotePath desligado guarda os acentos dos caminhos.
+// --no-index sai 1 quando ha diferenca) ou nem roda (sem git); quotePath desligado guarda os
+// acentos dos caminhos.
 async function git($, cwd, args, aceito = 0) {
-  const r = await $.process.run(['git', '-c', 'core.quotePath=false', ...args], { cwd })
+  const r = await $.process.run(['git', '-c', 'core.quotePath=false', ...args], { cwd }).catch(() => ({ exitCode: 1, stdout: '' }))
   return r.exitCode <= aceito ? r.stdout : ''
 }
 const naoRastreados = async ($, raiz) => (await git($, raiz, ['ls-files', '--others', '--exclude-standard', '-z'])).split('\0').filter(Boolean)
@@ -481,9 +522,67 @@ async function atualizarCodigo($) {
   } catch {}
 }
 
+// Le a arvore do projeto: os arquivos da raiz que o git nao ignora, sem os apagados do working
+// tree. So troca quando os caminhos ou as marcas mudaram, entao editar um arquivo so acende a marca
+// dele: o solto que a base da sessao nao tinha e novo, o que mudou desde a base (o diff contra o
+// commit dela) e mudado.
+// ponytail: a marca so com a raiz no topo do repositorio da base; numa subpasta os caminhos nao casam
+const semBarra = c => c.replace(/\\/g, '/').toLowerCase()
+async function lerArvore($) {
+  const raiz = await $.session.root()
+  try {
+    const topo = (await git($, raiz, ['rev-parse', '--show-toplevel'])).trim()
+    if (!topo) return update($, ARVORE, () => ({ semGit: true, arquivos: [], novos: [], mudados: [] }))
+    const lista = async args => (await git($, raiz, ['ls-files', ...args, '-z'])).split('\0').filter(Boolean)
+    const [rastreados, soltos, apagados] = await Promise.all([lista(['--cached']), naoRastreados($, raiz), lista(['--deleted'])])
+    const sumiram = new Set(apagados)
+    const arquivos = [...new Set([...rastreados, ...soltos])].filter(c => !sumiram.has(c)).sort()
+    const base = await read($, BASE)
+    const daBase = base && semBarra(base.raiz) === semBarra(topo) && semBarra(raiz) === semBarra(topo)
+    const novos = daBase ? soltos.filter(c => !base.soltos.includes(c)) : []
+    const mudados = daBase ? (await git($, raiz, ['diff', '--name-only', '-z', base.commit])).split('\0').filter(Boolean) : []
+    const nova = { arquivos, novos, mudados }
+    await update($, ARVORE, velha => (JSON.stringify(velha) === JSON.stringify(nova) ? velha : nova))
+  } catch {}
+}
+
+// As linhas visiveis da arvore: as pastas (com / no fim) antes dos arquivos, em ordem alfabetica,
+// e os filhos so das pastas abertas.
+function linhasDaArvore(arquivos, abertas) {
+  const raiz = new Map()
+  for (const c of arquivos) {
+    const partes = c.split('/')
+    let no = raiz
+    for (const p of partes.slice(0, -1)) {
+      if (!(no.get(p) instanceof Map)) no.set(p, new Map())
+      no = no.get(p)
+    }
+    no.set(partes.at(-1), null)
+  }
+  const linhas = []
+  const descer = (no, prefixo, nivel) => {
+    const nomes = [...no.keys()].sort((a, b) => (no.get(a) === null) - (no.get(b) === null) || a.localeCompare(b))
+    for (const nome of nomes) {
+      const pasta = no.get(nome) !== null
+      const caminho = `${prefixo}${nome}${pasta ? '/' : ''}`
+      linhas.push({ caminho, nome: pasta ? `${nome}/` : nome, nivel, pasta })
+      if (pasta && abertas.includes(caminho)) descer(no.get(nome), caminho, nivel + 1)
+    }
+  }
+  descer(raiz, '', 0)
+  return linhas
+}
+
+// as abas que se refazem ao abrir e depois de cada ferramenta que muda arquivo; a Arquivos abre o
+// diff do arquivo mudado, entao refaz o da aba Diff tambem
+async function refazer($, aba) {
+  if (aba === 'codigo' || aba === 'arquivos') await atualizarCodigo($)
+  if (aba === 'arquivos') await lerArvore($)
+}
+
 const trocarAba = async ($, aba) => {
   await update($, ABA, () => aba)
-  if (aba === 'codigo') await atualizarCodigo($)
+  await refazer($, aba)
 }
 
 const mexer = ($, qual, como) => update($, AGENTES, lista => lista.map(a => (qual(a) ? { ...a, ...como(a) } : a)))
@@ -613,6 +712,9 @@ export function register(on, options) {
         base: await read($, BASE),
         codigo: await read($, CODIGO),
         abertos: await read($, ABERTOS),
+        arvore: await read($, ARVORE),
+        pastas: await read($, PASTAS),
+        filtro: await read($, FILTRO),
         uso: await read($, USO),
         agentes: await read($, AGENTES),
       }
@@ -630,6 +732,9 @@ export function register(on, options) {
         await update($, BASE, () => antes.base)
         await update($, CODIGO, () => antes.codigo)
         await update($, ABERTOS, () => antes.abertos)
+        await update($, ARVORE, () => antes.arvore)
+        await update($, PASTAS, () => antes.pastas)
+        await update($, FILTRO, () => antes.filtro)
         await update($, USO, () => antes.uso)
         // a lista oficial e da sessao: o herdado que ela nao conhece mais para (reconciliar)
         await update($, AGENTES, () => antes.agentes.map(a => ({ ...a, herdado: true })))
@@ -689,7 +794,7 @@ export function register(on, options) {
     if (e.marco === 'inicio') {
       await update($, AGENTES, () => [])
       await update($, USO, () => ({}))
-      $.ui.toast('Leva registrada: /faz-painel mostra o andamento')
+      $.ui.toast('Leva registrada: /macrex-painel mostra o andamento')
     }
     return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}` }
   })
@@ -738,24 +843,30 @@ export function register(on, options) {
   // antes a pagina, ate o grill voltar ao CLI
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
     if (!(await emGrill($))) return next(e)
+    let voltou = null
     if (canalTela && (await read($, GRILL)).canal !== 'cli' && (await read($, GRILL_DA_SESSAO))) {
       const r = await pelaTela($, e, next.signal)
-      if (r) return r
-      // o Limpar apertado durante a espera ja tirou o grill
-      if (!(await emGrill($))) return next(e)
+      if (!r.motivo) return r
+      voltou = `A rodada não ficou na grill-tela (${r.motivo}): o grill segue no terminal, pelo diálogo.`
     }
     const id = e.tool_use_id
     const novas = e.questions.map(q => ({ id, pergunta: q.question, tema: q.header || q.question }))
-    await update($, GRILL, g => ({ ...g, perguntas: [...g.perguntas, ...novas] }))
+    // o Limpar apertado durante a espera da pagina ja tirou o grill
+    await update($, GRILL, g => g && { ...g, perguntas: [...g.perguntas, ...novas] })
     const r = await next(e)
     const respostas = r.result?.answers ?? {}
+    // a rodada recusada, interrompida ou sem nenhuma resposta sai do grill: ela volta numa rodada
+    // seguinte, e a aba nao a mostra duas vezes, a primeira vazia
+    const semResposta = r.deny !== undefined || r.isError || Object.keys(respostas).length === 0
     // o Limpar apertado com a pergunta aberta ja tirou o grill
     const respondido = await update($, GRILL, g => g && {
       ...g,
-      perguntas: g.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
+      perguntas: semResposta
+        ? g.perguntas.filter(p => p.id !== id)
+        : g.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
     })
     if (respondido) await $.store.set(chaveDoGrill(await $.session.root()), respondido)
-    return r
+    return voltou ? { ...r, context: [...(r.context ?? []), voltou] } : r
   })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
@@ -863,7 +974,7 @@ export function register(on, options) {
     return next(e)
   })
 
-  // a ferramenta que muda arquivo refaz a aba Diff, se e ela que esta na tela; o comando da
+  // a ferramenta que muda arquivo refaz a aba Diff ou a Arquivos, se e ela que esta na tela; o comando da
   // grill-tela que leva a URL da pagina liga a consulta das rodadas dela no grill em curso; o
   // prompt que o localizador gera (--linha) entra no grill sem depender do marco linha e, sem o
   // marco entendimento, fecha o grill na tela com o documento do prompt: senao o tempo nao para
@@ -874,7 +985,7 @@ export function register(on, options) {
       await mexer($, a => a.agentId === e.agentId, () => ({ atividade: agora }))
     }
     const r = await next(e)
-    if (MUDAM.includes(e.tool) && (await read($, ABA)) === 'codigo') await atualizarCodigo($)
+    if (MUDAM.includes(e.tool)) await refazer($, await read($, ABA))
     const tela = /grill-tela\.js/.test(e.command ?? '') && URL_DA_TELA.exec(e.command)?.[0]
     if (tela && (await emGrill($))) {
       await update($, GRILL, g => ({ ...g, tela }))
@@ -910,7 +1021,7 @@ export function register(on, options) {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Code } = $.ui.resolve(e)
+    const { Box, Text, Button, Code, Input } = $.ui.resolve(e)
     const leva = await read($, LEVA)
     // a aba Grill mostra o ultimo grill do workspace; a aba Painel, so o que ainda esta na tela
     const ultimoGrill = await read($, GRILL)
@@ -989,12 +1100,15 @@ export function register(on, options) {
       return h(Text, { color: TEXTO, ...props }, ...esq.map(parte), h(Text, {}, ' '.repeat(Math.max(1, larg - tam(esq) - tam(direita)))), ...direita.map(parte))
     }
     // a aba Diff: um chip por arquivo, o caminho que abre e fecha o diff, e as linhas somadas e tiradas
+    // o diff de um arquivo da aba Diff, aberto na aba Diff ou na Arquivos: a mesma lista de abertos
+    const abertos = await read($, ABERTOS)
+    const alternarDiff = caminho => update($, ABERTOS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho]))
+    const diffDe = a => (a.diff ? pedacos(a.diff).map(source => h(Code, { source, format: 'diff', path: a.caminho })) : [apagado('  binário, sem diff de texto')])
     if (aba === 'codigo') {
       const base = await read($, BASE)
-      const abertos = await read($, ABERTOS)
       const arquivo = (a, i) => {
         const aberto = abertos.includes(a.caminho)
-        const alternar = () => update($, ABERTOS, l => (l.includes(a.caminho) ? l.filter(c => c !== a.caminho) : [...l, a.caminho]))
+        const alternar = () => alternarDiff(a.caminho)
         return h(
           Box,
           { flexDirection: 'column', backgroundColor: CHIP, marginTop: 1 },
@@ -1004,22 +1118,76 @@ export function register(on, options) {
             h(Button, { key: `arquivo:${i}`, plain: true, label: `${aberto ? '⌄' : '›'} ${a.caminho}`, onPress: alternar }),
             h(Text, { wrap: 'truncate-end' }, h(Text, { color: VERDE }, `+${a.mais}`), ' ', h(Text, { color: VERMELHO }, `-${a.menos}`)),
           ),
-          ...(!aberto
-            ? []
-            : a.diff
-              ? pedacos(a.diff).map(source => h(Code, { source, format: 'diff', path: a.caminho }))
-              : [apagado('  binário, sem diff de texto')]),
+          ...(aberto ? diffDe(a) : []),
         )
       }
       const mais = arquivos.reduce((n, a) => n + a.mais, 0)
       const menos = arquivos.reduce((n, a) => n + a.menos, 0)
       return tela(
-        base?.raiz.split(/[\\/]/).pop() ?? 'Fora de um repositório git',
+        base ? nomeDa(base.raiz) : 'Fora de um repositório git',
         `${arquivos.length} ${arquivos.length === 1 ? 'arquivo alterado' : 'arquivos alterados'}`,
         `+${mais} -${menos}`,
         !base
           ? cartao(null, apagado('a sessão não começou num repositório git: não há com o que comparar'))
           : cartao(null, ...(arquivos.length > 0 ? arquivos.map(arquivo) : [apagado('nenhum arquivo alterado nesta sessão')])),
+      )
+    }
+    // a aba Arquivos: a arvore do projeto, com a pasta que abre e fecha no clique; o nome do arquivo
+    // novo vai em verde, o do alterado em amarelo, e a pasta fechada com algum deles leva o ponto. O
+    // arquivo com diff na aba Diff ganha o › que abre o diff embaixo dele (o Button nao tem cor, e o
+    // nome colorido fica num Text ao lado). Com o filtro, a arvore da lugar a lista plana dos
+    // caminhos que casam
+    if (aba === 'arquivos') {
+      const arvore = await read($, ARVORE)
+      const abertas = await read($, PASTAS)
+      const filtro = await read($, FILTRO)
+      const todos = arvore?.arquivos ?? []
+      const filtrar = texto => update($, FILTRO, () => texto)
+      const campo = h(Input, { key: 'arvore:filtro', placeholder: 'filtrar pelo caminho', value: filtro, onInput: filtrar, onSubmit: filtrar })
+      // ponytail: a lista plana desenha todos os que casam; um teto entra se um repositorio grande pesar no pane
+      const termo = filtro.trim().toLowerCase()
+      const linhas = termo
+        ? todos.filter(c => c.toLowerCase().includes(termo)).map(caminho => ({ caminho, nome: caminho, nivel: 0, pasta: false, doFiltro: true }))
+        : linhasDaArvore(todos, abertas)
+      const vazio = arvore ? (termo ? 'nenhum caminho casa com o filtro' : 'nenhum arquivo no projeto') : 'lendo a árvore…'
+      const recuo = nivel => '  '.repeat(nivel)
+      const noDaArvore = ({ caminho, nome, nivel, pasta, doFiltro }) => {
+        if (!pasta) {
+          const cor = arvore.novos.includes(caminho) ? VERDE : arvore.mudados.includes(caminho) ? AMARELO : TEXTO
+          const comDiff = arquivos.find(a => a.caminho === caminho)
+          if (!comDiff) return h(Text, { color: cor }, `${recuo(nivel)}${doFiltro ? '' : '  '}${nome}`)
+          const aberto = abertos.includes(caminho)
+          return h(
+            Box,
+            { flexDirection: 'column' },
+            h(
+              Box,
+              {},
+              h(Text, {}, recuo(nivel)),
+              h(Button, { key: `no:${caminho}`, plain: true, label: aberto ? '⌄' : '›', onPress: () => alternarDiff(caminho) }),
+              h(Text, { color: cor }, ` ${nome}`),
+            ),
+            ...(aberto ? diffDe(comDiff) : []),
+          )
+        }
+        const aberta = abertas.includes(caminho)
+        const alternar = () => update($, PASTAS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho]))
+        const mexida = !aberta && [...arvore.novos, ...arvore.mudados].some(c => c.startsWith(caminho))
+        return h(
+          Box,
+          { gap: 2 },
+          // o no da pasta com prefixo proprio, para nao se confundir com o campo do filtro
+          h(Button, { key: `no:${caminho}`, plain: true, label: `${recuo(nivel)}${aberta ? '▾' : '▸'} ${nome}`, onPress: alternar }),
+          mexida && h(Text, { color: AMARELO }, '•'),
+        )
+      }
+      return tela(
+        nomeDa(await $.session.root()),
+        'arquivos',
+        String(todos.length),
+        arvore?.semGit
+          ? cartao(null, apagado('a sessão não está num repositório git, ou o git não rodou: não há árvore para listar'))
+          : cartao(null, campo, ...(linhas.length > 0 ? linhas.map(noDaArvore) : [apagado(vazio)])),
       )
     }
     const agora = await $.clock.now()
@@ -1217,15 +1385,8 @@ export function register(on, options) {
     if (e.props.hasSurvey || !leva || leva.fechada) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const aberto = (await $.ui.panes()).some(pane => pane.id === PANE)
-    const n = leva.tickets.length
-    const emCurso = leva.tickets.findIndex(t => t.estado === 'em-curso')
-    const i = emCurso >= 0 ? emCurso + 1 : leva.tickets.filter(t => t.estado !== 'pendente').length
-    const partes = [
-      'Leva',
-      ROTULO[leva.fase] ?? leva.fase,
-      ...(n > 0 ? [`ticket ${i}/${n}`, `${verdes(leva)}✓`] : []),
-      duracao((await $.clock.now()) - leva.inicio),
-    ]
+    const contagem = ticketDaLeva(leva)
+    const partes = ['Leva', ROTULO[leva.fase] ?? leva.fase, ...(contagem ? [contagem] : []), duracao((await $.clock.now()) - leva.inicio)]
     // o botao no terminal e [ Abrir painel ], mais o espaco antes dele; sem lugar nem para Leva, sai
     const doBotao = aberto ? 0 : 'Abrir painel'.length + 5
     const cabe = larg => partes.join(' · ').length <= larg
@@ -1243,12 +1404,12 @@ export function register(on, options) {
     )
   })
 
-  // a linha que anima durante o turno leva a fase e os verdes da leva aberta, antes da reticencia
+  // a linha que anima durante o turno leva a fase e o ticket da leva aberta, antes da reticencia
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
     const leva = await read($, LEVA)
     if (!leva || leva.fechada) return next(e)
-    const contagem = leva.tickets.length > 0 ? ` ${verdes(leva)}/${leva.tickets.length}` : ''
-    return next({ ...e, props: { ...e.props, suffix: ` · ${ROTULO[leva.fase] ?? leva.fase}${contagem}${e.props.suffix}` } })
+    const contagem = ticketDaLeva(leva)
+    return next({ ...e, props: { ...e.props, suffix: ` · ${ROTULO[leva.fase] ?? leva.fase}${contagem ? ` · ${contagem}` : ''}${e.props.suffix}` } })
   })
 
   // o marco na conversa: uma linha apagada no lugar da linha generica da ferramenta

@@ -5,7 +5,7 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.8
+# Versao: 2.9
 
 Esta skill só troca o canal do `grilling`, cujas regras continuam valendo: em vez de perguntar no
 terminal, você publica cada rodada numa página local e espera o usuário responder lá. O
@@ -101,14 +101,16 @@ com ele. Saiu com código 1 (a sessão voltou ao CLI, ou não há o que retomar)
 ## Contratos
 
 Rodada — 2 a 4 opções por questão, exatamente uma `"recomendada": true`, ids únicos; `contexto` e
-`descricao` são opcionais e aceitam markdown curto (negrito, itálico, código, link):
+`descricao` são opcionais e aceitam markdown curto (negrito, itálico, código, link); `previa`,
+opcional, é o desenho da opção (mockup ASCII, trecho de código), que a página mostra como veio,
+num bloco monoespaçado:
 
 ```json
 {"rodada": 1, "questoes": [
   {"id": "Q1", "cabecalho": "Transporte", "titulo": "Como o agente e a tela conversam?",
    "contexto": "Hoje o grill é **todo no CLI**.",
    "opcoes": [{"rotulo": "Servidor local", "descricao": "Node, só stdlib", "recomendada": true},
-              {"rotulo": "Artifact", "descricao": "Página no claude.ai"}]}]}
+              {"rotulo": "Artifact", "descricao": "Página no claude.ai", "previa": "+------+\n| tela |\n+------+"}]}]}
 ```
 
 Final — só `decisao` e `escolha` são obrigatórios:

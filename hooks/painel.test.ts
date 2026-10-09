@@ -4,7 +4,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'faz-painel', props: {}, surface: 'terminal' } as const
+const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'macrex-painel', props: {}, surface: 'terminal' } as const
 const SURFACES = ['terminal', 'desktop'] as const
 const MARCO = 'mcp__macrex-skills__faz_marco'
 
@@ -76,7 +76,7 @@ async function quadro(ui: { drawn: () => Promise<unknown> }) {
 const TICKETS = [{ id: '01', titulo: 'Mod do painel' }, { id: '02', titulo: 'Ferramenta faz_marco' }]
 
 describe('painel da leva', () => {
-  test('/faz-painel abre o pane e, aberto, fecha', async ($, on) => {
+  test('/macrex-painel abre o pane e, aberto, fecha', async ($, on) => {
     const abertos = new Set<string>()
     on('ui.open', ($, e) => { abertos.add(e.id); return { value: { isPlaced: true } } })
     on('ui.close', ($, e) => { abertos.delete(e.id); return { value: undefined } })
@@ -84,9 +84,9 @@ describe('painel da leva', () => {
       value: [...abertos].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })),
     }))
 
-    await $.command.run({ command: 'faz-painel' })
-    expect([...abertos]).toEqual(['faz-painel'])
-    await $.command.run({ command: 'faz-painel' })
+    await $.command.run({ command: 'macrex-painel' })
+    expect([...abertos]).toEqual(['macrex-painel'])
+    await $.command.run({ command: 'macrex-painel' })
     expect([...abertos]).toEqual([])
   })
 
@@ -255,6 +255,38 @@ describe('painel da leva', () => {
     expect((await marco({ marco: 'linha' })).deny).toMatch(/linha/)
   })
 
+  test('a rodada interrompida, recusada ou sem nenhuma resposta sai da aba Grill e do store; a reenviada aparece uma vez, respondida', async ($, on) => {
+    // o caso da sessao de 2026-10-09: a rodada interrompida, a mesma recusada com "quero esclarecer",
+    // uma que voltou vazia e por fim a respondida
+    const { marco, sessao } = mundo($, on)
+    const voltas: Record<string, unknown>[] = [
+      { isError: true, result: 'The user interrupted the tool use' },
+      { deny: 'quero esclarecer' },
+      { result: { answers: {} } },
+      { result: { answers: { 'Onde guardar o estado?': '$.store', 'Botão ou atalho?': 'Botão' } } },
+    ]
+    on('tool.call', { tool: 'AskUserQuestion' }, () => voltas.shift() as never)
+    const pergunta = (header: string, question: string) => ({ header, question, multiSelect: false, options: [] })
+    const rodada = () => $.tool.call({ tool: 'AskUserQuestion', questions: [pergunta('Estado', 'Onde guardar o estado?'), pergunta('Botão', 'Botão ou atalho?')] } as never)
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:grill' })
+    await marco({ marco: 'grill', pedido: 'abas no painel' })
+
+    for (let i = 0; i < 3; i++) {
+      await rodada()
+      expect(await ui.find({ type: 'Text', text: /^Perguntas e respostas · 0\/0$/ })).toBeDefined()
+      // a sessao nova le o grill do store: a rodada tambem saiu de la
+      await sessao()
+      expect(await ui.find({ type: 'Text', text: /^Perguntas e respostas · 0\/0$/ })).toBeDefined()
+    }
+    await rodada()
+    expect(await ui.find({ type: 'Text', text: /^Perguntas e respostas · 2\/2$/ })).toBeDefined()
+    expect(await ui.findAll({ type: 'Text', text: /^Onde guardar o estado\?$/ })).toHaveLength(1)
+    expect(await ui.find({ type: 'Text', text: /sem resposta/ })).toBeUndefined()
+    await sessao()
+    expect(await quadro(ui)).toMatch(/Perguntas e respostas · 2\/2\nEstado\nOnde guardar o estado\?\n✓ \$\.store\nBotão\nBotão ou atalho\?\n✓ Botão/)
+  })
+
   test('a sessao nova le do store o grill do workspace', async ($, on) => {
     const { sessao } = mundo($, on, { 'grill:D:/ws/a': { pedido: 'grill do store', inicio: 0, perguntas: [] } })
     await sessao()
@@ -399,7 +431,7 @@ describe('painel da leva', () => {
   })
 
   test('no canal tela, o AskUserQuestion do grill vai a pagina da grill-tela e volta com a resposta dela; o Voltar ao CLI devolve o dialogo nativo', { options: { grill_canal: 'tela' } }, async ($, on) => {
-    const { marco } = mundo($, on)
+    const { marco, toasts } = mundo($, on)
     const URL = 'http://127.0.0.1:4321/?t=abc123'
     const comandos: { args: string[]; stdin?: string }[] = []
     // as voltas do aguardar, em ordem: o prazo que venceu, a mensagem a parte e a resposta da rodada 1; na rodada 2, o Voltar ao CLI
@@ -439,7 +471,7 @@ describe('painel da leva', () => {
     // a primeira rodada sobe a pagina com o nome da raiz, publica a rodada e espera ate a resposta
     const r1 = await perguntar([
       { header: 'Transporte', question: 'Como o agente e a tela conversam?', multiSelect: false,
-        options: [{ label: 'Servidor local', description: 'Node, só stdlib' }, { label: 'Artifact (Recommended)', description: 'Página no claude.ai' }] },
+        options: [{ label: 'Servidor local', description: 'Node, só stdlib' }, { label: 'Artifact (Recommended)', description: 'Página no claude.ai', preview: '+---+\n| A |\n+---+' }] },
       { header: 'Momento', question: 'Quando a tela abre?', multiSelect: false, options: [{ label: 'No início', description: 'logo' }, { label: 'No fim' }] },
     ])
     expect(nativas).toEqual([])
@@ -456,7 +488,7 @@ describe('painel da leva', () => {
       questoes: [
         { id: 'Q1', cabecalho: 'Transporte', titulo: 'Como o agente e a tela conversam?', opcoes: [
           { rotulo: 'Servidor local', descricao: 'Node, só stdlib', recomendada: false },
-          { rotulo: 'Artifact', descricao: 'Página no claude.ai', recomendada: true },
+          { rotulo: 'Artifact', descricao: 'Página no claude.ai', recomendada: true, previa: '+---+\n| A |\n+---+' },
         ] },
         { id: 'Q2', cabecalho: 'Momento', titulo: 'Quando a tela abre?', opcoes: [
           { rotulo: 'No início', descricao: 'logo', recomendada: true },
@@ -482,6 +514,9 @@ describe('painel da leva', () => {
     expect(JSON.parse(comandos[0].stdin ?? '').rodada).toBe(2)
     expect(nativas).toEqual(['Algo mais?'])
     expect(r2.result?.answers).toEqual({ 'Algo mais?': 'Não' })
+    // a volta ao terminal avisa o usuario e o modelo do motivo
+    expect(toasts).toContain('Grill de volta ao terminal: o usuário voltou ao terminal pela página')
+    expect(r2.context?.join('\n')).toMatch(/o usuário voltou ao terminal pela página/)
     expect(await quadro(ui)).toMatch(/Perguntas e respostas · 3\/3\n[\s\S]*Resto\nAlgo mais\?\n✓ Não/)
 
     // de volta ao CLI, o grill fica nele ate o fim: a pagina nao sobe de novo
@@ -508,6 +543,106 @@ describe('painel da leva', () => {
     expect((await perguntar()).result?.answers).toEqual({ 'Algo mais?': 'Não' })
     await perguntar()
     expect(comandos).toEqual(['iniciar'])
+  })
+
+  test('no canal tela, o Limpar apertado durante a espera da pagina leva a rodada ao dialogo com o motivo', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { marco, toasts } = mundo($, on)
+    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    let ui: Awaited<ReturnType<Engine['ui']['mount']>>
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: '{"fase":"rodada","historico":[]}' } }))
+    on('process.run', async ($, e) => {
+      const sub = e.argv[2]
+      // o usuario aperta o Limpar com a rodada na pagina, e a pagina volta ao CLI
+      if (sub === 'aguardar') await ui.press({ key: 'painel:limpar' })
+      const stdout = sub === 'iniciar' ? `${URL}\n` : sub === 'aguardar' ? '{"tipo":"cli"}\n' : 'ok\n'
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({ result: { questions: e.questions, answers: { 'Algo mais?': 'Não' } } }) as never)
+    await marco({ marco: 'grill', pedido: 'grill limpo na espera' })
+    ui = await $.ui.mount(PANE)
+
+    const r = await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Resto', question: 'Algo mais?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    expect(r.result?.answers).toEqual({ 'Algo mais?': 'Não' })
+    expect(toasts.at(-1)).toBe('Grill de volta ao terminal: o usuário voltou ao terminal pela página')
+    expect(r.context?.join('\n')).toMatch(/A rodada não ficou na grill-tela \(o usuário voltou ao terminal pela página\)/)
+  })
+
+  test('no canal tela, a rodada avisa a URL antes de esperar; a pagina guardada que morreu e retomada ou refeita, e sem pagina a rodada volta ao terminal com o motivo', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    // o caso da sessao de 2026-10-09: a rodada publicada numa pagina que o usuario nunca viu, sem a URL no terminal
+    const { marco, toasts } = mundo($, on)
+    const URL = (n: number) => `http://127.0.0.1:400${n}/?t=abc${n}`
+    const vivas = new Set<string>()
+    const subidas: Record<string, string[]> = { novo: [URL(1)], retomar: [] }
+    const comandos: string[][] = []
+    let toastsAoEsperar: string[] = []
+    let estado: Record<string, any> = { fase: 'inicio', historico: [] }
+    on('http.fetch', ($, e) => {
+      const viva = [...vivas].some(u => e.url === u.replace('/?t=', '/api/estado?t='))
+      return { value: viva ? { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } : { status: 502, ok: false, headers: {}, text: '' } }
+    })
+    on('process.run', ($, e) => {
+      const [, , sub, ...args] = e.argv
+      comandos.push([sub, ...args])
+      let stdout = ''
+      let ok = true
+      if (sub === 'iniciar') {
+        const url = subidas[args.includes('--retomar') ? 'retomar' : 'novo'].shift()
+        if (url) vivas.add(url)
+        stdout = url ? `${url}\n` : ''
+        ok = Boolean(url)
+      }
+      if (sub === 'rodada') {
+        ok = vivas.has(args[0])
+        if (ok) estado = { ...estado, fase: 'rodada', rodada: JSON.parse(e.init?.stdin ?? '') }
+      }
+      if (sub === 'aguardar') {
+        toastsAoEsperar = [...toasts]
+        const respostas = [{ id: 'Q1', marca: 'aceito', escolha: 'Sim', comentario: null }]
+        const rodada = estado.rodada
+        estado = { fase: 'aguarde', historico: [...estado.historico, { rodada, respostas }] }
+        stdout = `${JSON.stringify({ tipo: 'rodada', rodada: rodada.rodada, respostas })}\n`
+      }
+      return { value: { exitCode: ok ? 0 : 1, stdout, stderr: ok ? '' : 'falhou', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const nativas: string[] = []
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+      nativas.push(...e.questions.map(q => q.question))
+      return { result: { questions: e.questions, answers: { [e.questions[0].question]: 'Não' } } } as never
+    })
+    const perguntar = (question: string) =>
+      $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question, multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    await marco({ marco: 'grill', pedido: 'grill sem silencio' })
+
+    // a primeira sobe a pagina, e o toast com a URL sai antes do primeiro aguardar
+    const r1 = await perguntar('Primeira?')
+    expect(toastsAoEsperar).toContain(`Grill na tela: ${URL(1)}`)
+    expect(r1.context?.join('\n')).toContain(URL(1))
+
+    // a pagina guardada morreu: o --retomar a traz de volta antes da rodada, que vai a URL nova
+    vivas.clear()
+    subidas.retomar.push(URL(2))
+    comandos.length = 0
+    const r2 = await perguntar('Segunda?')
+    expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['rodada', URL(2), '-'], ['aguardar', URL(2), '--ate', '120']])
+    expect(r2.context?.join('\n')).toContain(URL(2))
+    expect(toastsAoEsperar).toContain(`Grill na tela: ${URL(2)}`)
+
+    // sem retomada, uma pagina nova
+    vivas.clear()
+    subidas.novo.push(URL(3))
+    comandos.length = 0
+    await perguntar('Terceira?')
+    expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['iniciar', '--projeto', 'a'], ['rodada', URL(3), '-'], ['aguardar', URL(3), '--ate', '120']])
+    expect(nativas).toEqual([])
+
+    // nenhuma sobe: nada e publicado, o dialogo pergunta e o toast e o contexto dizem por que
+    vivas.clear()
+    comandos.length = 0
+    const r4 = await perguntar('Quarta?')
+    expect(comandos.map(c => c[0])).toEqual(['iniciar', 'iniciar'])
+    expect(nativas).toEqual(['Quarta?'])
+    expect(toasts.at(-1)).toBe('Grill de volta ao terminal: a página da grill-tela não subiu')
+    expect(r4.context?.join('\n')).toMatch(/A rodada não ficou na grill-tela \(a página da grill-tela não subiu\)/)
   })
 
   test('no canal tela, so o grill desta sessao vai a pagina; o grilling de fora da /faz vai a grill-tela; o Seguir no terminal entre rodadas leva o grill ao CLI', { options: { grill_canal: 'tela' } }, async ($, on) => {
@@ -922,7 +1057,7 @@ describe('painel da leva', () => {
     const { toasts, marco } = mundo($, on)
 
     expect((await marco({ marco: 'inicio', documento: '2026-10-03 Painel da leva' })).deny).toBeUndefined()
-    expect(toasts.length).toBe(1)
+    expect(toasts).toEqual(['Leva registrada: /macrex-painel mostra o andamento'])
     await marco({ marco: 'fase', fase: 'tickets' })
     await marco({ marco: 'tickets', tickets: TICKETS })
     await marco({ marco: 'fase', fase: 'implement' })
@@ -1692,6 +1827,190 @@ describe('painel da leva', () => {
     const [, n] = /^@@ -0,0 \+1,(\d+) @@/.exec(String(doNovo[0].props.source)) ?? []
     expect(doNovo[1].props.source).toMatch(new RegExp(`^@@ -0,0 \\+${Number(n) + 1},\\d+ @@\\n\\+linha ${n}\\n`))
   })
+
+  // O git da arvore do projeto: os rastreados, os soltos (o que o .gitignore nao ignora) e os
+  // apagados do working tree, cada um pelo seu ls-files, e os mudados desde a base da sessao (o
+  // diff contra o abc123); o velho.txt ja estava solto no inicio.
+  function repo(on: On, git = { rastreados: ['README.md', 'hooks/register.js', 'hooks/painel.test.ts', 'skills/faz/SKILL.md'], soltos: ['velho.txt'], apagados: [] as string[], mudados: [] as string[], diff: '' }) {
+    on('process.run', ($, e) => {
+      const a = e.argv.join(' ')
+      const lista = (l: string[]) => l.map(c => `${c}\0`).join('')
+      const stdout = /rev-parse --show-toplevel/.test(a) ? 'D:/ws/a\n'
+        : /stash create/.test(a) ? 'abc123\n'
+        : /ls-files --cached/.test(a) ? lista(git.rastreados)
+        : /ls-files --others/.test(a) ? lista(git.soltos)
+        : /ls-files --deleted/.test(a) ? lista(git.apagados)
+        : /diff --name-only -z abc123/.test(a) ? lista(git.mudados)
+        : /diff --no-color --no-ext-diff abc123/.test(a) ? git.diff
+        : ''
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    for (const tool of ['Write', 'Edit', 'Bash']) on('tool.call', { tool }, () => ({ result: {} }) as never)
+    return { git }
+  }
+
+  // as cores do nome do arquivo: o que nao mudou, o alterado e o novo
+  const COR = { igual: '#c0caf5', mudado: '#e0af68', novo: '#9ece6a' }
+  const corDe = async (ui: { find: (m: object) => Promise<{ props: Record<string, unknown> } | undefined> }, nome: RegExp) =>
+    (await ui.find({ type: 'Text', text: nome }))?.props.color
+
+  test('a aba Arquivos mostra a arvore do projeto e abre e fecha as pastas; o arquivo e so texto', async ($, on) => {
+    const { sessao } = mundo($, on)
+    const { git } = repo(on)
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+
+    // a sexta aba, na tecla 6: as pastas fechadas antes dos arquivos, o cabecalho com a raiz e o total
+    expect((await ui.find({ type: 'Button', text: /^Arquivos$/ }))?.props.hotkey).toBe('6')
+    await ui.press({ key: 'aba:arquivos' })
+    expect(await quadro(ui)).toMatch(/Arquivos {2}arquivos\na {2}5\n/)
+    expect(await quadro(ui)).toMatch(/\[ ▸ hooks\/ \]\n\[ ▸ skills\/ \]\n {2}README\.md\n {2}velho\.txt$/)
+    // o arquivo nao e botao, e nada manda caminho ao prompt
+    expect(await ui.find({ type: 'Button', text: /README/ })).toBeUndefined()
+    expect(await ui.find({ text: /Enviar/ })).toBeUndefined()
+
+    await ui.press({ key: 'no:hooks/' })
+    expect(await quadro(ui)).toMatch(/\[ ▾ hooks\/ \]\n {4}painel\.test\.ts\n {4}register\.js\n\[ ▸ skills\/ \]/)
+
+    // o arquivo criado na sessao aparece depois da ferramenta, com o nome em verde
+    git.soltos = [...git.soltos, 'docs/novo.md']
+    await $.tool.call({ tool: 'Write', file_path: 'D:/ws/a/docs/novo.md', content: 'x' } as never)
+    await ui.press({ key: 'no:docs/' })
+    expect(await quadro(ui)).toMatch(/\[ ▾ docs\/ \]\n {4}novo\.md\n/)
+    expect(await corDe(ui, /novo\.md$/)).toBe(COR.novo)
+
+    // o editado so muda de cor: a arvore em si nao mexe
+    const antes = await quadro(ui)
+    expect(await corDe(ui, /README\.md$/)).toBe(COR.igual)
+    git.mudados = ['README.md']
+    await $.tool.call({ tool: 'Edit', file_path: 'D:/ws/a/README.md', old_string: 'a', new_string: 'b' } as never)
+    expect(await quadro(ui)).toBe(antes)
+    expect(await corDe(ui, /README\.md$/)).toBe(COR.mudado)
+
+    // o apagado do working tree sai; clicar de novo na pasta a fecha
+    git.apagados = ['README.md']
+    await $.tool.call({ tool: 'Bash', command: 'rm README.md' } as never)
+    expect(await ui.find({ text: /README\.md/ })).toBeUndefined()
+    await ui.press({ key: 'no:hooks/' })
+    expect(await ui.find({ text: /register\.js/ })).toBeUndefined()
+  })
+
+  test('o nome do arquivo alterado fica amarelo e o do novo verde, sem rotulo; a pasta fechada com algum deles leva o ponto', async ($, on) => {
+    const { sessao } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['hooks/register.js']
+    await sessao()
+    git.soltos = [...git.soltos, 'docs/novo.md']
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    expect(await quadro(ui)).toMatch(/\[ ▸ docs\/ \] {2}•\n\[ ▸ hooks\/ \] {2}•\n\[ ▸ skills\/ \]\n/)
+
+    // aberta, a pasta perde o ponto: a cor esta no nome dos filhos
+    await ui.press({ key: 'no:hooks/' })
+    await ui.press({ key: 'no:docs/' })
+    expect(await quadro(ui)).toMatch(/\[ ▾ docs\/ \]\n {4}novo\.md\n\[ ▾ hooks\/ \]\n {4}painel\.test\.ts\n {4}register\.js\n/)
+    expect(await corDe(ui, /register\.js$/)).toBe(COR.mudado)
+    expect(await corDe(ui, /novo\.md$/)).toBe(COR.novo)
+    expect(await corDe(ui, /painel\.test\.ts$/)).toBe(COR.igual)
+    expect(await ui.find({ type: 'Text', text: /^(novo|mudou)$/ })).toBeUndefined()
+  })
+
+  test('o clique no arquivo alterado abre embaixo o diff dele, o mesmo da aba Diff; o arquivo sem mudanca nao abre nada', async ($, on) => {
+    const { sessao } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['hooks/register.js']
+    git.diff = [
+      'diff --git a/hooks/register.js b/hooks/register.js',
+      '--- a/hooks/register.js',
+      '+++ b/hooks/register.js',
+      // o hunk tem de bater com as contagens do cabecalho: o Code descarta o format de diff invalido
+      '@@ -10,1 +10,1 @@ export function register(on) {',
+      '-const b = 2',
+      '+const b = 3',
+      '',
+    ].join('\n')
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    await ui.press({ key: 'no:hooks/' })
+    expect(await ui.find({ type: 'Code' })).toBeUndefined()
+    // so o alterado tem o › para abrir; o nome segue amarelo
+    expect(await quadro(ui)).toMatch(/\n {4}painel\.test\.ts\n.*\[ › \].*register\.js\n/)
+    expect(await corDe(ui, /register\.js$/)).toBe(COR.mudado)
+
+    await ui.press({ key: 'no:hooks/register.js' })
+    const code = await ui.find({ type: 'Code' })
+    expect(code?.props.format).toBe('diff')
+    expect(code?.props.source).toBe('@@ -10,1 +10,1 @@ export function register(on) {\n-const b = 2\n+const b = 3')
+    expect(await quadro(ui)).toMatch(/\[ ⌄ \].*register\.js\n@@ -10,1/)
+
+    await ui.press({ key: 'no:hooks/register.js' })
+    expect(await ui.find({ type: 'Code' })).toBeUndefined()
+  })
+
+  test('o filtro da aba Arquivos casa trecho do caminho sem diferenciar maiusculas e, vazio, volta a arvore', async ($, on) => {
+    const { sessao } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['hooks/register.js']
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    await ui.press({ key: 'no:hooks/' })
+    const arvore = await quadro(ui)
+
+    // com texto, a lista plana dos caminhos que casam, com a mesma cor da arvore
+    await ui.input({ key: 'arvore:filtro', text: 'REGISTER', kind: 'change' })
+    expect(await quadro(ui)).toMatch(/\nhooks\/register\.js$/)
+    expect(await ui.find({ text: /README|painel\.test/ })).toBeUndefined()
+    expect(await corDe(ui, /^hooks\/register\.js$/)).toBe(COR.mudado)
+
+    // sem caso, o aviso; vazio, a arvore volta com as pastas abertas de antes
+    await ui.input({ key: 'arvore:filtro', text: 'zzz', kind: 'change' })
+    expect(await ui.find({ type: 'Text', text: /^nenhum caminho casa com o filtro$/ })).toBeDefined()
+    await ui.input({ key: 'arvore:filtro', text: '', kind: 'change' })
+    expect(await quadro(ui)).toBe(arvore)
+  })
+
+  test('a aba Arquivos fora de um repositorio git diz que nao ha arvore', async ($, on) => {
+    const { sessao } = mundo($, on)
+    on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository', isStdoutTruncated: false, isStderrTruncated: false } }))
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    expect(await ui.find({ type: 'Text', text: /não está num repositório git/ })).toBeDefined()
+  })
+
+  test('a aba Arquivos sem o git instalado diz que nao ha arvore, em vez de ler para sempre', async ($, on) => {
+    const { sessao } = mundo($, on)
+    on('process.run', () => { throw new Error('spawn git ENOENT') })
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    expect(await ui.find({ type: 'Text', text: /lendo a árvore/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /o git não rodou/ })).toBeDefined()
+  })
+
+  test('o /clear guarda a aba Arquivos com as pastas abertas', async ($, on) => {
+    const novaSessao = estadoPorSessao(on)
+    const { sessao, clear } = mundo($, on)
+    repo(on)
+    on('classic.SessionStart', () => ({}) as never)
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    // o estado simulado nao avisa quem le: o teste redesenha depois de cada troca
+    await ui.press({ key: 'aba:arquivos' })
+    await ui.redraw()
+    await ui.press({ key: 'no:hooks/' })
+    await ui.redraw()
+    const antes = await quadro(ui)
+    expect(antes).toMatch(/\[ ▾ hooks\/ \]\n {4}painel\.test\.ts\n/)
+
+    await clear()
+    novaSessao()
+    await $.classic.SessionStart({ source: 'clear' } as never)
+    await ui.redraw()
+    expect(await quadro(ui)).toBe(antes)
+  })
 })
 
 // A leva viva fora do pane: a faixa acima do prompt, o sufixo do spinner e a linha do marco.
@@ -1722,21 +2041,22 @@ describe('faixa da leva', () => {
     await marco({ marco: 'ticket', ticket: '02' })
     await relogio.advance(segundos(80))
     await ui.redraw(PROPS_DA_FAIXA as never)
-    expect(await quadro(ui)).toMatch(/^Leva · implement · ticket 2\/2 · 1✓ · 1m20s {2}\[ Abrir painel \]\noutro mod$/)
+    // uma contagem so, a do ticket em curso: sem os verdes, que o painel mostra
+    expect(await quadro(ui)).toMatch(/^Leva · implement · ticket 2\/2 · 1m20s {2}\[ Abrir painel \]\noutro mod$/)
 
-    // estreita: sai o tempo, depois os verdes, depois o ticket
+    // estreita: sai o tempo, depois o ticket, depois a fase
     const larg = (n: number) => ui.redraw({ ...PROPS_DA_FAIXA, bodyColumns: n } as never)
-    await larg(51)
-    expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva · implement · ticket 2/2 · 1✓')
     await larg(46)
     expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva · implement · ticket 2/2')
+    await larg(40)
+    expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva · implement')
     await larg(30)
     expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva')
 
     // o Abrir painel abre o pane e some
     await larg(120)
     await ui.press({ key: 'faixa:abrir' })
-    expect([...abertos]).toEqual(['faz-painel'])
+    expect([...abertos]).toEqual(['macrex-painel'])
     expect(await ui.find({ type: 'Button', text: /Abrir painel/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /^Leva · implement/ })).toBeDefined()
 
@@ -1748,7 +2068,7 @@ describe('faixa da leva', () => {
     expect(await ui.find({ type: 'Text', text: /^outro mod$/ })).toBeDefined()
   })
 
-  test('o spinner leva a fase e os verdes da leva ativa antes da reticencia', async ($, on) => {
+  test('o spinner leva a fase e o ticket da leva ativa antes da reticencia, a mesma contagem da faixa', async ($, on) => {
     const { marco } = mundo($, on)
     const sufixos: string[] = []
     on('ui.render', { component: 'Spinner' }, ($, e) => {
@@ -1771,7 +2091,7 @@ describe('faixa da leva', () => {
     await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
     for (const surface of SURFACES) {
       ui = await $.ui.mount({ ...SPINNER, surface } as never)
-      expect(await ui.find({ type: 'Text', text: /^Sauteing · implement 1\/2…$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^Sauteing · implement · ticket 1\/2…$/ })).toBeDefined()
       await ui.unmount()
     }
     await marco({ marco: 'fechamento' })

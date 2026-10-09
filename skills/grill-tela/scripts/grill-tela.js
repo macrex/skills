@@ -63,6 +63,8 @@ function errosDaRodada(r) {
     q.opcoes.forEach((o, j) => {
       if (!o || !texto(o.rotulo)) erros.push(`${onde}.opcoes[${j}].rotulo: texto não vazio`);
       else if (o.descricao !== undefined && typeof o.descricao !== 'string') erros.push(`${onde}.opcoes[${j}].descricao: texto, se houver`);
+      // o desenho da opcao (o preview do AskUserQuestion), que a pagina mostra como veio
+      if (o && o.previa !== undefined && typeof o.previa !== 'string') erros.push(`${onde}.opcoes[${j}].previa: texto, se houver`);
     });
     const recs = q.opcoes.filter((o) => o && o.recomendada === true).length;
     if (recs !== 1) erros.push(`${onde}.opcoes: exatamente uma com "recomendada": true (tem ${recs})`);

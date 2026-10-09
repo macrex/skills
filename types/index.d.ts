@@ -112,6 +112,16 @@ export type CodigoArquivo = {
   diff: string
 }
 
+// A arvore do projeto da aba Arquivos: os caminhos que o git nao ignora, e os criados na sessao;
+// semGit, a raiz nao esta num repositorio git ou o git nao rodou.
+export type Arvore = {
+  arquivos: string[]
+  novos: string[]
+  // os que mudaram desde a base da sessao (o diff contra o commit dela)
+  mudados: string[]
+  semGit?: boolean
+}
+
 // Os tokens de um loop (o principal ou um sub-agente) somados turno a turno, e o modelo do ultimo.
 export type UsoDoLoop = {
   input_tokens: number
@@ -131,13 +141,17 @@ declare module 'claude-code' {
       grill: Grill | null
       // o grill foi aberto nesta sessao: so ele leva o AskUserQuestion a pagina
       grillDaSessao: boolean
-      aba: 'painel' | 'codigo' | 'grill' | 'tickets' | 'uso'
+      aba: 'painel' | 'codigo' | 'grill' | 'tickets' | 'uso' | 'arquivos'
       // por loop: 'sessao' para o principal, o agentId para cada sub-agente
       uso: Record<string, UsoDoLoop>
       medida: LevaMedida | null
       base: CodigoBase | null
       codigo: CodigoArquivo[]
       abertos: string[]
+      arvore: Arvore | null
+      // as pastas abertas da arvore, com / no fim
+      pastas: string[]
+      filtro: string
     }
   }
 }

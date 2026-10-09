@@ -4,7 +4,8 @@
 // pagina usa, com as preferencias numa pasta temporaria:
 //   1. iniciar sobe o servidor e imprime a URL; pedido sem o token e recusado; o topo da pagina
 //      traz a logo do repositorio e GRILL;
-//   2. rodada e final recusam o JSON malformado com codigo 1 e aceitam o valido;
+//   2. rodada e final recusam o JSON malformado com codigo 1 e aceitam o valido; o desenho (previa)
+//      da opcao e texto, vai ao estado e a pagina o mostra num bloco monoespacado;
 //   3. aguardar devolve as respostas da pagina (tabela e JSON), o ajuste e o sim;
 //   4. respostas com questao sem marca sao recusadas;
 //   5. preferencias gravam na pasta e voltam na leitura;
@@ -31,6 +32,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const vm = require('vm');
 const { spawn, spawnSync } = require('child_process');
 
 const SCRIPT = path.join(__dirname, 'grill-tela.js');
@@ -93,7 +95,7 @@ const RODADA = {
   rodada: 1,
   questoes: [
     { id: 'Q1', cabecalho: 'Transporte', titulo: 'Como conversam?', contexto: 'Hoje é **CLI**.',
-      opcoes: [{ rotulo: 'Servidor local', descricao: 'Node', recomendada: true }, { rotulo: 'Artifact', descricao: 'claude.ai' }] },
+      opcoes: [{ rotulo: 'Servidor local', descricao: 'Node', recomendada: true }, { rotulo: 'Artifact', descricao: 'claude.ai', previa: '+---+\n| A |\n+---+' }] },
     { id: 'Q2', cabecalho: 'Nome', titulo: 'Qual o nome?',
       opcoes: [{ rotulo: 'grill-tela', descricao: '', recomendada: true }, { rotulo: 'grill-html' }] },
   ],
@@ -116,12 +118,13 @@ const RODADA = {
 
   // 2. rodada malformada e valida
   const ruim = { rodada: 0, questoes: [{ id: 'Q1', cabecalho: '', titulo: 'x',
-    opcoes: [{ rotulo: 'a', recomendada: true }, { rotulo: 'b', recomendada: true }] }] };
+    opcoes: [{ rotulo: 'a', recomendada: true }, { rotulo: 'b', recomendada: true, previa: 3 }] }] };
   let r = roda('rodada', url, arquivo('ruim.json', ruim));
   assert.strictEqual(r.status, 1, 'rodada malformada sai com 1');
   assert.match(r.stderr, /rodada/);
   assert.match(r.stderr, /cabecalho/);
   assert.match(r.stderr, /recomendada/);
+  assert.match(r.stderr, /questoes\[0\]\.opcoes\[1\]\.previa: texto/);
   assert.strictEqual(roda('rodada', url, arquivo('quebrado.json', '{nao e json')).status, 1, 'JSON invalido sai com 1');
   r = roda('rodada', url, arquivo('rodada.json', RODADA));
   assert.strictEqual(r.status, 0, r.stderr);
@@ -129,6 +132,17 @@ const RODADA = {
   estado = (await pedir(api(url, 'estado'))).json;
   assert.strictEqual(estado.fase, 'rodada');
   assert.strictEqual(estado.rodada.questoes.length, 2);
+  assert.strictEqual(estado.rodada.questoes[0].opcoes[1].previa, '+---+\n| A |\n+---+');
+  // o desenho da pagina, rodado fora do navegador: escapado, sem o markdown curto, com espacos e
+  // quebras; no Panorama, o de cada opcao que tem, lado a lado; no Uma por vez, dentro da opcao
+  const desenho = vm.runInNewContext([/const esc = .*\r?\n/, /function md\(s\)\{[\s\S]*?\r?\n\}\r?\n/, /const previa = .*\r?\n/, /const previas = [\s\S]*?: '';\r?\n/]
+    .map((re) => re.exec(pagina.txt)[0]).join('') + '({ previas })');
+  const comPrevias = desenho.previas({ opcoes: [{ rotulo: 'A', previa: '<b>**x**</b>\n  y' }, { rotulo: 'B' }, { rotulo: 'C', previa: 'c' }] });
+  assert.ok(comPrevias.includes('<pre class="previa">&lt;b&gt;**x**&lt;/b&gt;\n  y</pre>'), 'a previa vai escapada e sem markdown');
+  assert.strictEqual(comPrevias.match(/<pre class="previa">/g).length, 2, 'no Panorama, a previa de cada opcao que tem');
+  assert.strictEqual(desenho.previas({ opcoes: [{ rotulo: 'B' }] }), '', 'sem previa, nada');
+  assert.match(pagina.txt, /function modoPanorama\(\)[\s\S]*?\$\{previas\(q\)\}/, 'o Panorama desenha as previas');
+  assert.match(pagina.txt, /function modoFoco\(\)[\s\S]*?\$\{previa\(o\)\}/, 'o Uma por vez desenha a previa na opcao');
 
   // 11. rascunho: so da rodada atual, volta no estado sem mexer na versao
   assert.strictEqual(estado.rascunho, null, 'rodada nova sem rascunho');
