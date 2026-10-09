@@ -5,12 +5,15 @@
 // A leva grava o estado pela ferramenta faz_marco (quando, dizem skills/faz/references/painel.md
 // e, para os marcos do grill, interrogatorio.md), no $.store do plugin, um por workspace; o
 // desenho le do $.state (types/index.d.ts), que sobrevive a hot reload. Os agentes e workflows vem
-// dos hooks do Agent, do Workflow, do fim de turno e da notificacao de tarefa. O grill do /faz
+// dos hooks do Agent, do Workflow, do fim de turno e da notificacao de tarefa, e os agentes se
+// acertam pela lista oficial ($.agent.list) a cada segundo da leva. O grill do /faz
 // (movimento 1) vem antes da leva: os marcos
 // grill, entendimento e linha, as perguntas do AskUserQuestion pelo tema (o header) e as rodadas
-// da grill-tela pelo estado da pagina dela.
+// da grill-tela pelo estado da pagina dela. Com a opcao grill_canal = tela, o AskUserQuestion do
+// grill vai a pagina da grill-tela (pelaTela).
 
 import { atom, read, update } from 'claude-code'
+import { soComPedido } from './so-com-pedido.js'
 
 const PANE = 'faz-painel'
 const FERRAMENTA = 'faz_marco'
@@ -58,7 +61,12 @@ const SKILL_DA_FASE = { spec: 'to-spec', tickets: 'to-tickets', implement: 'impl
 // o nome de cada fase no chip, o da skill que a cumpre; o fechamento nao vira chip, vira o aviso do /cpv
 const ROTULO = { ...SKILL_DA_FASE, correcoes: 'correções', qualidade: 'qualidade' }
 const FIM_DE_TAREFA = { completed: 'concluido', failed: 'falhou', killed: 'parado', stopped: 'parado' }
-const DO_AGENTE = { rodando: ['rodando', LARANJA], concluido: ['concluído', VERDE], falhou: ['falhou', VERMELHO], parado: ['parado', APAGADO] }
+const DO_AGENTE = { rodando: ['rodando', LARANJA], aguardando: ['aguardando', AMARELO], concluido: ['concluído', VERDE], falhou: ['falhou', VERMELHO], parado: ['parado', APAGADO] }
+// o status da lista oficial ($.agent.list) no estado do painel; um status fora daqui nao mexe no agente
+const DA_LISTA = { pending: 'rodando', running: 'rodando', waiting: 'aguardando', idle: 'aguardando', completed: 'concluido', failed: 'falhou', killed: 'parado' }
+const VIVOS = ['rodando', 'aguardando']
+// o agente rodando sem ferramenta ha mais que isto mostra ha quanto tempo esta sem saida
+const SEM_SAIDA = 2 * 60 * 1000
 
 const LEVA = atom({ plugin: 'macrex-skills', key: 'leva' }, null)
 // Os agentes e workflows da leva, so na sessao (nao vao ao $.store).
@@ -70,6 +78,9 @@ const SKILLS = atom({ plugin: 'macrex-skills', key: 'skills' }, [])
 const HISTORICO = atom({ plugin: 'macrex-skills', key: 'historico' }, [])
 // O grill do movimento 1, um por workspace no $.store, ate o proximo grill.
 const GRILL = atom({ plugin: 'macrex-skills', key: 'grill' }, null)
+// Se o grill foi aberto nesta sessao (pelo marco grill ou pelo grilling da /faz), so no $.state:
+// o grill que o store traz de outra sessao, talvez abandonado, nao leva o AskUserQuestion a pagina.
+const GRILL_DA_SESSAO = atom({ plugin: 'macrex-skills', key: 'grillDaSessao' }, false)
 // A aba do pane, so na sessao.
 const ABA = atom({ plugin: 'macrex-skills', key: 'aba' }, 'painel')
 // A base da aba Diff, tirada no inicio da sessao; os arquivos que a sessao mudou desde ela, e os abertos.
@@ -78,6 +89,8 @@ const CODIGO = atom({ plugin: 'macrex-skills', key: 'codigo' }, [])
 const ABERTOS = atom({ plugin: 'macrex-skills', key: 'abertos' }, [])
 // Os tokens de cada turno desde o inicio da leva (ou da sessao, antes dela), so na sessao.
 const USO = atom({ plugin: 'macrex-skills', key: 'uso' }, {})
+// A ultima medida da sessao (session.measure): o custo, o contexto e a janela de 5 h, so na sessao.
+const MEDIDA = atom({ plugin: 'macrex-skills', key: 'medida' }, null)
 const ABAS = { painel: 'Painel', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso' }
 const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']
 // os caracteres de controle que um Code recusa: todos menos tab e quebra de linha
@@ -101,6 +114,35 @@ const retoma = (leva, m) => m.marco === 'inicio' && Boolean(leva) && !leva.fecha
 const dois = n => String(n).padStart(2, '0')
 const verdes = leva => leva.tickets.filter(t => t.estado === 'verde').length
 const somar = (a = {}, b) => Object.fromEntries(TOKENS.map(k => [k, (a[k] ?? 0) + (b[k] ?? 0)]))
+// o custo medido da leva: o da sessao agora menos o do inicio; sem custo na sessao, nada
+const comCusto = (leva, usd) => (usd == null || leva.custoInicio == null ? leva : { ...leva, custo: usd - leva.custoInicio })
+const dolares = usd => `US$ ${usd.toFixed(2).replace('.', ',')}`
+const porcento = p => `${String(p).replace('.', ',')}%`
+// o tempo ate a janela resetar, sem os segundos: 1h40, 25min
+function ateResetar(ms) {
+  const m = Math.max(0, Math.round(ms / 60000))
+  return m < 60 ? `${m}min` : `${Math.floor(m / 60)}h${dois(m % 60)}`
+}
+
+// O estado da leva que a compactacao pede ao resumo, no teto de ~600 tokens (~4 caracteres cada);
+// a nota so dos verdes, cortada, e o que passa do teto sai do fim (os ultimos tickets)
+const TETO_DA_COMPACTACAO = 2300
+const NOTA_NA_COMPACTACAO = 200
+function levaNaCompactacao(leva) {
+  const nota = n => (n.length > NOTA_NA_COMPACTACAO ? `${n.slice(0, NOTA_NA_COMPACTACAO - 1)}…` : n)
+  const linhas = [
+    'Preserve literalmente no resumo este estado da leva do /faz, que segue depois da compactacao:',
+    `documento: ${leva.documento}`,
+    `fase: ${leva.fase}${leva.modo ? ` · modo: ${leva.modo}` : ''}`,
+    `sujos: ${(leva.sujos ?? []).join(', ') || 'nenhum'}`,
+    ...leva.tickets.map(t => {
+      const reparos = t.reparos ? `, ${t.reparos} ${t.reparos === 1 ? 'reparo' : 'reparos'}` : ''
+      return `${t.id} ${t.titulo}: ${t.estado}${reparos}${t.estado === 'verde' && t.notas ? ` — ${nota(t.notas)}` : ''}`
+    }),
+  ]
+  const bloco = linhas.join('\n')
+  return bloco.length > TETO_DA_COMPACTACAO ? `${bloco.slice(0, TETO_DA_COMPACTACAO - 1)}…` : bloco
+}
 
 // a contagem de tokens curta, com a virgula do portugues: 999, 1,5k, 2,3M
 function tokens(n) {
@@ -115,17 +157,19 @@ function duracao(ms) {
   return m < 60 ? `${m}m${dois(s % 60)}s` : `${Math.floor(m / 60)}h${dois(m % 60)}m`
 }
 
-// Aplica um marco ao estado na hora `agora`; devolve o estado novo ou { erro } sem tocar no antigo.
-function aplicar(leva, m, agora) {
+// Aplica um marco ao estado na hora `agora`, com o custo da sessao `usd` (no inicio e no
+// fechamento); devolve o estado novo ou { erro } sem tocar no antigo.
+function aplicar(leva, m, agora, usd) {
   if (m.marco === 'inicio') {
     if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'inicio exige documento (titulo da nota ou caminho)' }
     if (m.sujos != null && !(Array.isArray(m.sujos) && m.sujos.every(s => typeof s === 'string'))) {
       return { erro: 'sujos exige uma lista de caminhos (o git status --porcelain de antes da leva)' }
     }
-    // a retomada guarda tudo, inclusive os sujos do inicio original
+    // a retomada guarda tudo, inclusive os sujos do inicio original e o custo, que o carregar ja
+    // rebaseou na sessao nova
     if (retoma(leva, m)) return leva
     const sujos = m.sujos ?? []
-    return { documento: m.documento, fase: 'spec', fases: ['spec'], entradas: { spec: agora }, inicio: agora, tickets: [], sujos, fechada: false }
+    return { documento: m.documento, fase: 'spec', fases: ['spec'], entradas: { spec: agora }, inicio: agora, tickets: [], sujos, fechada: false, custoInicio: usd }
   }
   if (!MARCOS.includes(m.marco)) return { erro: `marco desconhecido: ${m.marco}; use ${MARCOS.join(', ')}` }
   if (!leva) return { erro: 'nenhuma leva neste workspace: registre o marco inicio antes' }
@@ -183,7 +227,7 @@ function aplicar(leva, m, agora) {
       return { ...leva, itens: velho ? itens.map(i => (i === velho ? novo : i)) : [...itens, novo] }
     }
     case 'fechamento':
-      return { ...fase('fechamento'), fechada: true, fim: agora }
+      return { ...comCusto(fase('fechamento'), usd), fechada: true, fim: agora }
   }
 }
 
@@ -230,7 +274,9 @@ async function sincronizarTela($) {
   const daTela = [...(estado?.historico ?? []), ...abertas].flatMap(({ rodada, respostas }) =>
     rodada.questoes.map(q => {
       const r = respostas?.find(x => x.id === q.id)
-      return { id: `tela:${rodada.rodada}:${q.id}`, pergunta: q.titulo, tema: q.cabecalho, ...(r && { resposta: r.comentario ? `${r.escolha} (${r.comentario})` : r.escolha }) }
+      // sem escolha (delegado, esclarecer, adiado), a marca faz as vezes dela
+      const escolha = r && (r.escolha ?? r.marca)
+      return { id: `tela:${rodada.rodada}:${q.id}`, pergunta: q.titulo, tema: q.cabecalho, ...(r && { resposta: r.comentario ? `${escolha} (${r.comentario})` : escolha }) }
     }),
   )
   // a mescla e sobre o grill de agora: o que chegou durante a consulta (o entendimento, o fora do
@@ -240,22 +286,105 @@ async function sincronizarTela($) {
     if (grill?.tela !== url) return grill
     const { tela, ...resto } = grill
     const perguntas = [...grill.perguntas.map(p => daTela.find(t => t.id === p.id) ?? p), ...daTela.filter(t => !grill.perguntas.some(p => p.id === t.id))]
-    const proximo = { ...resto, perguntas, ...(estado && !['cli', 'concluido'].includes(estado.fase) && { tela }) }
+    // a pagina que voltou ao CLI (o Seguir no terminal, mesmo entre rodadas) leva o grill ao canal cli
+    const proximo = { ...resto, perguntas, ...(estado?.fase === 'cli' && { canal: 'cli' }), ...(estado && !['cli', 'concluido'].includes(estado.fase) && { tela }) }
     mudou = JSON.stringify(proximo) !== JSON.stringify(grill)
     return mudou ? proximo : grill
   })
   if (mudou) await $.store.set(chaveDoGrill(await $.session.root()), novo)
 }
 
+// O AskUserQuestion do grill no canal tela: a rodada vai a pagina da grill-tela, que sobe na
+// primeira, e a resposta dela volta no formato do dialogo, com a URL para a tela final da skill;
+// a consulta da pagina a registra no grill. A pagina que nao sobe, recusa a rodada ou volta ao CLI,
+// e a interrupcao, devolvem null: o grill segue pelo dialogo nativo ate o fim.
+// ponytail: multiSelect vira escolha unica, a pagina nao tem outra
+const RECOMENDADA = /\s*\(Recommended\)$/
+// a resposta sem escolha volta com o rotulo do botao que o usuario apertou na pagina
+const NAO_RESPOSTA = { delegado: 'Decida você', esclarecer: 'Não entendi', adiado: 'Adiar' }
+async function pelaTela($, e, signal) {
+  const rodar = (args, init) =>
+    $.process.run(['node', `${$.plugin.root}/skills/grill-tela/scripts/grill-tela.js`, ...args], init).catch(() => ({ exitCode: 1, stdout: '' }))
+  const grill = await read($, GRILL)
+  const url = grill.tela ?? URL_DA_TELA.exec((await rodar(['iniciar', '--projeto', (await $.session.root()).split(/[\\/]/).pop()])).stdout)?.[0]
+  // a rodada seguinte a ultima que a pagina publicou neste grill
+  const n = 1 + Math.max(0, ...grill.perguntas.map(p => Number(/^tela:(\d+):/.exec(p.id)?.[1] ?? 0)))
+  const questoes = e.questions.map((q, i) => {
+    const marcada = Math.max(0, q.options.findIndex(o => RECOMENDADA.test(o.label)))
+    return {
+      id: `Q${i + 1}`,
+      cabecalho: q.header || q.question,
+      titulo: q.question,
+      opcoes: q.options.map((o, j) => ({ rotulo: o.label.replace(RECOMENDADA, ''), descricao: o.description, recomendada: j === marcada })),
+    }
+  })
+  let msg = null
+  const textos = [] // o que o usuario escreveu a parte na pagina, com a rodada aberta
+  if (url &&(await rodar(['rodada', url, '-'], { stdin: JSON.stringify({ rodada: n, questoes }) })).exitCode === 0) {
+    await update($, GRILL, g => g && { ...g, tela: url })
+    await sincronizarTela($)
+    // cada volta do aguardar e um $ e nao conta no orcamento do hook; a interrupcao nao espera a volta
+    const parou = new Promise(ok => (signal.aborted ? ok(null) : signal.addEventListener('abort', () => ok(null), { once: true })))
+    do {
+      const saida = await Promise.race([rodar(['aguardar', url, '--ate', '120'], { timeoutMs: 150_000 }), parou])
+      try {
+        msg = saida && JSON.parse(saida.stdout.trim().split('\n').pop())
+      } catch {
+        msg = null
+      }
+      if (msg?.tipo === 'texto') textos.push(msg.texto)
+    } while ((msg?.tipo === 'pendente' || msg?.tipo === 'texto') && !signal.aborted)
+  }
+  if (msg?.tipo === 'rodada' && msg.rodada === n && !signal.aborted) {
+    await sincronizarTela($)
+    const answers = Object.fromEntries(
+      e.questions.map((q, i) => {
+        const r = msg.respostas.find(x => x.id === `Q${i + 1}`)
+        const escolha = r?.escolha ?? NAO_RESPOSTA[r?.marca] ?? 'sem resposta'
+        return [q.question, r?.comentario ? `${escolha} (${r.comentario})` : escolha]
+      }),
+    )
+    const aParte = textos.map(t => `O usuário escreveu à parte na grill-tela, antes de responder: ${t}`)
+    return { result: { questions: e.questions, answers }, context: [`A rodada foi respondida na grill-tela, em ${url}: a tela final do grill vai a esta URL.`, ...aParte] }
+  }
+  // de volta ao CLI: a pagina e avisada, e a rodada que ficou aberta nela sai da aba Grill
+  if (url) await rodar(['cli', url])
+  const novo = await update($, GRILL, g => {
+    if (!g) return g
+    const { tela, ...resto } = g
+    return { ...resto, canal: 'cli', perguntas: g.perguntas.filter(p => p.resposta != null || !p.id.startsWith(`tela:${n}:`)) }
+  })
+  if (novo) await $.store.set(chaveDoGrill(await $.session.root()), novo)
+  return null
+}
+
 // O que tem store volta dele: a leva, o historico e o grill do workspace, gravados pela raiz do
-// projeto ($.session.root()), que o cd do shell nao move.
+// projeto ($.session.root()), que o cd do shell nao move. O custo da sessao nova recomeca: o
+// inicio do custo da leva aberta passa a ser o de agora menos o que ela ja custou, antes do
+// primeiro session.measure dela.
 async function carregar($, raiz) {
   const salva = await $.store.get(chave(raiz))
-  if (salva) await update($, LEVA, () => salva)
+  const usd = salva && !salva.fechada ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
+  if (salva) await update($, LEVA, () => (usd == null ? salva : { ...salva, custoInicio: usd - (salva.custo ?? 0) }))
   const historico = await $.store.get(chaveDoHistorico(raiz))
   if (historico) await update($, HISTORICO, () => historico)
   const grill = await $.store.get(chaveDoGrill(raiz))
   if (grill) await update($, GRILL, () => grill)
+}
+
+// O prompt da leva como sugestao da caixa, que o Tab pega e o Enter envia como digitado (o
+// $.prompt.submit chega como do plugin e nao autoriza as skills reservadas): depois do /clear,
+// o do grill que nenhuma leva executou, aberta ou fechada; no inicio ou na retomada da sessao, o
+// da leva aberta que nasceu do grill. Sem await: a sugestao espera o dialogo que segura a caixa,
+// e a que falha so nao aparece.
+async function sugerirLinha($, depoisDoClear) {
+  const grill = await read($, GRILL)
+  if (!grill?.linha) return
+  const leva = await read($, LEVA)
+  // a leva do documento do grill que comecou depois dele; uma leva velha do mesmo documento nao conta
+  const executada = Boolean(leva && leva.documento === grill.documento && !(leva.inicio < grill.inicio))
+  const doGrill = executada && !leva.fechada
+  if (depoisDoClear ? !executada : doGrill) $.prompt.suggest({ text: grill.linha }).catch(() => {})
 }
 
 // O botao Limpar da aba Painel, sempre ao lado do titulo e o unico que limpa (o /clear nao mexe no
@@ -358,6 +487,48 @@ const trocarAba = async ($, aba) => {
 }
 
 const mexer = ($, qual, como) => update($, AGENTES, lista => lista.map(a => (qual(a) ? { ...a, ...como(a) } : a)))
+const vivo = a => VIVOS.includes(a.estado)
+
+// Acerta os agentes vivos da leva pela lista oficial: casa pelo agentId, ou pelo nome enquanto nao
+// tem um (o teammate); o herdado de outra sessao que a lista nao conhece mais para. Os workflows
+// nao estao na lista e ficam com os hooks.
+// ponytail: pelo nome casa o ultimo da lista ainda sem dono; dois teammates de mesmo nome confundem
+async function reconciliar($) {
+  if (!(await read($, AGENTES)).some(a => a.tipo === 'agente' && vivo(a))) return
+  let lista
+  try {
+    lista = await $.agent.list()
+  } catch {
+    return
+  }
+  const agora = await $.clock.now()
+  await update($, AGENTES, agentes => {
+    let mudou = false
+    const novos = agentes.map(a => {
+      if (a.tipo !== 'agente' || !vivo(a)) return a
+      const info = a.agentId ? lista.find(i => i.id === a.agentId) : lista.findLast(i => i.name === a.nome && !agentes.some(b => b.agentId === i.id))
+      const estado = info ? (DA_LISTA[info.status] ?? a.estado) : a.herdado ? 'parado' : a.estado
+      const agentId = info?.id ?? a.agentId
+      if (estado === a.estado && agentId === a.agentId) return a
+      mudou = true
+      return { ...a, estado, agentId, ...(!VIVOS.includes(estado) && { duracao: agora - a.inicio }) }
+    })
+    return mudou ? novos : agentes
+  })
+}
+
+// O Parar de um agente vivo: confirma e encerra pela TaskStop, que aceita o id da tarefa em
+// background, o agentId ou o nome do teammate.
+const idDeParar = a => a.taskId ?? a.agentId ?? a.nome
+async function parar($, a) {
+  // o dialogo dispensado rejeita: e o mesmo que nao parar
+  const resposta = await $.ui.ask(`Parar o agente ${a.nome}?`, ['Parar', 'Deixar rodando']).catch(() => '')
+  if (resposta !== 'Parar') return
+  const r = await $.tool.call({ tool: 'TaskStop', task_id: idDeParar(a) }).catch(() => ({ isError: true }))
+  if (r.deny !== undefined || r.isError) return $.ui.toast(`Não deu para parar ${a.nome}`)
+  const fim = await $.clock.now()
+  await mexer($, x => x.id === a.id && vivo(x), x => ({ estado: 'parado', duracao: fim - x.inicio }))
+}
 
 const ativa = async $ => {
   const leva = await read($, LEVA)
@@ -367,15 +538,22 @@ const emGrill = async $ => {
   const grill = await read($, GRILL)
   return Boolean(naTela(grill) && grill.documento == null)
 }
+const emGrillDaSessao = async $ => (await read($, GRILL_DA_SESSAO)) && (await emGrill($))
 
-export function register(on) {
+export function register(on, options) {
+  // o hooks.json aceita um modulo so: o so-com-pedido entra por aqui, quando a opcao o liga
+  if (options?.so_com_pedido) soComPedido(on)
+  // o canal do grill na opcao do plugin (/config); no tela, o AskUserQuestion do grill vai a pagina
+  const canalTela = options?.grill_canal === 'tela'
   on('session.start', async ($, e, next) => {
     await carregar($, await $.session.root())
+    await sugerirLinha($, false)
     await marcarBase($, e.cwd)
     // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
     // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente
     $.clock.every(1000, async () => {
       if (await emGrill($)) await sincronizarTela($)
+      if (await ativa($)) await reconciliar($)
       if ((await ativa($)) || (await emGrill($))) $.ui.invalidate('ui.render')
     })
     // no repouso, o ronco: so o pane montado redesenha
@@ -444,6 +622,7 @@ export function register(on) {
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'clear' || e.source === 'resume') {
       await carregar($, await $.session.root())
+      await sugerirLinha($, e.source === 'clear')
       const antes = herdado
       herdado = null
       if (antes) {
@@ -452,7 +631,8 @@ export function register(on) {
         await update($, CODIGO, () => antes.codigo)
         await update($, ABERTOS, () => antes.abertos)
         await update($, USO, () => antes.uso)
-        await update($, AGENTES, () => antes.agentes)
+        // a lista oficial e da sessao: o herdado que ela nao conhece mais para (reconciliar)
+        await update($, AGENTES, () => antes.agentes.map(a => ({ ...a, herdado: true })))
       }
     }
     return next(e)
@@ -471,10 +651,13 @@ export function register(on) {
       if (grill.erro) return { deny: grill.erro }
       await $.store.set(chaveDoGrill(await $.session.root()), grill)
       await update($, GRILL, () => grill)
+      if (e.marco === 'grill') await update($, GRILL_DA_SESSAO, () => true)
       return { result: `marco registrado; ${e.marco}` }
     }
     const antes = await read($, LEVA)
-    const leva = aplicar(antes, e, await $.clock.now())
+    // o custo da sessao, que o inicio e o fechamento guardam; erro aqui nunca para a leva
+    const usd = ['inicio', 'fechamento'].includes(e.marco) ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
+    const leva = aplicar(antes, e, await $.clock.now(), usd)
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
     // a leva comeca (ou retoma): o grill sai da aba Painel
@@ -485,9 +668,16 @@ export function register(on) {
       return { result: `marco registrado; retomada na fase ${leva.fase}\n${estado}` }
     }
     const falta = ['inicio', 'fase'].includes(e.marco) && semSkill(leva.fase, await read($, SKILLS))
+    // a janela de 5 h em 90% ao entrar numa fase em que sub-agentes rodam: um aviso por leva
+    const janela = (await read($, MEDIDA))?.janela?.percentUsed ?? 0
+    const comAgentes = ['revisao', 'correcoes'].includes(leva.fase) || (leva.fase === 'implement' && ['sub-agents', 'workflow'].includes(leva.modo))
+    const avisa = e.marco === 'fase' && comAgentes && janela >= 90 && !leva.avisoDaJanela
+    // o objeto e novo, o aplicar acabou de cria-lo
+    if (avisa) leva.avisoDaJanela = true
     const raiz = await $.session.root()
     await $.store.set(chave(raiz), leva)
     await update($, LEVA, () => leva)
+    if (avisa) $.ui.toast(`Janela de 5 h em ${porcento(janela)}: os sub-agentes dividem o limite com esta sessão`)
     if (e.marco === 'fechamento' && !antes.fechada) {
       const modelos = [...new Set((await read($, AGENTES)).map(a => a.modelo).filter(Boolean))]
       const historico = [{ ...leva, modelos }, ...((await $.store.get(chaveDoHistorico(raiz))) ?? [])].slice(0, NO_HISTORICO)
@@ -519,26 +709,41 @@ export function register(on) {
 
   // casa pelo sufixo depois do `:`: mattpocock-skills:to-spec e to-spec contam igual. O grilling
   // que o /faz invoca abre o grill no painel com o pedido dele, sem esperar o marco grill, que o
-  // agente pode esquecer; o marco que chega depois so troca o pedido pelo resumo
+  // agente pode esquecer; o marco que chega depois so troca o pedido pelo resumo. No canal tela, o
+  // grilling de fora da /faz nao abre grill no painel, e o AskUserQuestion dele nao iria a pagina:
+  // o resultado da skill manda conduzi-lo pela grill-tela, o ciclo inteiro
   let noFaz = false
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const nome = String(e.skill ?? '').split(':').pop()
     if (Object.values(SKILL_DA_FASE).includes(nome)) await update($, SKILLS, lista => (lista.includes(nome) ? lista : [...lista, nome]))
     const pedido = String(e.args ?? '').trim()
-    if (nome === 'grilling' && noFaz && pedido && !(await emGrill($))) {
-      noFaz = false
+    const daFaz = nome === 'grilling' && noFaz
+    // o grilling consome a /faz que o invocou, com ou sem o pedido
+    if (nome === 'grilling') noFaz = false
+    if (daFaz && pedido && !(await emGrillDaSessao($))) {
       limpo = false
       const grill = aplicarNoGrill(null, { marco: 'grill', pedido: pedido.length > 60 ? `${pedido.slice(0, 59)}…` : pedido }, await $.clock.now())
       await $.store.set(chaveDoGrill(await $.session.root()), grill)
       await update($, GRILL, () => grill)
+      await update($, GRILL_DA_SESSAO, () => true)
     }
-    return next(e)
+    const r = await next(e)
+    if (!canalTela || nome !== 'grilling' || daFaz || r.result === undefined || (await emGrillDaSessao($))) return r
+    const aviso = 'Este grill nao e o da /faz, e o plugin nao leva o AskUserQuestion dele a pagina: ignore a instrucao de fazer as rodadas pelo AskUserQuestion, invoque a skill grill-tela e conduza o grill inteiro por ela.'
+    return { ...r, context: [...(r.context ?? []), aviso] }
   })
 
   // as rodadas do grill pelo CLI: cada pergunta entra pelo tema e espera a resposta (as da
-  // grill-tela chegam pelo estado da pagina, em sincronizarTela)
+  // grill-tela chegam pelo estado da pagina, em sincronizarTela). No canal tela, a rodada vai
+  // antes a pagina, ate o grill voltar ao CLI
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
     if (!(await emGrill($))) return next(e)
+    if (canalTela && (await read($, GRILL)).canal !== 'cli' && (await read($, GRILL_DA_SESSAO))) {
+      const r = await pelaTela($, e, next.signal)
+      if (r) return r
+      // o Limpar apertado durante a espera ja tirou o grill
+      if (!(await emGrill($))) return next(e)
+    }
     const id = e.tool_use_id
     const novas = e.questions.map(q => ({ id, pergunta: q.question, tema: q.header || q.question }))
     await update($, GRILL, g => ({ ...g, perguntas: [...g.perguntas, ...novas] }))
@@ -598,7 +803,7 @@ export function register(on) {
     if (e.agentId) {
       const fim = await $.clock.now()
       const estado = e.reason === 'answer' ? 'concluido' : e.reason === 'aborted' ? 'parado' : 'falhou'
-      await mexer($, a => a.agentId === e.agentId && a.estado === 'rodando', a => ({
+      await mexer($, a => a.agentId === e.agentId && vivo(a), a => ({
         estado,
         modelo: e.usage?.model ?? a.modelo,
         duracao: fim - a.inicio,
@@ -607,14 +812,39 @@ export function register(on) {
     return next(e)
   })
 
+  // a medida da sessao, a cada turno e a cada ponto da janela: o custo, o contexto e a janela de
+  // 5 h (so na assinatura; numa chave de API nao vem) para a aba Uso; a leva aberta grava o custo dela
+  on('session.measure', async ($, e, next) => {
+    await update($, MEDIDA, () => ({ custo: e.cost?.usd, contexto: e.context.percent, janela: e.rateLimits.find(r => r.kind === 'five_hour') }))
+    let mudou = false
+    const leva = await update($, LEVA, l => {
+      const medida = l && !l.fechada ? comCusto(l, e.cost?.usd) : l
+      mudou = medida !== l && medida.custo !== l.custo
+      return mudou ? medida : l
+    })
+    if (mudou) await $.store.set(chave(await $.session.root()), leva)
+    return next(e)
+  })
+
   // um teammate nao termina: fica ocioso quando entrega, e e ai que o trabalho dele acabou
   on('classic.TeammateIdle', async ($, e, next) => {
     const fim = await $.clock.now()
-    await mexer($, a => a.tipo === 'agente' && a.nome === e.teammate_name && a.estado === 'rodando', a => ({
+    await mexer($, a => a.tipo === 'agente' && a.nome === e.teammate_name && vivo(a), a => ({
       estado: 'concluido',
       duracao: fim - a.inicio,
     }))
     return next(e)
+  })
+
+  // a leva atravessa a compactacao do loop principal: o resumo recebe o estado dela. O precompute
+  // (o resumo adiantado, que a compactacao seguinte reaproveita sem passar as instructions dela ao
+  // resumidor) fica vetado com a leva aberta, para o resumo ser feito com o estado de agora; o
+  // sub-agente passa intacto, e a compactacao de verdade nunca e cancelada aqui
+  on('session.compact', async ($, e, next) => {
+    if (e.agentId || !(await ativa($))) return next(e)
+    if (e.trigger === 'precompute') return { skip: 'leva aberta: o resumo leva o estado dela' }
+    const bloco = levaNaCompactacao(await read($, LEVA))
+    return next({ ...e, instructions: e.instructions ? `${e.instructions}\n\n${bloco}` : bloco })
   })
 
   // fim de um workflow (ou agente) em background: a notificacao da tarefa chega como mensagem
@@ -625,7 +855,7 @@ export function register(on) {
     if (aviso) {
       const [, tarefa, status] = aviso
       const fim = await $.clock.now()
-      await mexer($, a => (a.taskId === tarefa || a.agentId === tarefa) && a.estado === 'rodando', a => ({
+      await mexer($, a => (a.taskId === tarefa || a.agentId === tarefa) && vivo(a), a => ({
         estado: FIM_DE_TAREFA[status] ?? 'concluido',
         duracao: fim - a.inicio,
       }))
@@ -638,6 +868,11 @@ export function register(on) {
   // prompt que o localizador gera (--linha) entra no grill sem depender do marco linha e, sem o
   // marco entendimento, fecha o grill na tela com o documento do prompt: senao o tempo nao para
   on('tool.call', async ($, e, next) => {
+    // a ferramenta chamada dentro de um sub-agente traz o agentId dele: e a ultima atividade dele
+    if (e.agentId && (await ativa($))) {
+      const agora = await $.clock.now()
+      await mexer($, a => a.agentId === e.agentId, () => ({ atividade: agora }))
+    }
     const r = await next(e)
     if (MUDAM.includes(e.tool) && (await read($, ABA)) === 'codigo') await atualizarCodigo($)
     const tela = /grill-tela\.js/.test(e.command ?? '') && URL_DA_TELA.exec(e.command)?.[0]
@@ -831,10 +1066,16 @@ export function register(on) {
         linhaLarga(largura, [[nome || 'modelo desconhecido']], aDireita(tokens(u.input_tokens), tokens(u.output_tokens), tokens(u.cache_read_input_tokens + u.cache_creation_input_tokens)))
       const nomeDo = id => (id === 'sessao' ? 'sessão principal' : (agentes.find(a => a.agentId === id)?.nome ?? `agente ${id.slice(0, 8)}`))
       const loop = ([id, u]) => linhaLarga(largura, [[nomeDo(id)]], [[u.modelo, { color: AZUL }], ['  '], [tokens(total(u)).padStart(7)]])
+      // o custo e os limites medidos: o da leva (o da sessao, sem ela), a janela de 5 h e o contexto
+      const medida = await read($, MEDIDA)
+      const custo = leva?.custo != null ? ['custo da leva', leva.custo] : !leva && medida?.custo != null ? ['custo da sessão', medida.custo] : null
+      const janela = medida?.janela && `5h ${porcento(medida.janela.percentUsed)}${medida.janela.resetsAt ? ` · reseta em ${ateResetar(Date.parse(medida.janela.resetsAt) - agora)}` : ''}`
+      const limites = [janela, medida?.contexto != null && `contexto ${porcento(medida.contexto)}`].filter(Boolean).join(' · ')
       return tela(
         leva?.documento ?? 'Sessão',
         'tokens',
         tokens(uso.reduce((n, [, u]) => n + total(u), 0)),
+        (custo || limites) && cartao(null, custo && linhaLarga(largura, [[custo[0]]], [[dolares(custo[1])]]), limites && h(Text, { color: TEXTO }, limites)),
         ...(uso.length === 0
           ? [cartao(null, apagado('nenhum turno terminou ainda'))]
           : [
@@ -921,21 +1162,36 @@ export function register(on) {
     // a leva que nasceu do grill guardado (o mesmo documento) mostra a fase dele
     const doGrill = ultimoGrill?.documento === leva.documento ? ultimoGrill : null
     const agentes = await read($, AGENTES)
-    const visiveis = [...agentes.filter(a => a.estado === 'rodando'), ...agentes.filter(a => a.estado !== 'rodando').slice(-5)]
+    const visiveis = [...agentes.filter(vivo), ...agentes.filter(a => !vivo(a)).slice(-5)]
     const agente = a => {
       const [estado, cor] = DO_AGENTE[a.estado]
-      return linhaLarga(largura, [[a.nome]], [
+      const linhaDoAgente = linhaLarga(largura, [[a.nome]], [
         ...(a.modelo ? [[a.modelo, { color: AZUL }], ['  ']] : []),
-        [estado.padEnd(9), { color: cor }],
+        [estado.padEnd(10), { color: cor }],
         ['  '],
         [duracao(a.duracao ?? agora - a.inicio).padStart(6), { color: APAGADO }],
       ])
+      if (!vivo(a)) return linhaDoAgente
+      // o vivo ganha embaixo o Parar e, o agente rodando sem ferramenta ha mais de 2 min, ha quanto
+      // tempo; o workflow nao: as ferramentas dele trazem o agentId dos sub-agentes de dentro
+      const quieto = agora - (a.atividade ?? a.inicio)
+      return h(
+        Box,
+        { flexDirection: 'column' },
+        linhaDoAgente,
+        h(
+          Box,
+          { gap: 2, paddingLeft: 2 },
+          h(Button, { key: `agente:parar:${idDeParar(a)}`, label: 'Parar', dimColor: true, onPress: () => parar($, a) }),
+          a.tipo === 'agente' && a.estado === 'rodando' && quieto > SEM_SAIDA && h(Text, { color: AMARELO }, `sem saída há ${Math.floor(quieto / 60000)} min`),
+        ),
+      )
     }
     const historico = await read($, HISTORICO)
     const passada = l => {
       const reparos = l.tickets.reduce((soma, t) => soma + (t.reparos ?? 0), 0)
       const total = l.inicio != null && l.fim != null && `total ${duracao(l.fim - l.inicio)}`
-      return [l.documento, total, l.modo, `${verdes(l)}/${l.tickets.length} verdes`, `reparos ${reparos}`, ...(l.modelos ?? [])].filter(Boolean).join(' · ')
+      return [l.documento, total, l.custo != null && dolares(l.custo), l.modo,`${verdes(l)}/${l.tickets.length} verdes`, `reparos ${reparos}`, ...(l.modelos ?? [])].filter(Boolean).join(' · ')
     }
     return tela(
       comLimpar(`Leva · ${leva.documento}`),
@@ -952,5 +1208,54 @@ export function register(on) {
       // o historico so aparece sob a leva fechada: com ela aberta, o espaco e do andamento
       leva.fechada && historico.length > 0 && cartao('Histórico', ...historico.map(l => apagado(passada(l)))),
     )
+  })
+
+  // a faixa acima do prompt: a leva aberta numa linha, sem abrir o pane; o que outro mod desenha
+  // na faixa segue embaixo
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const leva = await read($, LEVA)
+    if (e.props.hasSurvey || !leva || leva.fechada) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const aberto = (await $.ui.panes()).some(pane => pane.id === PANE)
+    const n = leva.tickets.length
+    const emCurso = leva.tickets.findIndex(t => t.estado === 'em-curso')
+    const i = emCurso >= 0 ? emCurso + 1 : leva.tickets.filter(t => t.estado !== 'pendente').length
+    const partes = [
+      'Leva',
+      ROTULO[leva.fase] ?? leva.fase,
+      ...(n > 0 ? [`ticket ${i}/${n}`, `${verdes(leva)}✓`] : []),
+      duracao((await $.clock.now()) - leva.inicio),
+    ]
+    // o botao no terminal e [ Abrir painel ], mais o espaco antes dele; sem lugar nem para Leva, sai
+    const doBotao = aberto ? 0 : 'Abrir painel'.length + 5
+    const cabe = larg => partes.join(' · ').length <= larg
+    while (partes.length > 1 && !cabe(e.props.bodyColumns - doBotao)) partes.pop()
+    const comBotao = !aberto && cabe(e.props.bodyColumns - doBotao)
+    const abrir = async () => {
+      await $.ui.open({ id: PANE, title: 'Leva' })
+      $.ui.invalidate('ui.render')
+    }
+    return h(
+      Box,
+      { flexDirection: 'column' },
+      h(Box, { gap: 1 }, h(Text, { wrap: 'truncate-end' }, partes.join(' · ')), comBotao && h(Button, { key: 'faixa:abrir', label: 'Abrir painel', dimColor: true, onPress: abrir })),
+      await next(e),
+    )
+  })
+
+  // a linha que anima durante o turno leva a fase e os verdes da leva aberta, antes da reticencia
+  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
+    const leva = await read($, LEVA)
+    if (!leva || leva.fechada) return next(e)
+    const contagem = leva.tickets.length > 0 ? ` ${verdes(leva)}/${leva.tickets.length}` : ''
+    return next({ ...e, props: { ...e.props, suffix: ` · ${ROTULO[leva.fase] ?? leva.fase}${contagem}${e.props.suffix}` } })
+  })
+
+  // o marco na conversa: uma linha apagada no lugar da linha generica da ferramenta
+  on('ui.render', { component: 'ToolUse', props: { tool: MARCO } }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const m = e.props.input ?? {}
+    const resumo = [m.fase, m.ticket != null && `ticket ${m.ticket}`, m.portao].filter(Boolean).join(' · ')
+    return h(Text, { dimColor: true, ...(e.props.isErrored && { color: VERMELHO }) }, `◆ marco ${m.marco}${resumo ? ` · ${resumo}` : ''}`)
   })
 }

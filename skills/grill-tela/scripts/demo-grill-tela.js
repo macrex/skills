@@ -77,13 +77,18 @@ const RODADA_1 = { rodada: 1, questoes: [
   publica('rodada', url, RODADA_2);
   const r2 = espera(url);
 
-  const tabela = [...r1.respostas, ...r2.respostas].map((r) => ({
-    decisao: [...RODADA_1.questoes, ...RODADA_2.questoes].find((q) => q.id === r.id).cabecalho,
-    escolha: r.comentario ? `${r.escolha} (nota: ${r.comentario})` : r.escolha }));
+  // a proveniencia como o SKILL.md manda tirar das respostas; o gatilho (Q1) sai duravel
+  const tabela = [...r1.respostas, ...r2.respostas].map((r) => {
+    const q = [...RODADA_1.questoes, ...RODADA_2.questoes].find((x) => x.id === r.id);
+    const escolhida = q.opcoes.find((o) => o.rotulo === r.escolha);
+    return { decisao: q.cabecalho, escolha: r.escolha, motivo: r.comentario || (escolhida ? escolhida.descricao : ''),
+      alternativas: q.opcoes.filter((o) => o !== escolhida).map((o) => o.rotulo),
+      origem: r.marca === 'aceito' ? 'aceitou' : 'ditou', duravel: r.id === 'Q1' };
+  });
   for (;;) {
     publica('final', url, { tabela });
     const f = espera(url);
-    if (f.tipo === 'sim') return console.log('Sim recebido: o servidor encerra sozinho. Fim da demo.');
+    if (f.tipo === 'sim') return console.log(`Sim recebido, ${f.adrs.length} marcadas como ADR: o servidor encerra sozinho. Fim da demo.`);
     if (f.tipo === 'ajuste') tabela.push({ decisao: 'Ajuste', escolha: f.texto });
   }
 })();

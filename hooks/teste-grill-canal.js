@@ -6,7 +6,8 @@
 //      padrao e o fluxo de sempre do usuario;
 //   2. perguntar: o grilling com e sem o prefixo `mattpocock-skills:` recebe a instrucao de
 //      perguntar o canal (cita o AskUserQuestion e a grill-tela), sem decidir permissao;
-//   3. tela: recebe a instrucao de ir direto para a grill-tela, sem perguntar;
+//   3. tela: recebe a instrucao de fazer as rodadas pelo AskUserQuestion, que o plugin leva a
+//      grill-tela, e a tela final pela skill, sem perguntar;
 //   4. a opcao do plugin ganha de GRILL_CANAL; sem a opcao, GRILL_CANAL decide;
 //   5. sem env, o pluginConfigs do settings.json decide; corrompido vale cli;
 //   6. ligado, outra skill, JSON invalido, stdin vazio e `{}` passam calados, com status 0;
@@ -53,6 +54,8 @@ assert.match(INSTRUCAO.perguntar, /AskUserQuestion/);
 assert.match(INSTRUCAO.perguntar, /grill-tela/);
 assert.match(INSTRUCAO.tela, /grill-tela/);
 assert.match(INSTRUCAO.tela, /sem perguntar/);
+assert.match(INSTRUCAO.tela, /rodada pelo AskUserQuestion/);
+assert.match(INSTRUCAO.tela, /tela final/);
 
 // 1. cli por padrao
 calado(rodar(skill('grilling')), 'sem opcao nenhuma');

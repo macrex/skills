@@ -8,7 +8,7 @@ allowed-tools: Bash(git:*) Bash(node:*) Read Write Edit Glob Grep Skill mcp__vau
 
 # /cpv — fecha a leva
 
-# Versao: 1.5
+# Versao: 1.6
 
 **Só vale digitado pelo usuário**: invocar `/cpv` é o pedido expresso de commit e push desta
 leva, e só dela; nenhum agente, skill ou workflow o dispara.
@@ -74,8 +74,10 @@ node "<pasta desta skill>/scripts/segredos.js" <raiz>
 ### 2. Estagiar
 
 Confira os pendentes daquele repo no Contexto: arquivo que não é da leva (sujeira anterior, outro
-assunto) → mostre ao usuário e pergunte antes de estagiar. Depois, `git -C <raiz> add -A`: leva o
-index já preparado e os arquivos novos, que `commit -a` deixaria de fora.
+assunto) → mostre ao usuário e pergunte antes de estagiar (no Claude Code, pelo `AskUserQuestion`:
+a resposta em texto abre outro turno, que a opção `so_com_pedido` do plugin barra no commit).
+Depois, `git -C <raiz> add -A`: leva o index já preparado e os arquivos novos, que `commit -a`
+deixaria de fora.
 
 ### 3. A mensagem
 

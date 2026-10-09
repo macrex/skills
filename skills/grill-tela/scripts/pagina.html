@@ -85,7 +85,7 @@ strong{font-weight:600}
 .qid{font:12px var(--mono);color:var(--muted)}
 .cab{font-weight:600}
 .st{margin-top:2px;font-size:12px;font-weight:500;color:var(--muted)}
-.st .aceito{color:var(--rec)}.st .outra{color:var(--troca)}.st .com{color:var(--nota)}
+.st .aceito{color:var(--rec)}.st .outra{color:var(--troca)}.st .com,.st .delegado,.st .esclarecer,.st .adiado{color:var(--nota)}
 .tit{font-size:15px;font-weight:500}
 .ctx{margin-top:2px;font-size:13px;color:var(--muted)}
 .pills{display:flex;gap:6px;flex-wrap:wrap}
@@ -107,6 +107,7 @@ strong{font-weight:600}
 .lado button.on{background:var(--surface2)}
 .lado .bola{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex:none;background:var(--line2);color:var(--muted)}
 .lado .bola.aceito{background:var(--rec);color:var(--rec-ink)}.lado .bola.outra{background:var(--troca);color:var(--surface)}
+.lado .bola.delegado,.lado .bola.esclarecer,.lado .bola.adiado{background:var(--nota);color:var(--surface)}
 .lado small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .cartao{flex:999 1 560px;min-width:0;padding:26px 28px}
 .cartao h2{margin:10px 0 4px;font-size:22px;font-weight:600;letter-spacing:-.01em}
@@ -132,7 +133,9 @@ strong{font-weight:600}
 .ponto{width:36px;height:36px;border-radius:8px;font:600 12px var(--mono);border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0}
 .ponto.aceito{background:var(--rec-soft);color:var(--rec);border-color:var(--rec-soft)}
 .ponto.outra{background:var(--troca-soft);color:var(--troca);border-color:var(--troca)}
+.ponto.delegado,.ponto.esclarecer,.ponto.adiado{background:var(--nota-soft);color:var(--nota);border-color:var(--nota-line)}
 .ponto.on{background:var(--sel);color:var(--sel-ink);border-color:var(--sel)}
+.livre{display:flex;gap:8px;align-items:center;flex:1 1 320px}.livre input{margin:0}
 .barra .fim{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 
 /* histórico */
@@ -152,6 +155,9 @@ th{font-weight:500;background:var(--surface2);border-top:1px solid var(--line)}
 details.recebido{margin-top:18px;text-align:left}details.recebido summary{cursor:pointer;color:var(--muted);font-size:13px}
 pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;padding:12px;font-size:12px;overflow:auto;max-height:260px;text-align:left}
 .final{max-width:1040px;margin:0 auto}
+.adr{display:inline-flex;align-items:center;gap:8px;min-height:40px;font-size:13px;white-space:nowrap;cursor:pointer}
+.adr input{width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:var(--rec)}
+.alts{font-size:13px;color:var(--muted)}
 
 .cfg{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 8px 28px rgba(0,0,0,.12);padding:16px;width:260px;margin:0;inset:auto;position:fixed;top:64px;right:max(16px,calc((100vw - 1320px)/2 + 32px))}
 .cfg h4{margin:0 0 12px}
@@ -177,7 +183,7 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
 const TOKEN = new URLSearchParams(location.search).get('t');
 // E: o estado do servidor; S: o que só a página sabe (marcas ainda não enviadas, campos abertos)
 let E = null;
-const S = { resp:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false };
+const S = { resp:{}, adr:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false, abreTexto:false, texto:'', enviada:false };
 // modo e tema ficam no JSON de preferências do servidor, porque a porta muda a cada grill
 const VAR = {A:'Panorama', B:'Uma por vez'};
 let V = 'A';
@@ -208,7 +214,8 @@ function tema(){ const t = escuro()?'light':'dark'; document.documentElement.dat
 const svg = (d, t=18) => `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICONE_SOM = svg('<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>', 17);
 const ICONE_NOTA = svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 17);
-const ICONE_LUA = svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>');
+const ICONE_SINO = svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', 17);
+const ICONE_LUA =svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>');
 const ICONE_SOL = svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
 const ESTRELA = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>';
 
@@ -250,43 +257,113 @@ function painelVoz(){
    ${TEM_VOZ?'':'<p class="sub" style="margin:10px 0 0">Este navegador não tem leitura em voz.</p>'}</div>`;
 }
 
+// ---------- aviso de rodada nova com a aba em segundo plano: cada nível inclui os anteriores ----------
+const NIVEIS = {off:'Nenhum', titulo:'Título da aba', som:'Título e bipe', sistema:'Título, bipe e notificação'};
+const AV = { nivel:'som', titulo:'', audio:null };
+const nivelAte = k => Object.keys(NIVEIS).indexOf(AV.nivel) >= Object.keys(NIVEIS).indexOf(k);
+const TEM_NOTIF = 'Notification' in window;
+// o navegador só libera a notificação e o áudio com um gesto do usuário: o primeiro clique na página
+function pedeNotif(){ if(TEM_NOTIF && nivelAte('sistema') && Notification.permission==='default') Notification.requestPermission(); }
+addEventListener('click', () => { try{ AV.audio ||= new AudioContext(); }catch(e){} pedeNotif(); }, {once:true});
+function ajusteAviso(v){ AV.nivel=v; api('preferencias','POST',{aviso:v}); pedeNotif(); }
+function bipe(){
+  try{
+    const c = AV.audio ||= new AudioContext(); c.resume();
+    const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    o.frequency.value = 880; g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t+0.25);
+  }catch(e){}
+}
+function avisar(){
+  if(!nivelAte('titulo')) return;
+  AV.titulo = `(1) ${E.fase==='final' ? 'Fechamento' : `Rodada ${R().rodada}`} · ${E.projeto}`;
+  document.title = tituloAba();
+  if(nivelAte('som')) bipe();
+  if(nivelAte('sistema') && TEM_NOTIF && Notification.permission==='granted'){
+    const n = new Notification(AV.titulo, { body:'O grill espera a sua resposta.', tag:`grill-${TOKEN}` });
+    n.onclick = () => { focus(); n.close(); };
+  }
+}
+const tituloAba = () => AV.titulo || `${E.projeto} · Grill`;
+document.addEventListener('visibilitychange',() => { if(!document.hidden && AV.titulo && E){ AV.titulo=''; document.title=tituloAba(); } });
+function painelAviso(){
+  return `<div id="cfg-aviso" class="cfg" popover><h4>Aviso de rodada nova</h4>
+   <label for="aviso">Com a aba em segundo plano</label><select id="aviso" onchange="ajusteAviso(this.value)">
+   ${Object.entries(NIVEIS).map(([k,n])=>`<option value="${k}" ${k===AV.nivel?'selected':''}>${n}</option>`).join('')}</select>
+   ${TEM_NOTIF && Notification.permission==='denied' ? '<p class="sub" style="margin:0">O navegador bloqueou as notificações desta página.</p>' : ''}</div>`;
+}
+
 // ---------- rodada ----------
 const R = () => E.rodada;
 const Q = () => R().questoes;
-// toda questão nasce com a recomendada marcada, para a rodada poder ir direto no Enviar
-const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= { opcao:recIdx(q), propria:'', com:'', abreProp:false, abreCom:false };
+// toda questão nasce com a recomendada marcada, para a rodada poder ir direto no Enviar, ou com a marca do rascunho
+const resp = q => S.resp[`${R().rodada}:${q.id}`] ||= { opcao:recIdx(q), propria:'', com:'', abreProp:false, abreCom:false, nao:null, ...doRascunho(q) };
+// a página recarregada no meio da rodada volta com as marcas que o servidor guardou
+function doRascunho(q){
+  const d = E.rascunho && E.rascunho.rodada===R().rodada && E.rascunho.resp[q.id];
+  if(!d || typeof d!=='object') return {};
+  const t = v => typeof v==='string' ? v : '', propria = t(d.propria);
+  const nao = typeof d.nao==='string' && NAO[d.nao] ? d.nao : null;
+  const opcao = nao ? null : Number.isInteger(d.opcao) && q.opcoes[d.opcao] ? d.opcao : (d.opcao===null && propria.trim() ? null : recIdx(q));
+  return { opcao, propria: opcao===null && !nao ? propria : '', com:t(d.com), nao };
+}
+// grava as marcas no servidor 500 ms depois da última mudança; ao fechar a aba, grava na hora
+let tRascunho = null;
+function gravaRascunho(){
+  tRascunho = null;
+  if(!E || E.fase!=='rodada') return;
+  const r = Object.fromEntries(Q().map(q=>{ const a=resp(q); return [q.id, { opcao:a.opcao, propria:a.propria, com:a.com, nao:a.nao }]; }));
+  fetch(`/api/rascunho?t=${TOKEN}`, { method:'PUT', keepalive:true, headers:{'content-type':'application/json'},
+    body: JSON.stringify({ rodada:R().rodada, resp:r }) }).catch(()=>{});
+}
+function salvaRascunho(){ clearTimeout(tRascunho); tRascunho = setTimeout(gravaRascunho, 500); }
+addEventListener('pagehide', ()=>{ if(tRascunho){ clearTimeout(tRascunho); gravaRascunho(); } });
 const recIdx = q => q.opcoes.findIndex(o=>o.recomendada);
-const marca = q => { const a=resp(q); return a.opcao!==null ? (a.opcao===recIdx(q)?'aceito':'outra') : (a.propria.trim()?'outra':null); };
+const marca = q => { const a=resp(q); return a.nao || (a.opcao!==null ? (a.opcao===recIdx(q)?'aceito':'outra') : (a.propria.trim()?'outra':null)); };
 const nProntas = () => Q().filter(marca).length;
 const qi = i => Q()[i];
+// as nao-respostas: a questao vai sem escolha, so com a marca
+const NAO = { delegado:'Decida você', esclarecer:'Não entendi', adiado:'Adiar' };
+const ROTULO = { aceito:'aceita', outra:'trocada', delegado:'decida você', esclarecer:'não entendi', adiado:'adiada' };
+const GLIFO = { aceito:'✓', outra:'⇄', delegado:'→', esclarecer:'?', adiado:'…' };
 
-function escolher(i,o){ const a=resp(qi(i)); a.opcao=o; a.propria=''; a.abreProp=false; render(); }
-function propria(i,txt){ const a=resp(qi(i)); a.propria=txt; if(txt.trim()) a.opcao=null; else if(a.opcao===null) a.opcao=recIdx(qi(i)); atualiza(i); }
-function comentar(i,txt){ resp(qi(i)).com=txt; atualiza(i); }
+function escolher(i,o){ const a=resp(qi(i)); a.opcao=o; a.propria=''; a.abreProp=false; a.nao=null; salvaRascunho(); render(); }
+// clicar de novo na mesma marca a desfaz e volta à recomendada
+function naoResponder(i,k){ const a=resp(qi(i)); a.nao = a.nao===k ? null : k; a.opcao = a.nao ? null : recIdx(qi(i)); a.propria=''; a.abreProp=false; salvaRascunho(); render(); }
+function propria(i,txt){ const a=resp(qi(i)); a.propria=txt; if(txt.trim()){ a.opcao=null; a.nao=null; } else if(a.opcao===null && !a.nao) a.opcao=recIdx(qi(i)); salvaRascunho(); atualiza(i); }
+function comentar(i,txt){ resp(qi(i)).com=txt; salvaRascunho(); atualiza(i); }
 // abre o campo e já põe o cursor nele
 function abrir(i, campo){ resp(qi(i))[campo]=true; render(); const el=document.querySelector(`[data-campo="${campo}-${i}"]`); if(el) el.focus(); }
 
 async function enviar(){
   if(S.enviando || nProntas()<Q().length) return;
-  S.enviando=true; parar();
-  const respostas = Q().map(q=>{ const a=resp(q); return { id:q.id, opcao:a.opcao, propria:a.propria, comentario:a.com }; });
+  S.enviando=true; parar(); clearTimeout(tRascunho); tRascunho=null; // o envio limpa o rascunho no servidor
+  const respostas = Q().map(q=>{ const a=resp(q); return { id:q.id, opcao:a.opcao, propria:a.propria, marca:a.nao, comentario:a.com }; });
   const r = await api('respostas','POST',{ tipo:'rodada', rodada:R().rodada, respostas });
   S.enviando=false; S.erro = r.ok ? '' : (r.json && r.json.erro || 'o servidor recusou o envio');
   await consultar(true);
 }
+// a mensagem livre vai ao agente sem fechar a rodada
+async function escreverAParte(){
+  const r = await api('respostas','POST',{ tipo:'texto', texto:S.texto });
+  if(r.ok){ S.abreTexto=false; S.texto=''; S.erro=''; S.enviada=true; } else S.erro = r.json && r.json.erro || 'o servidor recusou a mensagem';
+  render();
+}
 
 function statusHTML(q){
   const m=marca(q), com=resp(q).com.trim();
-  return (m==='aceito' ? '<span class="aceito">aceita</span>' : m==='outra' ? '<span class="outra">trocada</span>' : 'sem resposta')
+  return (m ? `<span class="${m}">${ROTULO[m]}</span>` : 'sem resposta')
     + (com ? ' · <span class="com">com nota</span>' : '');
 }
 function resumoTexto(){
   const ms=Q().map(marca), n=k=>ms.filter(m=>m===k).length, c=Q().filter(q=>resp(q).com.trim()).length;
   const pl=(k,um,v)=>`${k} ${k===1?um:v}`;
-  return [pl(n('aceito'),'aceita','aceitas'), pl(n('outra'),'trocada','trocadas'), `${c} com nota`].join(' · ');
+  const naos = [[n('delegado'),'para o agente'], [n('esclarecer'),'a esclarecer'], [n('adiado'),n('adiado')===1?'adiada':'adiadas']].filter(([k])=>k).map(([k,t])=>`${k} ${t}`);
+  return [pl(n('aceito'),'aceita','aceitas'), pl(n('outra'),'trocada','trocadas'), ...naos, `${c} com nota`].join(' · ');
 }
 function descHTML(q){
   const a=resp(q);
+  if(a.nao) return { delegado:'O agente decide, e informa a escolha.', esclarecer:'O agente reescreve a questão em termos mais simples na próxima rodada.', adiado:'A questão fica para depois.' }[a.nao];
   if(a.opcao!==null) return md(q.opcoes[a.opcao].descricao||'');
   return a.propria.trim() ? 'A sua resposta vai como está.' : 'Escreva a sua resposta, ou escolha uma opção.';
 }
@@ -294,8 +371,9 @@ function pills(q,i){
   const a=resp(q);
   return q.opcoes.map((o,j)=>`<button class="pill ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}"
       title="${esc(puro(o.descricao))}" onclick="escolher(${i},${j})">${o.recomendada?ESTRELA:''}${md(o.rotulo)}</button>`).join('')
-    + `<button class="pill outra-p ${a.opcao===null?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null}" onclick="abrir(${i},'abreProp')">Outra…</button>`;
+    + `<button class="pill outra-p ${a.opcao===null&&!a.nao?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null&&!a.nao}" onclick="abrir(${i},'abreProp')">Outra…</button>` + naoPills(q,i);
 }
+const naoPills = (q,i) => { const a=resp(q); return Object.entries(NAO).map(([k,t])=>`<button class="pill outra-p ${a.nao===k?'sel':''}" data-q="${i}" data-o="${k}" aria-pressed="${a.nao===k}" onclick="naoResponder(${i},'${k}')">${t}</button>`).join(''); };
 const campoProp = (q,i) => { const a=resp(q); return a.abreProp||a.propria
   ? `<input class="campo" data-campo="abreProp-${i}" aria-label="Sua resposta para ${esc(q.id)}" placeholder="Sua resposta…" value="${esc(a.propria)}" oninput="propria(${i},this.value)">` : ''; };
 const campoCom = (q,i) => { const a=resp(q); return a.abreCom||a.com
@@ -304,12 +382,16 @@ const campoCom = (q,i) => { const a=resp(q); return a.abreCom||a.com
 // a barra fixa no rodapé: os dois modos têm o progresso, a navegação e o Enviar no mesmo lugar, sempre à vista
 const pontos = () => Q().map((q,k)=>{ const m=marca(q);
   return `<button class="ponto ${m||''} ${V==='B'&&k===S.foco?'on':''}" title="${esc(q.cabecalho)}" onclick="irPara(${k})"
-    aria-label="${esc(q.id)}, ${esc(q.cabecalho)}: ${m==='aceito'?'aceita':m==='outra'?'trocada':'sem resposta'}">${k+1}</button>`; }).join('');
+    aria-label="${esc(q.id)}, ${esc(q.cabecalho)}: ${m?ROTULO[m]:'sem resposta'}">${k+1}</button>`; }).join('');
 function irPara(k){ if(V==='B'){ S.foco=k; render(); } else document.querySelector(`[data-lin="${k}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}); }
 function barra(){
   const t=Q().length, n=nProntas(), i=S.foco, umaPorVez=V==='B', ultima=!umaPorVez||i===t-1;
   return `<div class="barra"><div class="barra-in"><div class="pontos" id="pontos" role="group" aria-label="Questões da rodada">${pontos()}</div>
     <span class="resumo" id="resumo">${resumoTexto()}</span>${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}
+    ${S.abreTexto ? `<span class="livre"><input class="campo" id="texto-livre" aria-label="Mensagem para o agente" placeholder="Mensagem para o agente…" value="${esc(S.texto)}"
+       oninput="S.texto=this.value" onkeydown="if(event.key==='Enter'&&!event.ctrlKey&&!event.metaKey){event.preventDefault();escreverAParte()}">
+       <button class="btn sec" onclick="escreverAParte()">Enviar mensagem</button><button class="sublink" onclick="S.abreTexto=false;render()">Cancelar</button></span>`
+     : `<button class="sublink" onclick="S.abreTexto=true;S.enviada=false;render();document.getElementById('texto-livre').focus()">Escrever à parte</button>${S.enviada?'<span class="resumo">mensagem enviada</span>':''}`}
     <div class="fim">${umaPorVez?`<button class="btn sec" ${i?'':'disabled'} onclick="S.foco--;render()">← Anterior</button>
      ${i<t-1?`<button class="btn pri" onclick="S.foco++;render()">Próxima →<span class="kbd">Enter</span></button>`:''}`:''}
      <button class="btn ${ultima?'ok':'ok-l'}" id="enviar" ${n<t?'disabled':''} onclick="enviar()">Enviar rodada ${R().rodada}<span class="kbd">Ctrl Enter</span></button></div></div></div>`;
@@ -319,7 +401,7 @@ function historico(){
   const linhas = E.historico.flatMap(h=>h.respostas.map(r=>({...r, rodada:h.rodada.rodada})));
   return `<details class="caixa hist"><summary>Rodadas anteriores (${E.historico.length})</summary>
     <table><tr><th>Rodada</th><th>Questão</th><th>Resposta</th><th>Marca</th></tr>
-    ${linhas.map(r=>`<tr><td class="mono">${r.rodada}</td><td class="mono">${esc(r.id)}</td><td>${md(r.escolha)}${r.comentario?`<div class="muted" style="font-size:12.5px;font-style:italic">“${esc(r.comentario)}”</div>`:''}</td><td class="st"><span class="${r.marca}">${r.marca==='aceito'?'aceita':'trocada'}</span></td></tr>`).join('')}
+    ${linhas.map(r=>`<tr><td class="mono">${r.rodada}</td><td class="mono">${esc(r.id)}</td><td>${md(r.escolha)}${r.comentario?`<div class="muted" style="font-size:12.5px;font-style:italic">“${esc(r.comentario)}”</div>`:''}</td><td class="st"><span class="${r.marca}">${ROTULO[r.marca]}</span></td></tr>`).join('')}
     </table></details>`;
 }
 function modoPanorama(){
@@ -333,10 +415,10 @@ function modoPanorama(){
    <p class="nota-rodape">Clique numa opção para trocar a resposta; passe o mouse para ver a descrição. ★ marca a recomendada do agente. Escrever no terminal também assume o grill por lá.</p>` + historico();
 }
 // a lista lateral de Uma por vez muda com a marca; atualiza() a redesenha sem render()
-const escolhaTexto = q => { const a=resp(q); return a.opcao!==null ? puro(q.opcoes[a.opcao].rotulo) : (a.propria.trim()||'—'); };
+const escolhaTexto = q => { const a=resp(q); return a.nao ? ROTULO[a.nao] : a.opcao!==null ? puro(q.opcoes[a.opcao].rotulo) : (a.propria.trim()||'—'); };
 function ladoHTML(q,i){
   const m=marca(q);
-  return `<span class="bola ${m||''}">${m?(m==='aceito'?'✓':'⇄'):i+1}</span>
+  return `<span class="bola ${m||''}">${m?GLIFO[m]:i+1}</span>
     <span style="min-width:0"><b style="font-weight:600">${esc(q.cabecalho)}</b><small>${esc(escolhaTexto(q))}${resp(q).com.trim()?' · nota':''}</small></span>`;
 }
 function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Enter
@@ -349,7 +431,7 @@ function modoFoco(){ // uma questão por vez, lista lateral, teclas 1–9 e Ente
     <h2>${md(q.titulo)}</h2>${q.contexto?`<div class="ctx" style="font-size:14px">${md(q.contexto)}</div>`:''}
     <div class="opts">${q.opcoes.map((o,j)=>`<button class="opt ${o.recomendada?'rec':''} ${a.opcao===j?'sel':''}" data-q="${i}" data-o="${j}" aria-pressed="${a.opcao===j}" onclick="escolher(${i},${j})">
       <span class="kbd">${j+1}</span><span><span class="lab">${md(o.rotulo)}</span>${o.recomendada?`<span class="estrela">${ESTRELA} recomendada</span>`:''}${o.descricao?`<span class="d">${md(o.descricao)}</span>`:''}</span></button>`).join('')}</div>
-    <div class="abre"><button class="pill outra-p ${a.opcao===null?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null}" onclick="abrir(${i},'abreProp')">+ Outra resposta</button>
+    <div class="abre"><button class="pill outra-p ${a.opcao===null&&!a.nao?'sel':''}" data-q="${i}" data-o="outra" aria-pressed="${a.opcao===null&&!a.nao}" onclick="abrir(${i},'abreProp')">+ Outra resposta</button>${naoPills(q,i)}
      <button class="pill nota-p" onclick="abrir(${i},'abreCom')">${ICONE_NOTA}Nota para o agente</button></div>
     ${campoProp(q,i)}${campoCom(q,i)}
    </section></div>` + historico();
@@ -370,8 +452,9 @@ function topo(){
    <div class="acoes">
    ${E.fase==='rodada'?`<div class="seg" role="group" aria-label="Modo">${Object.entries(VAR).map(([k,n])=>`<button class="${k===V?'on':''}" aria-pressed="${k===V}" onclick="modo('${k}')">${n}</button>`).join('')}</div>`:''}
    <button class="ico" aria-label="Leitura em voz alta" title="Leitura em voz alta" popovertarget="cfg-leitura">${ICONE_SOM}</button>
+   <button class="ico" aria-label="Aviso de rodada nova" title="Aviso de rodada nova" popovertarget="cfg-aviso">${ICONE_SINO}</button>
    <button class="ico" aria-label="Alternar tema" title="Alternar tema" onclick="tema()">${escuro()?ICONE_SOL:ICONE_LUA}</button>
-   ${ativo?`<button class="sublink" onclick="paraCli()">Seguir no terminal</button>`:''}</div></div></header>` + painelVoz();
+   ${ativo?`<button class="sublink" onclick="paraCli()">Seguir no terminal</button>`:''}</div></div></header>` + painelVoz() + painelAviso();
 }
 const telaRodada = () => (V==='B' ? modoFoco : modoPanorama)();
 function telaAguarde(){
@@ -385,8 +468,12 @@ function telaFinal(){
   const n=E.final.tabela.length, r=E.historico.length;
   return `<div class="final"><h1 class="h1">O entendimento, fechado</h1>
    <p class="sub" style="margin-bottom:20px">${n} ${n===1?'decisão':'decisões'}${r?` em ${r} ${r===1?'rodada':'rodadas'}`:''}. Confirme, ou diga o que mudar e o agente reabre uma rodada só com isso.</p>
-   <div class="caixa" style="overflow-x:auto"><table><tr><th style="width:56px">#</th><th style="width:200px">Decisão</th><th>Escolha</th></tr>
-   ${E.final.tabela.map((l,i)=>`<tr><td class="mono muted">${i+1}</td><td style="font-weight:600">${md(l.decisao)}</td><td>${md(l.escolha)}</td></tr>`).join('')}</table></div>
+   <div class="caixa" style="overflow-x:auto"><table><tr><th style="width:56px">#</th><th style="width:200px">Decisão</th><th>Escolha</th><th>Motivo</th><th>Alternativas</th><th>ADR</th></tr>
+   ${E.final.tabela.map((l,i)=>`<tr><td class="mono muted">${i+1}</td><td style="font-weight:600">${md(l.decisao)}</td>
+     <td>${md(l.escolha)}${ORIGEM[l.origem]?`<div class="st">${ORIGEM[l.origem]}</div>`:''}</td>
+     <td>${l.motivo?md(l.motivo):'<span class="muted">—</span>'}</td>
+     <td class="alts">${(l.alternativas||[]).map(md).join('<br>')||'—'}</td>
+     <td><label class="adr"><input type="checkbox" ${adrMarcada(i)?'checked':''} onchange="S.adr[chaveAdr(${i})]=this.checked">Registrar como ADR</label></td></tr>`).join('')}</table></div>
    <div style="margin-top:20px">${S.abreAjuste
      ? `<label class="rotulo" for="ajuste" style="margin-top:0">O que precisa mudar?</label>
         <textarea id="ajuste" rows="3" style="margin-top:6px" oninput="S.ajuste=this.value">${esc(S.ajuste)}</textarea>
@@ -394,11 +481,15 @@ function telaFinal(){
         <button class="btn sec" onclick="S.abreAjuste=false;render()">Cancelar</button>${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}</div>`
      : `<div class="envio"><button class="btn ok" onclick="confirmar()">Confirmo o entendimento</button>
         <button class="btn sec" onclick="S.abreAjuste=true;render();document.getElementById('ajuste').focus()">Quero ajustar</button>
-        <span class="muted" style="font-size:12.5px">O sim volta ao terminal e a página fecha sozinha.</span></div>`}</div></div>`;
+        <span class="muted" style="font-size:12.5px">O sim volta ao terminal com as decisões marcadas como ADR, e a página fecha sozinha.</span></div>`}</div></div>`;
 }
+// de onde veio a escolha, e a caixa de ADR, que nasce marcada nas decisões duráveis; a chave leva a versão, para uma final republicada recomeçar
+const ORIGEM = { aceitou:'<span class="aceito">recomendada aceita</span>', ditou:'<span class="outra">ditada por você</span>', agente:'delegada ao agente' };
+const chaveAdr = i => `${E.versao}:${i}`;
+const adrMarcada = i => S.adr[chaveAdr(i)] ?? E.final.tabela[i].duravel === true;
 const telaFim = (glifo,t,s) => `<div class="centro"><div><div class="glifo">${glifo}</div><h1 class="h1">${t}</h1><p class="sub">${s}</p></div></div>`;
 
-async function confirmar(){ await api('respostas','POST',{tipo:'sim'}); await consultar(true); }
+async function confirmar(){ await api('respostas','POST',{tipo:'sim', adrs:E.final.tabela.map((l,i)=>i).filter(adrMarcada)}); await consultar(true); }
 async function ajustar(){
   const r = await api('respostas','POST',{tipo:'ajuste', texto:S.ajuste});
   if(r.ok){ S.abreAjuste=false; S.ajuste=''; S.erro=''; } else S.erro = r.json && r.json.erro || 'o servidor recusou o ajuste';
@@ -415,7 +506,7 @@ function render(){
   const naRodada = E.fase==='rodada' && !S.caiu;
   document.getElementById('app').innerHTML = topo() + `<main class="wrap ${naRodada?'com-barra':''}">${corpo}</main>` + (naRodada ? barra() : '');
   // a aba diz de que projeto é o grill: o nome no título e a cor do projeto no ícone
-  document.title = `${E.projeto} · Grill`;
+  document.title = tituloAba();
   document.querySelector('link[rel=icon]').href = 'data:image/svg+xml,' + encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="hsl(${matiz(E.projeto)} 55% 45%)"/></svg>`);
 }
@@ -433,7 +524,7 @@ function atualiza(i){ // resumo, marca, linha, opções e lateral, sem render(),
   document.querySelectorAll(`[data-lin="${i}"]`).forEach(el=>el.classList.toggle('troca', m==='outra'));
   document.querySelectorAll(`[data-com="${i}"]`).forEach(el=>el.classList.toggle('tem', !!a.com.trim()));
   document.querySelectorAll(`[data-q="${i}"]`).forEach(el=>{
-    const on = el.dataset.o==='outra' ? a.opcao===null : a.opcao===+el.dataset.o;
+    const on = el.dataset.o in NAO ? a.nao===el.dataset.o : el.dataset.o==='outra' ? a.opcao===null && !a.nao : a.opcao===+el.dataset.o;
     el.classList.toggle('sel', on); el.setAttribute('aria-pressed', on);
   });
 }
@@ -443,9 +534,10 @@ async function consultar(forcar){
   if(S.caiu || (E && ['concluido','cli'].includes(E.fase))) return;
   try{
     const r = await api('estado');
-    const mudou = !E || r.json.versao !== E.versao;
+    const mudou = !E || r.json.versao !== E.versao, primeira = !E;
     E = r.json;
     if(mudou){ S.foco=0; parar(); }
+    if(mudou && !primeira && document.hidden && ['rodada','final'].includes(E.fase)) avisar();
     if(mudou || forcar){ render(); if(mudou) scrollTo(0,0); }
   }catch(e){ if(E){ S.caiu=true; render(); } }
 }
@@ -463,6 +555,7 @@ api('preferencias').then(r=>{
   if(typeof p.voz==='string') LEIT.voz=p.voz;
   if([0.5,0.75,1,1.25,1.5,1.75,2].includes(p.velocidade)) LEIT.vel=p.velocidade;
   if(typeof p.volume==='number' && p.volume>=0 && p.volume<=1) LEIT.vol=p.volume;
+  if(NIVEIS[p.aviso]) AV.nivel=p.aviso;
 }).catch(()=>{}).finally(()=>{ render(); consultar(); });
 setInterval(consultar, 1000);
 </script>

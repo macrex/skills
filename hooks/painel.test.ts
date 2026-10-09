@@ -23,9 +23,14 @@ function mundo($: Engine, on: On, store: Record<string, unknown> = {}, cwd = 'D:
   on('command.register', () => ({ value: undefined }))
   on('tool.register', () => ({ value: undefined }))
   on('ui.toast', ($, e) => { toasts.push(e.text); return { value: undefined } })
+  // o $.session.usage() da sessao: sem custo nem janela ate o teste dar um
+  let uso: Record<string, unknown> = { startedAt: 0, context: { window: 200000 }, rateLimits: [] }
+  on('session.usage', () => ({ value: uso }) as never)
+  on('session.measure', ($, e) => ({ changed: e.changed }))
   return {
     toasts,
     relogio,
+    usar: (u: Record<string, unknown>) => { uso = { ...uso, ...u } },
     marco: (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, ...input } as never),
     sessao: () => $.session.start({ cwd, surface: 'terminal', isInteractive: true }),
     clear: () => $.session.end({ reason: 'clear', sessionId: 's', resume: { id: 's' } } as never),
@@ -365,6 +370,203 @@ describe('painel da leva', () => {
     expect(await quadro(ui)).toMatch(/Quando a tela abre\?\n✓ Só no fim \(e no meio também\)\nResto\nAlgo mais\?\n✓ Não/)
   })
 
+  test('a resposta da grill-tela sem escolha (delegado, esclarecer, adiado) aparece pela marca', async ($, on) => {
+    const { marco, sessao } = mundo($, on)
+    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const RODADA = { rodada: 1, questoes: ['Q1', 'Q2', 'Q3'].map(id => ({ id, cabecalho: `Tema ${id}`, titulo: `Pergunta ${id}?`, opcoes: [] })) }
+    const estado = {
+      fase: 'aguarde',
+      rodada: RODADA,
+      historico: [{
+        rodada: RODADA,
+        respostas: [
+          { id: 'Q1', marca: 'delegado', escolha: null, comentario: null },
+          { id: 'Q2', marca: 'esclarecer', escolha: null, comentario: 'o que e isso?' },
+          { id: 'Q3', marca: 'adiado', escolha: null, comentario: null },
+        ],
+      }],
+    }
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: 'Rodada 1 na tela, 3 questões.', stderr: '' } }) as never)
+    await sessao()
+    await marco({ marco: 'grill', pedido: 'grill na tela' })
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:grill' })
+    await $.tool.call({ tool: 'Bash', command: `node "C:/s/grill-tela/scripts/grill-tela.js" rodada ${URL} r1.json` } as never)
+    expect(await ui.find({ type: 'Text', text: /^✓ delegado$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^✓ esclarecer \(o que e isso\?\)$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^✓ adiado$/ })).toBeDefined()
+  })
+
+  test('no canal tela, o AskUserQuestion do grill vai a pagina da grill-tela e volta com a resposta dela; o Voltar ao CLI devolve o dialogo nativo', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { marco } = mundo($, on)
+    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const comandos: { args: string[]; stdin?: string }[] = []
+    // as voltas do aguardar, em ordem: o prazo que venceu, a mensagem a parte e a resposta da rodada 1; na rodada 2, o Voltar ao CLI
+    const voltas = [
+      '{"tipo":"pendente"}',
+      '{"tipo":"texto","texto":"e o prazo?"}',
+      'Rodada 1 respondida na tela:\n\n| Questão | Marca | Escolha | Comentário |\n\n{"tipo":"rodada","rodada":1,"respostas":[' +
+        '{"id":"Q1","marca":"aceito","escolha":"Artifact","comentario":"só no fim"},{"id":"Q2","marca":"delegado","escolha":null,"comentario":null}]}',
+      '{"tipo":"cli"}',
+    ]
+    let estado: Record<string, any> = { fase: 'inicio', historico: [] }
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
+    on('process.run', ($, e) => {
+      const [node, script, sub, ...args] = e.argv
+      expect(node).toBe('node')
+      expect(script).toMatch(/skills[\\/]grill-tela[\\/]scripts[\\/]grill-tela\.js$/)
+      comandos.push({ args: [sub, ...args], stdin: e.init?.stdin })
+      let stdout = 'ok\n'
+      if (sub === 'iniciar') stdout = `${URL}\n`
+      if (sub === 'rodada') estado = { ...estado, fase: 'rodada', rodada: JSON.parse(e.init?.stdin ?? '') }
+      if (sub === 'aguardar') {
+        stdout = `${voltas.shift()}\n`
+        const msg = JSON.parse(stdout.trim().split('\n').pop()!)
+        if (msg.tipo === 'rodada') estado = { fase: 'aguarde', rodada: estado.rodada, historico: [...estado.historico, { rodada: estado.rodada, respostas: msg.respostas }] }
+        if (msg.tipo === 'cli') estado = { ...estado, fase: 'cli' }
+      }
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const nativas: string[] = []
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+      nativas.push(...e.questions.map(q => q.question))
+      return { result: { questions: e.questions, answers: { 'Algo mais?': 'Não' } } } as never
+    })
+    const perguntar = (questions: unknown[]) => $.tool.call({ tool: 'AskUserQuestion', questions } as never)
+    await marco({ marco: 'grill', pedido: 'grill pelo canal tela' })
+
+    // a primeira rodada sobe a pagina com o nome da raiz, publica a rodada e espera ate a resposta
+    const r1 = await perguntar([
+      { header: 'Transporte', question: 'Como o agente e a tela conversam?', multiSelect: false,
+        options: [{ label: 'Servidor local', description: 'Node, só stdlib' }, { label: 'Artifact (Recommended)', description: 'Página no claude.ai' }] },
+      { header: 'Momento', question: 'Quando a tela abre?', multiSelect: false, options: [{ label: 'No início', description: 'logo' }, { label: 'No fim' }] },
+    ])
+    expect(nativas).toEqual([])
+    expect(comandos.map(c => c.args)).toEqual([
+      ['iniciar', '--projeto', 'a'],
+      ['rodada', URL, '-'],
+      ['aguardar', URL, '--ate', '120'],
+      ['aguardar', URL, '--ate', '120'],
+      ['aguardar', URL, '--ate', '120'],
+    ])
+    // a recomendada e a do (Recommended), sem a marca no rotulo; sem nenhuma marcada, a primeira
+    expect(JSON.parse(comandos[1].stdin ?? '')).toEqual({
+      rodada: 1,
+      questoes: [
+        { id: 'Q1', cabecalho: 'Transporte', titulo: 'Como o agente e a tela conversam?', opcoes: [
+          { rotulo: 'Servidor local', descricao: 'Node, só stdlib', recomendada: false },
+          { rotulo: 'Artifact', descricao: 'Página no claude.ai', recomendada: true },
+        ] },
+        { id: 'Q2', cabecalho: 'Momento', titulo: 'Quando a tela abre?', opcoes: [
+          { rotulo: 'No início', descricao: 'logo', recomendada: true },
+          { rotulo: 'No fim', recomendada: false },
+        ] },
+      ],
+    })
+    // o resultado e o do dialogo, as respostas pelo texto da pergunta, e a URL vai ao modelo para a tela final
+    expect(r1.result).toEqual({
+      questions: expect.any(Array),
+      answers: { 'Como o agente e a tela conversam?': 'Artifact (só no fim)', 'Quando a tela abre?': 'Decida você' },
+    })
+    expect(r1.context?.join('\n')).toContain(URL)
+    expect(r1.context?.join('\n')).toContain('e o prazo?')
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:grill' })
+    expect(await quadro(ui)).toMatch(/Transporte\nComo o agente e a tela conversam\?\n✓ Artifact \(só no fim\)\nMomento\nQuando a tela abre\?\n✓ delegado/)
+
+    // a segunda vai a mesma pagina; o Voltar ao CLI avisa a pagina e o dialogo nativo pergunta, sem a rodada aberta duplicada
+    comandos.length = 0
+    const r2 = await perguntar([{ header: 'Resto', question: 'Algo mais?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }])
+    expect(comandos.map(c => c.args)).toEqual([['rodada', URL, '-'], ['aguardar', URL, '--ate', '120'], ['cli', URL]])
+    expect(JSON.parse(comandos[0].stdin ?? '').rodada).toBe(2)
+    expect(nativas).toEqual(['Algo mais?'])
+    expect(r2.result?.answers).toEqual({ 'Algo mais?': 'Não' })
+    expect(await quadro(ui)).toMatch(/Perguntas e respostas · 3\/3\n[\s\S]*Resto\nAlgo mais\?\n✓ Não/)
+
+    // de volta ao CLI, o grill fica nele ate o fim: a pagina nao sobe de novo
+    comandos.length = 0
+    await perguntar([{ header: 'Fim', question: 'Fechamos?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }])
+    expect(comandos).toEqual([])
+    expect(nativas).toEqual(['Algo mais?', 'Fechamos?'])
+  })
+
+  test('no canal tela, a pagina que nao sobe deixa o grill no dialogo nativo; fora do grill, nada vai a pagina', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { marco } = mundo($, on)
+    const comandos: string[] = []
+    on('process.run', ($, e) => {
+      comandos.push(e.argv[2])
+      return { value: { exitCode: 1, stdout: '', stderr: 'o servidor não subiu em 5 segundos', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({ result: { questions: e.questions, answers: { 'Algo mais?': 'Não' } } }) as never)
+    const perguntar = () =>
+      $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Resto', question: 'Algo mais?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+
+    await perguntar()
+    expect(comandos).toEqual([])
+    await marco({ marco: 'grill', pedido: 'pagina fora do ar' })
+    expect((await perguntar()).result?.answers).toEqual({ 'Algo mais?': 'Não' })
+    await perguntar()
+    expect(comandos).toEqual(['iniciar'])
+  })
+
+  test('no canal tela, so o grill desta sessao vai a pagina; o grilling de fora da /faz vai a grill-tela; o Seguir no terminal entre rodadas leva o grill ao CLI', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    // o grill abandonado de outra sessao, que o store traz de volta
+    const { sessao, relogio } = mundo($, on, { 'grill:D:/ws/a': { pedido: 'grill velho', inicio: 0, perguntas: [] } })
+    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const comandos: string[] = []
+    let estado: Record<string, any> = { fase: 'inicio', historico: [] }
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
+    on('process.run', ($, e) => {
+      // o git da base da aba Diff, no inicio da sessao, fica fora
+      if (e.argv[0] === 'git') return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+      const sub = e.argv[2]
+      comandos.push(sub)
+      let stdout = 'ok\n'
+      if (sub === 'iniciar') stdout = `${URL}\n`
+      if (sub === 'rodada') estado = { fase: 'rodada', rodada: JSON.parse(e.init?.stdin ?? ''), historico: [] }
+      if (sub === 'aguardar') {
+        const respostas = [{ id: 'Q1', marca: 'aceito', escolha: 'Sim', comentario: null }]
+        estado = { fase: 'aguarde', historico: [{ rodada: estado.rodada, respostas }] }
+        stdout = `${JSON.stringify({ tipo: 'rodada', rodada: estado.historico[0].rodada.rodada, respostas })}\n`
+      }
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const nativas: string[] = []
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+      nativas.push(...e.questions.map(q => q.question))
+      return { result: { questions: e.questions, answers: {} } } as never
+    })
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    const grilling = (args = '') => $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args } as never)
+    const perguntar = () =>
+      $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Resto', question: 'Algo mais?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    await sessao()
+
+    // o grill velho nao sequestra a pergunta comum para a pagina
+    await perguntar()
+    expect(comandos).toEqual([])
+    expect(nativas).toEqual(['Algo mais?'])
+
+    // o grilling de fora da /faz nao abre grill no painel: o resultado manda conduzi-lo pela grill-tela
+    expect((await grilling('um grill qualquer')).context?.join('\n')).toMatch(/invoque a skill grill-tela e conduza o grill inteiro por ela/)
+    // o da /faz abre o grill desta sessao, que vai a pagina
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    expect((await grilling('pedido da faz')).context).toBeUndefined()
+    await perguntar()
+    expect(comandos).toEqual(['iniciar', 'rodada', 'aguardar'])
+    expect(nativas).toEqual(['Algo mais?'])
+
+    // o Seguir no terminal apertado entre rodadas: a consulta da pagina leva o grill ao CLI
+    estado = { ...estado, fase: 'cli' }
+    await relogio.advance(segundos(1))
+    comandos.length = 0
+    await perguntar()
+    expect(comandos).toEqual([])
+    expect(nativas).toEqual(['Algo mais?', 'Algo mais?'])
+  })
+
   test('o /clear troca a sessao e o $.state recomeca vazio: o painel volta com tudo o que desenhava', async ($, on) => {
     const novaSessao = estadoPorSessao(on)
     const { marco, clear } = mundo($, on)
@@ -427,6 +629,76 @@ describe('painel da leva', () => {
     cd('D:/ws/a')
     await depoisDoClear()
     expect(await quadro(ui)).toMatch(/▐▛███▜▌/)
+  })
+
+  test('a sessao nova do /clear sugere na caixa o prompt do grill que nenhuma leva aberta executou, sem envia-lo', async ($, on) => {
+    const novaSessao = estadoPorSessao(on)
+    const { marco, clear } = mundo($, on)
+    on('classic.SessionStart', () => ({}) as never)
+    const sugeridas: string[] = []
+    on('prompt.suggest', ($, e) => { sugeridas.push(e.text); return { isShown: true } })
+    on('prompt.submit', () => { throw new Error('o prompt da leva nunca e enviado pelo plugin') })
+    const depoisDoClear = async () => {
+      await clear()
+      novaSessao()
+      await $.classic.SessionStart({ source: 'clear' } as never)
+    }
+    const LINHA = 'rode /macrex-skills:faz leva doc até o fim.\n/mattpocock-skills:to-spec'
+
+    // sem linha, nada a sugerir
+    await marco({ marco: 'grill', pedido: 'grill' })
+    await depoisDoClear()
+    expect(sugeridas).toEqual([])
+
+    await marco({ marco: 'entendimento', documento: 'doc' })
+    await marco({ marco: 'linha', linha: LINHA })
+    await depoisDoClear()
+    expect(sugeridas).toEqual([LINHA])
+
+    // a leva que nasceu do grill ja esta aberta: o /clear no meio dela nao sugere de novo
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await depoisDoClear()
+    expect(sugeridas).toEqual([LINHA])
+    // nem depois de fechada: a leva do grill ja rodou
+    await marco({ marco: 'fechamento' })
+    await depoisDoClear()
+    expect(sugeridas).toEqual([LINHA])
+  })
+
+  test('a retomada da leva aberta que nasceu do grill sugere o mesmo prompt, no inicio da sessao e no SessionStart de resume', async ($, on) => {
+    const LINHA = 'rode /macrex-skills:faz leva doc até o fim.'
+    const grill = { pedido: 'grill', inicio: 0, perguntas: [], documento: 'doc', fim: 1, linha: LINHA, fora: true }
+    const aberta = { documento: 'doc', fase: 'implement', fases: ['spec', 'implement'], tickets: [], fechada: false }
+    const { sessao } = mundo($, on, { 'grill:D:/ws/a': grill, 'leva:D:/ws/a': aberta })
+    on('classic.SessionStart', () => ({}) as never)
+    const sugeridas: string[] = []
+    on('prompt.suggest', ($, e) => { sugeridas.push(e.text); return { isShown: true } })
+
+    await sessao()
+    expect(sugeridas).toEqual([LINHA])
+    await $.classic.SessionStart({ source: 'resume' } as never)
+    expect(sugeridas).toEqual([LINHA, LINHA])
+  })
+
+  test('sem leva aberta do grill, a retomada nao sugere: nem com a leva fechada, nem com a de outro documento', async ($, on) => {
+    const grill = { pedido: 'grill', inicio: 0, perguntas: [], documento: 'doc', fim: 1, linha: 'rode /macrex-skills:faz leva doc até o fim.' }
+    const { sessao, marco } = mundo($, on, {
+      'grill:D:/ws/a': grill,
+      'leva:D:/ws/a': { documento: 'doc', fase: 'fechamento', fases: ['spec'], tickets: [], fechada: true },
+    })
+    on('classic.SessionStart', () => ({}) as never)
+    const sugeridas: string[] = []
+    on('prompt.suggest', ($, e) => { sugeridas.push(e.text); return { isShown: true } })
+
+    await sessao()
+    await $.classic.SessionStart({ source: 'resume' } as never)
+    await marco({ marco: 'inicio', documento: 'outro' })
+    await $.classic.SessionStart({ source: 'resume' } as never)
+    expect(sugeridas).toEqual([])
+    // a leva do grill de novo aberta volta a sugerir
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await $.classic.SessionStart({ source: 'resume' } as never)
+    expect(sugeridas).toEqual([grill.linha])
   })
 
   test('o Limpar fica sempre ao lado do titulo e tira o grill e a leva, aberta ou fechada', async ($, on) => {
@@ -852,6 +1124,56 @@ describe('painel da leva', () => {
     expect(await ui.find({ type: 'Text', text: /^1m30s$/ })).toBeDefined()
   })
 
+  test('a compactacao do loop principal com a leva aberta pede no resumo o estado da leva', async ($, on) => {
+    const { marco } = mundo($, on)
+    const vistas: Array<{ trigger: string; instructions?: string }> = []
+    const messages = [{ role: 'user', text: 'oi', toolUses: [] }]
+    on('session.compact', ($, e) => { vistas.push(e); return { messages } as never })
+    const compactar = (e: Record<string, unknown>) => $.session.compact({ messages, ...e } as never)
+
+    // sem leva, a compactacao passa intacta
+    await compactar({ trigger: 'manual', instructions: 'o plano' })
+    expect(vistas.pop()).toMatchObject({ trigger: 'manual', instructions: 'o plano' })
+
+    await marco({ marco: 'inicio', documento: 'doc', sujos: ['CONTEXT.md'] })
+    await marco({ marco: 'fase', fase: 'tickets' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'workflow' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', reparos: 1, notas: `faz_marco aceita sujos ${'x'.repeat(400)}` })
+    await marco({ marco: 'ticket', ticket: '02' })
+    await marco({ marco: 'portao', ticket: '02', portao: 'vermelho', reparos: 2, notas: 'segredo do vermelho' })
+
+    // as instructions existentes ficam, e o bloco da leva vem depois delas, no teto
+    const r = await compactar({ trigger: 'auto', instructions: 'o plano' })
+    expect(r.skip).toBeUndefined()
+    const { instructions = '' } = vistas.pop() ?? { trigger: '' }
+    expect(instructions.startsWith('o plano\n\n')).toBe(true)
+    expect(instructions).toMatch(/literalmente/)
+    expect(instructions).toMatch(/documento: doc/)
+    expect(instructions).toMatch(/fase: implement/)
+    expect(instructions).toMatch(/modo: workflow/)
+    expect(instructions).toMatch(/01 Mod do painel: verde, 1 reparo — faz_marco aceita sujos x+…/)
+    expect(instructions).toMatch(/02 Ferramenta faz_marco: vermelho, 2 reparos$/m)
+    expect(instructions).not.toMatch(/segredo do vermelho/)
+    expect(instructions).toMatch(/sujos: CONTEXT\.md/)
+    expect(instructions.length).toBeLessThan(2400)
+
+    // sem instructions, so o bloco; o precompute, cujo resumo a compactacao seguinte reaproveitaria
+    // sem o bloco, fica vetado; o sub-agente passa intacto
+    await compactar({ trigger: 'plugin' })
+    expect(vistas.pop()?.instructions).toMatch(/^Preserve/)
+    expect((await compactar({ trigger: 'precompute', instructions: 'o plano' })).skip).toBeDefined()
+    expect(vistas).toEqual([])
+    await compactar({ trigger: 'auto', agentId: 'a1' })
+    expect(vistas.pop()?.instructions).toBeUndefined()
+
+    // a leva fechada nao entra mais
+    await marco({ marco: 'fechamento' })
+    await compactar({ trigger: 'manual' })
+    expect(vistas.pop()?.instructions).toBeUndefined()
+  })
+
   test('a fase declarada sem a sua skill aparece com ! e o marco avisa', async ($, on) => {
     const { marco } = mundo($, on)
     on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
@@ -1032,6 +1354,133 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /haiku-conta-hooks/ }))?.text).toMatch(/concluído\s+25s$/)
   })
 
+  test('a lista oficial acerta os agentes no tique do relogio: waiting e idle aguardam, completed, failed e killed fecham com a duracao', async ($, on) => {
+    const { relogio, marco, sessao } = mundo($, on)
+    const ids: Record<string, string> = { 'sonnet-espera': 'a1', 'sonnet-feito': 'a2', 'sonnet-roda': 'a3', 'sonnet-falha': 'a4', 'sonnet-morto': 'a5' }
+    // o teammate nao tem agentId no Agent: casa pelo nome
+    on('tool.call', { tool: 'Agent' }, ($, e) => ({ result: e.name === 'haiku-time' ? 'Spawned successfully.' : { status: 'async_launched', agentId: ids[e.name] } }) as never)
+    on('tool.call', { tool: 'Workflow' }, () => ({ result: { status: 'async_launched', taskId: 'w1', workflowName: 'tickets' } }) as never)
+    let lista: { id: string; description: string; type: string; status: string; name?: string }[] = []
+    on('agent.list', () => ({ value: lista }))
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    for (const name of [...Object.keys(ids), 'haiku-time']) await $.tool.call({ tool: 'Agent', name, description: 'd', prompt: 'p' } as never)
+    await $.tool.call({ tool: 'Workflow', script: 'x' } as never)
+    const info = (id: string, status: string, name?: string) => ({ id, description: 'd', type: 'general-purpose', status, name })
+    // a cada segundo a lista e lida: o que ela ainda nao conhece segue como esta
+    await relogio.advance(segundos(29))
+    lista = [info('a1', 'waiting'), info('a2', 'completed'), info('a3', 'running'), info('a4', 'failed'), info('a5', 'killed'), info('t1', 'idle', 'haiku-time')]
+    await relogio.advance(segundos(1))
+
+    const ui = await $.ui.mount(PANE)
+    const linha = async (nome: string) => (await ui.find({ type: 'Text', text: new RegExp(nome) }))?.text
+    expect(await linha('sonnet-espera')).toMatch(/aguardando\s+30s$/)
+    expect(await linha('haiku-time')).toMatch(/aguardando\s+30s$/)
+    expect(await linha('sonnet-feito')).toMatch(/concluído\s+30s$/)
+    expect(await linha('sonnet-falha')).toMatch(/falhou\s+30s$/)
+    expect(await linha('sonnet-morto')).toMatch(/parado\s+30s$/)
+    expect(await linha('sonnet-roda')).toMatch(/rodando\s+30s$/)
+    // o workflow nao esta na lista: segue com os hooks
+    expect(await linha('workflow tickets')).toMatch(/rodando\s+30s$/)
+    // o que fechou nao anda mais; o que aguarda fecha quando a lista diz
+    await relogio.advance(segundos(9))
+    lista = [info('a1', 'completed'), info('t1', 'idle', 'haiku-time')]
+    await relogio.advance(segundos(1))
+    expect(await linha('sonnet-espera')).toMatch(/concluído\s+40s$/)
+    expect(await linha('sonnet-feito')).toMatch(/concluído\s+30s$/)
+    // o que a lista ainda nao conhece, nesta sessao, segue rodando
+    expect(await linha('sonnet-roda')).toMatch(/rodando\s+40s$/)
+  })
+
+  test('depois do /clear, o agente rodando herdado que a lista nao conhece mais vira parado', async ($, on) => {
+    const novaSessao = estadoPorSessao(on)
+    const { relogio, marco, sessao, clear } = mundo($, on)
+    on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'velho' } }) as never)
+    on('classic.SessionStart', () => ({}) as never)
+    on('agent.list', () => ({ value: [] }))
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await $.tool.call({ tool: 'Agent', name: 'opus-herdado', description: 'd', prompt: 'p' } as never)
+    await relogio.advance(segundos(5))
+    await clear()
+    novaSessao()
+    await relogio.advance(segundos(4))
+    await $.classic.SessionStart({ source: 'clear' } as never)
+    await relogio.advance(segundos(1))
+
+    const ui = await $.ui.mount(PANE)
+    expect((await ui.find({ type: 'Text', text: /opus-herdado/ }))?.text).toMatch(/parado\s+10s$/)
+    expect(await quadro(ui)).not.toMatch(/\[ Parar \]/)
+  })
+
+  test('o agente rodando mostra ha quanto tempo nao tem saida, passados 2 min da ultima ferramenta dele', async ($, on) => {
+    const { relogio, marco, sessao } = mundo($, on)
+    on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'a1' } }) as never)
+    on('tool.call', { tool: 'Read' }, () => ({ result: {} }) as never)
+    on('tool.call', { tool: 'Workflow' }, () => ({ result: { status: 'async_launched', taskId: 'w1', workflowName: 'tickets' } }) as never)
+    on('agent.list', () => ({ value: [{ id: 'a1', description: 'd', type: 'general-purpose', status: 'running' }] }))
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await $.tool.call({ tool: 'Agent', name: 'sonnet-lento', description: 'd', prompt: 'p' } as never)
+    // o workflow nao ganha o aviso: as ferramentas dele trazem o agentId dos sub-agentes de dentro
+    await $.tool.call({ tool: 'Workflow', script: 'x' } as never)
+    const ui = await $.ui.mount(PANE)
+    await relogio.advance(segundos(100))
+    // a ferramenta chamada dentro do sub-agente traz o agentId dele
+    await $.tool.call({ tool: 'Read', file_path: 'a.md', agentId: 'a1' } as never)
+    await relogio.advance(segundos(110))
+    expect(await ui.find({ text: /sem saída/ })).toBeUndefined()
+    await relogio.advance(segundos(70))
+    expect(await ui.find({ type: 'Text', text: /^sem saída há 3 min$/ })).toBeDefined()
+    expect((await quadro(ui)).match(/sem saída/g)).toHaveLength(1)
+  })
+
+  test('o Parar de um agente rodando confirma e encerra pela TaskStop; recusado, o agente segue', async ($, on) => {
+    const { relogio, marco, sessao, toasts } = mundo($, on)
+    on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'a1' } }) as never)
+    on('tool.call', { tool: 'Workflow' }, () => ({ result: { status: 'async_launched', taskId: 'w1', workflowName: 'tickets' } }) as never)
+    on('agent.list', () => ({ value: [{ id: 'a1', description: 'd', type: 'general-purpose', status: 'running' }] }))
+    let escolha = 'Deixar rodando'
+    const perguntas: string[] = []
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+      perguntas.push(e.questions[0].question)
+      return { result: { questions: e.questions, answers: { [e.questions[0].question]: escolha } } } as never
+    })
+    const parados: unknown[] = []
+    let falha = false
+    on('tool.call', { tool: 'TaskStop' }, ($, e) => {
+      if (falha) return { deny: 'nao' } as never
+      parados.push(e.task_id)
+      return { result: { message: 'ok', task_id: e.task_id, task_type: 'local_agent' } } as never
+    })
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await $.tool.call({ tool: 'Agent', name: 'sonnet-parar', description: 'd', prompt: 'p' } as never)
+    await $.tool.call({ tool: 'Workflow', script: 'x' } as never)
+    const ui = await $.ui.mount(PANE)
+    await relogio.advance(segundos(20))
+
+    await ui.press({ key: 'agente:parar:a1' } as never)
+    expect(perguntas).toEqual(['Parar o agente sonnet-parar?'])
+    expect(parados).toEqual([])
+    expect((await ui.find({ type: 'Text', text: /sonnet-parar/ }))?.text).toMatch(/rodando\s+20s$/)
+
+    escolha = 'Parar'
+    falha = true
+    await ui.press({ key: 'agente:parar:a1' } as never)
+    expect(toasts).toContain('Não deu para parar sonnet-parar')
+    expect((await ui.find({ type: 'Text', text: /sonnet-parar/ }))?.text).toMatch(/rodando\s+20s$/)
+
+    falha = false
+    await ui.press({ key: 'agente:parar:a1' } as never)
+    expect(parados).toEqual(['a1'])
+    expect((await ui.find({ type: 'Text', text: /sonnet-parar/ }))?.text).toMatch(/parado\s+20s$/)
+    // o workflow para pelo id da tarefa
+    await ui.press({ key: 'agente:parar:w1' } as never)
+    expect(parados).toEqual(['a1', 'w1'])
+    expect(await quadro(ui)).not.toMatch(/\[ Parar \]/)
+  })
+
   test('toda aba abre com o cabecalho: o nome dela em laranja, sem marca e sem caixa alta, e o titulo embaixo, com e sem leva', async ($, on) => {
     const { marco } = mundo($, on)
     const ui = await $.ui.mount(PANE)
@@ -1106,6 +1555,78 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /^sonnet-review/ }))?.text).toMatch(/claude-sonnet-5-5\s+3,5k$/)
   })
 
+  test('a aba Uso mostra o custo medido da leva, a janela de 5 h e o contexto; o historico guarda o custo', async ($, on) => {
+    const { marco, usar, relogio } = mundo($, on)
+    const medir = (usd: number, rateLimits: unknown[], percent = 45) =>
+      $.session.measure({ context: { window: 200000, tokens: 90000, percent }, rateLimits, cost: { usd }, changed: ['cost'] } as never)
+    const cincoHoras = (percentUsed: number) => ({ kind: 'five_hour', percentUsed, resetsAt: new Date(relogio.now() + 100 * 60000).toISOString() })
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:uso' })
+
+    // o custo da leva e o da sessao menos o que ela tinha no inicio
+    usar({ cost: { usd: 1.5 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await medir(2.75, [cincoHoras(62), { kind: 'seven_day', percentUsed: 10 }])
+    expect((await ui.find({ type: 'Text', text: /^custo da leva/ }))?.text).toMatch(/^custo da leva\s+US\$ 1,25$/)
+    expect(await ui.find({ type: 'Text', text: /^5h 62% · reseta em 1h40 · contexto 45%$/ })).toBeDefined()
+
+    // chave de API: sem janela, so o contexto
+    await medir(2.75, [], 50)
+    expect(await ui.find({ type: 'Text', text: /^contexto 50%$/ })).toBeDefined()
+    expect(await ui.find({ text: /5h/ })).toBeUndefined()
+
+    // o fechamento le o custo de agora e a linha do historico o mostra
+    usar({ cost: { usd: 3 } })
+    await marco({ marco: 'fechamento' })
+    await ui.press({ key: 'aba:painel' })
+    expect((await ui.find({ type: 'Text', text: /^doc · / }))?.text).toMatch(/ · US\$ 1,50 · /)
+  })
+
+  test('a retomada numa sessao nova soma o custo das duas sessoes', async ($, on) => {
+    const { marco, usar, sessao } = mundo($, on)
+    const medir = (usd: number) => $.session.measure({ context: { window: 200000 }, rateLimits: [], cost: { usd }, changed: ['cost'] } as never)
+    usar({ cost: { usd: 1 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await medir(2)
+    // a sessao nova recomeca o custo dela; o turno antes da retomada ja soma ao que a leva custou
+    usar({ cost: { usd: 0 } })
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:uso' })
+    await medir(0.05)
+    expect((await ui.find({ type: 'Text', text: /^custo da leva/ }))?.text).toMatch(/US\$ 1,05$/)
+    usar({ cost: { usd: 0.2 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await medir(0.5)
+    expect((await ui.find({ type: 'Text', text: /^custo da leva/ }))?.text).toMatch(/US\$ 1,50$/)
+  })
+
+  test('com a janela de 5 h em 90% ou mais, o implement com sub-agentes, a revisao ou as correcoes avisam uma vez por leva', async ($, on) => {
+    const { marco, toasts } = mundo($, on)
+    const janela = (percentUsed: number) =>
+      $.session.measure({ context: { window: 200000 }, rateLimits: [{ kind: 'five_hour', percentUsed }], changed: ['rateLimits'] } as never)
+    const avisos = () => toasts.filter(t => /sub-agentes dividem o limite/.test(t)).length
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await janela(92)
+    await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
+    expect(avisos()).toBe(0)
+    await marco({ marco: 'fase', fase: 'implement', modo: 'workflow' })
+    expect(avisos()).toBe(1)
+    await marco({ marco: 'fase', fase: 'revisao' })
+    await marco({ marco: 'fase', fase: 'correcoes' })
+    expect(avisos()).toBe(1)
+
+    // a leva seguinte avisa de novo; abaixo de 90%, nao
+    await marco({ marco: 'inicio', documento: 'outra' })
+    await marco({ marco: 'fase', fase: 'revisao' })
+    expect(avisos()).toBe(2)
+    await marco({ marco: 'inicio', documento: 'terceira' })
+    await janela(89)
+    await marco({ marco: 'fase', fase: 'correcoes' })
+    expect(avisos()).toBe(2)
+  })
+
   test('a aba Codigo lista o que a sessao mudou desde o inicio e abre o diff de cada arquivo', async ($, on) => {
     const { sessao } = mundo($, on)
     // o git do repositorio: o velho.txt ja estava solto no inicio e fica fora da lista
@@ -1170,5 +1691,119 @@ describe('painel da leva', () => {
     expect(doNovo[0].props.source).toMatch(/^@@ -0,0 \+1,\d+ @@\n\+linha 0\n/)
     const [, n] = /^@@ -0,0 \+1,(\d+) @@/.exec(String(doNovo[0].props.source)) ?? []
     expect(doNovo[1].props.source).toMatch(new RegExp(`^@@ -0,0 \\+${Number(n) + 1},\\d+ @@\\n\\+linha ${n}\\n`))
+  })
+})
+
+// A leva viva fora do pane: a faixa acima do prompt, o sufixo do spinner e a linha do marco.
+const FAIXA = { plugin: 'macrex-skills', component: 'AbovePrompt', surface: 'terminal' } as const
+const PROPS_DA_FAIXA = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} }
+
+describe('faixa da leva', () => {
+  test('a faixa mostra a leva aberta numa linha com o Abrir painel, estreita da direita para a esquerda e some com survey, sem leva ou fechada', async ($, on) => {
+    const { marco, relogio } = mundo($, on)
+    const abertos = new Set<string>()
+    on('ui.open', ($, e) => { abertos.add(e.id); return { value: { isPlaced: true } } })
+    on('ui.panes', () => ({ value: [...abertos].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }))
+    // o que outro mod desenha na faixa fica embaixo da linha da leva
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return h(Text, {}, 'outro mod')
+    })
+
+    const ui = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    expect(await ui.find({ text: /^Leva/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^outro mod$/ })).toBeDefined()
+
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    await marco({ marco: 'ticket', ticket: '02' })
+    await relogio.advance(segundos(80))
+    await ui.redraw(PROPS_DA_FAIXA as never)
+    expect(await quadro(ui)).toMatch(/^Leva · implement · ticket 2\/2 · 1✓ · 1m20s {2}\[ Abrir painel \]\noutro mod$/)
+
+    // estreita: sai o tempo, depois os verdes, depois o ticket
+    const larg = (n: number) => ui.redraw({ ...PROPS_DA_FAIXA, bodyColumns: n } as never)
+    await larg(51)
+    expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva · implement · ticket 2/2 · 1✓')
+    await larg(46)
+    expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva · implement · ticket 2/2')
+    await larg(30)
+    expect((await ui.find({ type: 'Text', text: /^Leva/ }))?.text).toBe('Leva')
+
+    // o Abrir painel abre o pane e some
+    await larg(120)
+    await ui.press({ key: 'faixa:abrir' })
+    expect([...abertos]).toEqual(['faz-painel'])
+    expect(await ui.find({ type: 'Button', text: /Abrir painel/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^Leva · implement/ })).toBeDefined()
+
+    await ui.redraw({ ...PROPS_DA_FAIXA, hasSurvey: true } as never)
+    expect(await ui.find({ text: /^Leva/ })).toBeUndefined()
+    await marco({ marco: 'fechamento' })
+    await ui.redraw(PROPS_DA_FAIXA as never)
+    expect(await ui.find({ text: /^Leva/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^outro mod$/ })).toBeDefined()
+  })
+
+  test('o spinner leva a fase e os verdes da leva ativa antes da reticencia', async ($, on) => {
+    const { marco } = mundo($, on)
+    const sufixos: string[] = []
+    on('ui.render', { component: 'Spinner' }, ($, e) => {
+      sufixos.push(e.props.suffix)
+      const { Text } = $.ui.resolve(e)
+      return h(Text, {}, `${e.props.word}${e.props.suffix}`)
+    })
+    const SPINNER = { plugin: 'macrex-skills', component: 'Spinner', props: { word: 'Sauteing', message: null, suffix: '…', mode: 'responding' } } as const
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({ ...SPINNER, surface } as never)
+      expect(sufixos.at(-1)).toBe('…')
+      await ui.unmount()
+    }
+    await marco({ marco: 'inicio', documento: 'doc' })
+    let ui = await $.ui.mount({ ...SPINNER, surface: 'terminal' } as never)
+    expect(sufixos.at(-1)).toBe(' · to-spec…')
+    await ui.unmount()
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    for (const surface of SURFACES) {
+      ui = await $.ui.mount({ ...SPINNER, surface } as never)
+      expect(await ui.find({ type: 'Text', text: /^Sauteing · implement 1\/2…$/ })).toBeDefined()
+      await ui.unmount()
+    }
+    await marco({ marco: 'fechamento' })
+    ui = await $.ui.mount({ ...SPINNER, surface: 'terminal' } as never)
+    expect(sufixos.at(-1)).toBe('…')
+  })
+
+  test('a chamada do faz_marco na conversa e uma linha apagada com o marco e o resumo', async ($, on) => {
+    on('ui.render', { component: 'ToolUse' }, ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return h(Text, {}, `generica ${e.props.tool}`)
+    })
+    const linha = async (input: Record<string, unknown>, isErrored = false) => {
+      const ui = await $.ui.mount({
+        plugin: 'macrex-skills',
+        surface: 'terminal',
+        component: 'ToolUse',
+        props: { tool_use_id: 't', tool: MARCO, input, isRunning: false, isErrored, isInterrupted: false },
+      } as never)
+      const texto = await ui.find({ type: 'Text', text: /^◆/ })
+      await ui.unmount()
+      return texto
+    }
+    expect((await linha({ marco: 'portao', ticket: '01', portao: 'verde', testes: '3/4' }))?.text).toBe('◆ marco portao · ticket 01 · verde')
+    expect((await linha({ marco: 'fase', fase: 'implement', modo: 'inline' }))?.text).toBe('◆ marco fase · implement')
+    const inicio = await linha({ marco: 'inicio', documento: 'doc' })
+    expect(inicio?.text).toBe('◆ marco inicio')
+    expect(inicio?.props.dimColor).toBe(true)
+    expect((await linha({ marco: 'ticket', ticket: '9' }, true))?.props.color).toBe('#f7768e')
+    // as outras ferramentas ficam com a linha delas
+    const bash = await $.ui.mount({ plugin: 'macrex-skills', surface: 'terminal', component: 'ToolUse', props: { tool_use_id: 'b', tool: 'Bash', input: { command: 'ls' }, isRunning: false, isErrored: false, isInterrupted: false } } as never)
+    expect(await bash.find({ text: /◆/ })).toBeUndefined()
+    expect(await bash.find({ type: 'Text', text: /^generica Bash$/ })).toBeDefined()
   })
 })

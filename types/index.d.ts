@@ -34,6 +34,19 @@ export type Leva = {
   fechada: boolean
   // a hora em que o /cpv rodou depois do fechamento
   cpv?: number
+  // o custo da sessao (US$) no inicio, rebaseado na retomada, e o da leva medido desde ele
+  // (session.measure e fechamento); ausentes onde a sessao nao tem custo
+  custoInicio?: number
+  custo?: number
+  // o aviso da janela de 5 h em 90% ja saiu nesta leva
+  avisoDaJanela?: boolean
+}
+
+// A ultima medida da sessao (session.measure); a janela de 5 h so vem na assinatura.
+export type LevaMedida = {
+  custo?: number
+  contexto?: number
+  janela?: { kind: string; percentUsed: number; resetsAt?: string }
 }
 
 // Uma leva fechada no historico do workspace, com os modelos distintos dos agentes dela.
@@ -44,11 +57,16 @@ export type LevaAgente = {
   tipo: 'agente' | 'workflow'
   nome: string
   modelo: string
-  estado: 'rodando' | 'concluido' | 'falhou' | 'parado'
+  // aguardando: waiting ou idle na lista oficial ($.agent.list)
+  estado: 'rodando' | 'aguardando' | 'concluido' | 'falhou' | 'parado'
   inicio: number
   duracao?: number
   agentId?: string
   taskId?: string
+  // a hora da ultima ferramenta que o sub-agente chamou
+  atividade?: number
+  // veio da sessao de antes do /clear ou do /resume
+  herdado?: boolean
 }
 
 // Uma pergunta do grill pelo tema (o header do AskUserQuestion); sem resposta ainda, aguardando.
@@ -73,6 +91,8 @@ export type Grill = {
   fora?: boolean
   // a URL da pagina da grill-tela que o grill consulta, enquanto ela esta aberta
   tela?: string
+  // no canal tela, o grill que voltou ao CLI: o AskUserQuestion dele nao vai mais a pagina
+  canal?: 'cli'
 }
 
 // A base da aba Diff, tirada no inicio da sessao.
@@ -112,6 +132,7 @@ declare module 'claude-code' {
       aba: 'painel' | 'codigo' | 'grill' | 'tickets' | 'uso'
       // por loop: 'sessao' para o principal, o agentId para cada sub-agente
       uso: Record<string, UsoDoLoop>
+      medida: LevaMedida | null
       base: CodigoBase | null
       codigo: CodigoArquivo[]
       abertos: string[]
