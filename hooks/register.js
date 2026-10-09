@@ -45,7 +45,7 @@ const PORTOES = ['verde', 'vermelho']
 const MODOS = ['inline', 'sub-agents', 'workflow']
 // as fases depois do implement, cujo andamento chega item a item, e o titulo do cartao de cada uma
 const FASES_COM_ITENS = { revisao: 'Revisão', correcoes: 'Correções', qualidade: 'Qualidade' }
-const NO_HISTORICO = 10
+const NO_HISTORICO = 5
 const FUNDO = '#24283b'
 // a paleta do video do README: cartoes um tom abaixo do fundo, chips um tom acima; as cores do
 // texto vao explicitas, porque o fundo e escuro mesmo num terminal de tema claro
@@ -96,12 +96,12 @@ const FILTRO = atom({ plugin: 'macrex-skills', key: 'filtro' }, '')
 const USO = atom({ plugin: 'macrex-skills', key: 'uso' }, {})
 // A ultima medida da sessao (session.measure): o custo, o contexto e a janela de 5 h, so na sessao.
 const MEDIDA = atom({ plugin: 'macrex-skills', key: 'medida' }, null)
-const ABAS = { painel: 'Painel', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso', arquivos: 'Arquivos' }
+const ABAS = { painel: 'Geral', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso', arquivos: 'Arquivos' }
 const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']
 // os caracteres de controle que um Code recusa: todos menos tab e quebra de linha
 const CONTROLE = /[\u0000-\u0008\u000b-\u001f\u007f]/g
-// a linha das abas e a margem embaixo dela
-const LINHAS_DAS_ABAS = 2
+// a linha das abas, o sublinhado da ativa e a margem embaixo dela
+const LINHAS_DAS_ABAS = 3
 // as ferramentas que mudam arquivo: depois de cada uma, a aba Diff ou a Arquivos aberta se refaz
 const MUDAM = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell']
 // o maior source que um Code desenha e 10000; a folga e do cabecalho recontado
@@ -110,6 +110,10 @@ const LIMITE_DO_CODE = 9900
 const URL_DA_TELA = /http:\/\/127\.0\.0\.1:\d+\/g\/[^/\s?]+\/\d{8}-\d{6}\?t=[0-9a-f]+/
 // a API de um grill fica debaixo do caminho dele: a mesma regra do cliente da grill-tela
 const rotaDa = (url, rota) => url.replace(/\/?\?t=/, `/api/${rota}?t=`)
+// o carimbo da sessao do grill na URL, o --id do --retomar
+const idDaTela = url => /\/(\d{8}-\d{6})\?/.exec(url ?? '')?.[1]
+// o --retomar da grill-tela, que imprime a URL do grill retomado
+const RETOMAR = /grill-tela\.js["']?\s+iniciar\b.*\s--retomar\b/
 
 const chave = cwd => `leva:${cwd}`
 const chaveDoHistorico = cwd => `levas:${cwd}`
@@ -120,8 +124,11 @@ const GRILLS_POR_WORKSPACE = 10
 const novoId = agora => `${Number(agora).toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 // a skill da fase que esta sessao ainda nao invocou, ou undefined
 const semSkill = (fase, skills) => (skills.includes(SKILL_DA_FASE[fase]) ? undefined : SKILL_DA_FASE[fase])
+// o documento do inicio sem o "até o fim" que fecha a abertura da linha da leva (`leva <documento>
+// até o fim.`): colado nele, o documento nao casa com o do grill, e a leva perde o tempo dele
+const doInicio = documento => documento.replace(/\s+até o fim\.?\s*$/, '')
 // um inicio com o mesmo documento sobre a leva aberta e a retomada dela
-const retoma = (leva, m) => m.marco === 'inicio' && Boolean(leva) && !leva.fechada && leva.documento === m.documento
+const retoma = (leva, m) => m.marco === 'inicio' && Boolean(leva) && !leva.fechada && typeof m.documento === 'string' && leva.documento === doInicio(m.documento)
 const dois = n => String(n).padStart(2, '0')
 // a ultima parte de um caminho, com / ou \: o nome do projeto pela raiz
 const nomeDa = caminho => caminho.split(/[\\/]/).pop()
@@ -190,7 +197,7 @@ function aplicar(leva, m, agora, usd) {
     // rebaseou na sessao nova
     if (retoma(leva, m)) return leva
     const sujos = m.sujos ?? []
-    return { documento: m.documento, fase: 'spec', fases: ['spec'], entradas: { spec: agora }, inicio: agora, tickets: [], sujos, fechada: false, custoInicio: usd }
+    return { documento: doInicio(m.documento), fase: 'spec', fases: ['spec'], entradas: { spec: agora }, inicio: agora, tickets: [], sujos, fechada: false, custoInicio: usd }
   }
   if (!MARCOS.includes(m.marco)) return { erro: `marco desconhecido: ${m.marco}; use ${MARCOS.join(', ')}` }
   if (!leva) return { erro: 'nenhuma leva neste workspace: registre o marco inicio antes' }
@@ -212,7 +219,8 @@ function aplicar(leva, m, agora, usd) {
       if (!Array.isArray(m.tickets) || !m.tickets.every(t => t && t.id != null && typeof t.titulo === 'string')) {
         return { erro: 'tickets exige uma lista de { id, titulo }' }
       }
-      return { ...leva, tickets: m.tickets.map(t => ({ id: String(t.id), titulo: t.titulo, estado: 'pendente' })) }
+      // a lista reenviada no meio da leva (tickets novos no fim) guarda o andamento dos que ja tem
+      return { ...leva, tickets: m.tickets.map(t => ({ ...(leva.tickets.find(v => v.id === String(t.id)) ?? { estado: 'pendente' }), id: String(t.id), titulo: t.titulo })) }
     case 'ticket':
       return {
         ...leva,
@@ -284,10 +292,10 @@ async function salvarGrillNovo($, grill) {
   for (const velho of (await grillsDo($, raiz)).slice(GRILLS_POR_WORKSPACE)) await $.store.delete(chaveDoGrill(raiz, velho.id))
 }
 
-// o grill que a aba Painel mostra: o que o inicio da leva nao tirou de la
+// o grill que a aba Geral mostra: o que o inicio da leva nao tirou de la
 const naTela = grill => (grill && !grill.fora ? grill : null)
 
-// Tira o grill da aba Painel quando a leva comeca; a aba Grill o guarda ate o Limpar.
+// Tira o grill da aba Geral quando a leva comeca; a aba Grill o guarda ate o Limpar.
 async function tirarGrillDaTela($) {
   const grill = await read($, GRILL)
   if (!naTela(grill)) return
@@ -311,7 +319,8 @@ async function sincronizarTela($) {
     if (r.ok) estado = JSON.parse(r.text)
   } catch {}
   const abertas = estado?.fase === 'rodada' && estado.rodada ? [{ rodada: estado.rodada }] : []
-  const daTela = [...(estado?.historico ?? []), ...abertas].flatMap(({ rodada, respostas }) =>
+  // a rodada do terminal que o registrar gravou na sessao ja esta no grill, pelo AskUserQuestion dela
+  const daTela = [...(estado?.historico ?? []).filter(h => !h.terminal), ...abertas].flatMap(({ rodada, respostas }) =>
     rodada.questoes.map(q => {
       const r = respostas?.find(x => x.id === q.id)
       // sem escolha (delegado, esclarecer, adiado), a marca faz as vezes dela
@@ -345,27 +354,9 @@ const NAO_RESPOSTA = { delegado: 'Decida você', esclarecer: 'Não entendi', adi
 // um subcomando da grill-tela; o que nem roda volta como falha
 const rodarTela = ($, args, init) =>
   $.process.run(['node', `${$.plugin.root}/skills/grill-tela/scripts/grill-tela.js`, ...args], init).catch(() => ({ exitCode: 1, stdout: '' }))
-async function pelaTela($, e, signal) {
-  const grill = await read($, GRILL)
-  const projeto = nomeDa(await $.session.root())
-  const iniciar = async (...mais) => URL_DA_TELA.exec((await rodarTela($, ['iniciar', '--projeto', projeto, ...mais])).stdout)?.[0]
-  const outro = () => iniciar('--pedido', grill.pedido)
-  const responde = async u => {
-    try {
-      return (await $.http.fetch(rotaDa(u, 'estado'))).ok
-    } catch {
-      return false
-    }
-  }
-  // a pagina guardada que parou de responder volta pelo --retomar do grill dela, ou sobe outra; a
-  // que responde mas ja encerrou o grill dela (telaFim) recusaria a rodada, e sobe outra; todas
-  // abrem o navegador
-  let url = grill.tela
-  if (url && !(await responde(url))) url = (await iniciar('--retomar', '--id', /\/(\d{8}-\d{6})\?/.exec(url)?.[1] ?? '')) ?? (await outro())
-  else if (!url || grill.telaFim) url = await outro()
-  // a rodada seguinte a ultima que a pagina publicou neste grill
-  const n = 1 + Math.max(0, ...grill.perguntas.map(p => Number(/^tela:(\d+):/.exec(p.id)?.[1] ?? 0)))
-  const questoes = e.questions.map((q, i) => {
+// A rodada do dialogo na forma da grill-tela: a recomendada e a do (Recommended), sem ela a primeira.
+function questoesDaTela(questions) {
+  return questions.map((q, i) => {
     const marcada = Math.max(0, q.options.findIndex(o => RECOMENDADA.test(o.label)))
     return {
       id: `Q${i + 1}`,
@@ -374,6 +365,58 @@ async function pelaTela($, e, signal) {
       opcoes: q.options.map((o, j) => ({ rotulo: o.label.replace(RECOMENDADA, ''), descricao: o.description, recomendada: j === marcada, ...(o.preview && { previa: o.preview }) })),
     }
   })
+}
+// As respostas do dialogo na forma que a grill-tela grava: a opcao recomendada e aceito, outra opcao
+// ou o texto livre e outra; a questao sem resposta fica de fora.
+function respostasDaTela(questions, questoes, answers) {
+  return questions.flatMap((q, i) => {
+    const dada = String(answers[q.question] ?? '').trim()
+    if (!dada) return []
+    const opcao = questoes[i].opcoes.find(o => o.rotulo === dada.replace(RECOMENDADA, ''))
+    return [{ id: questoes[i].id, marca: opcao?.recomendada ? 'aceito' : 'outra', escolha: opcao?.rotulo ?? dada, comentario: null }]
+  })
+}
+// O grill do terminal no historico de grills: a rodada respondida no dialogo, ou o sim com o
+// documento, vai a sessao do grill na tela ou a do terminal, que a primeira rodada cria. A grill-tela
+// so grava em sessao no terminal, e a falha nunca para o grill. O sim do grill que a pagina conduz
+// (fora do canal cli) e da pagina, e nao vai.
+async function registrarNoHistoricoDeGrills($, corpo) {
+  const grill = await read($, GRILL)
+  const alvo = grill?.tela ?? grill?.registro
+  if (!grill || (corpo.tipo === 'sim' && (!alvo || (grill.tela && grill.canal !== 'cli')))) return
+  const args = alvo ? ['registrar', alvo, '-'] : ['registrar', '--projeto', nomeDa(await $.session.root()), '--pedido', grill.pedido, '-']
+  const r = await rodarTela($, args, { stdin: JSON.stringify(corpo) })
+  const url = !alvo && r.exitCode === 0 && URL_DA_TELA.exec(r.stdout)?.[0]
+  if (!url) return
+  const novo = await update($, GRILL, g => (g?.id === grill.id ? { ...g, registro: url } : g))
+  if (novo?.registro === url) await salvarGrill($, novo)
+}
+async function pelaTela($, e, signal) {
+  const grill = await read($, GRILL)
+  const projeto = nomeDa(await $.session.root())
+  const iniciar = async (...mais) => URL_DA_TELA.exec((await rodarTela($, ['iniciar', '--projeto', projeto, ...mais])).stdout)?.[0]
+  const outro = () => iniciar('--pedido', grill.pedido)
+  // o estado da pagina, ou null quando ela nao responde
+  const estadoDa = async u => {
+    try {
+      const r = await $.http.fetch(rotaDa(u, 'estado'))
+      return r.ok ? JSON.parse(r.text) : null
+    } catch {
+      return null
+    }
+  }
+  const responde = async u => (await estadoDa(u)) !== null
+  // a pagina guardada que parou de responder volta pelo --retomar do grill dela, ou sobe outra; a
+  // que responde mas ja encerrou o grill dela (telaFim) recusaria a rodada, e sobe outra; todas
+  // abrem o navegador
+  let url = grill.tela
+  if (url && !(await responde(url))) url = (await iniciar('--retomar', '--id', idDaTela(url) ?? '')) ?? (await outro())
+  else if (!url || grill.telaFim) url = await outro()
+  // a rodada seguinte a ultima que a pagina publicou neste grill
+  // e da sessao, que tem tambem as rodadas do terminal: o numero nunca se repete
+  const daSessao = url ? await estadoDa(url) : null
+  const n = 1 + Math.max(0, ...grill.perguntas.map(p => Number(/^tela:(\d+):/.exec(p.id)?.[1] ?? 0)), ...(daSessao?.historico ?? []).map(h => h.rodada.rodada), daSessao?.rodada?.rodada ?? 0)
+  const questoes = questoesDaTela(e.questions)
   let msg = null
   const textos = [] // o que o usuario escreveu a parte na pagina, com a rodada aberta
   const publicada = url && (await rodarTela($, ['rodada', url, '-'], { stdin: JSON.stringify({ rodada: n, questoes }) })).exitCode === 0
@@ -478,7 +521,7 @@ async function sugerirLinha($, depoisDoClear) {
   if (depoisDoClear ? !executada : doGrill) $.prompt.suggest({ text: grill.linha }).catch(() => {})
 }
 
-// O botao Limpar da aba Painel, sempre ao lado do titulo e o unico que limpa (o /clear nao mexe no
+// O botao Limpar da aba Geral, sempre ao lado do titulo e o unico que limpa (o /clear nao mexe no
 // painel): o grill desta janela sai de todas as abas e do store (o de outra janela fica), e a leva, aberta ou fechada, sai com os
 // agentes e o uso dela; o historico fica para a proxima fechada. A leva aberta limpa perde a retomada.
 async function limpar($) {
@@ -824,6 +867,7 @@ export function register(on, options) {
       await (e.marco === 'grill' && !soPedido ? salvarGrillNovo($, grill) : salvarGrill($, grill))
       await update($, GRILL, () => grill)
       if (e.marco === 'grill') await update($, GRILL_DA_SESSAO, () => true)
+      if (e.marco === 'entendimento') await registrarNoHistoricoDeGrills($, { tipo: 'sim', documento: grill.documento })
       return { result: `marco registrado; ${e.marco}` }
     }
     const antes = await read($, LEVA)
@@ -832,7 +876,7 @@ export function register(on, options) {
     const leva = aplicar(antes, e, await $.clock.now(), usd)
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
-    // a leva comeca (ou retoma): o grill sai da aba Painel
+    // a leva comeca (ou retoma): o grill sai da aba Geral
     if (e.marco === 'inicio') await tirarGrillDaTela($)
     if (retoma(antes, e)) {
       const tickets = leva.tickets.map(({ id, titulo, estado, notas }) => ({ id, titulo, estado, notas }))
@@ -950,6 +994,10 @@ export function register(on, options) {
         : g.perguntas.map(p => (p.id === id ? { ...p, resposta: respostas[p.pergunta] ?? 'sem resposta' } : p)),
     })
     if (respondido) await salvarGrill($, respondido)
+    if (respondido && !semResposta) {
+      const questoes = questoesDaTela(e.questions)
+      await registrarNoHistoricoDeGrills($, { tipo: 'terminal', questoes, respostas: respostasDaTela(e.questions, questoes, respostas) })
+    }
     return voltou ? { ...r, context: [...(r.context ?? []), voltou] } : r
   })
 
@@ -1075,6 +1123,17 @@ export function register(on, options) {
       await update($, GRILL, g => ({ ...g, tela, telaFim: false }))
       await sincronizarTela($)
     }
+    // no canal tela, o --retomar do grill desta janela que voltou ao CLI o devolve a tela, na URL de agora (o servidor
+    // pode ter subido noutra porta): a rodada seguinte vai a pagina
+    const deVolta = canalTela && RETOMAR.test(e.command ?? '') && URL_DA_TELA.exec(String(r?.result?.stdout ?? ''))?.[0]
+    if (deVolta && (await emGrill($))) {
+      const novo = await update($, GRILL, g => {
+        if (g?.canal !== 'cli' || idDaTela(g.tela) !== idDaTela(deVolta)) return g
+        const { canal, ...resto } = g
+        return { ...resto, tela: deVolta, telaFim: false }
+      })
+      if (novo?.tela === deVolta) await salvarGrill($, novo)
+    }
     // so o stdout que abre com o prompt (o comando composto que imprime outra coisa antes nao e o
     // localizador falando), e so no grill na tela: o que a leva tirou de la guarda o prompt dela
     const linha = /skills-do-matt\.js["']?\s+--linha/.test(e.command ?? '') && String(r?.result?.stdout ?? '').trim()
@@ -1090,6 +1149,17 @@ export function register(on, options) {
       if (!novo.erro) {
         await salvarGrill($, novo)
         await update($, GRILL, () => novo)
+        if (novo === fechado) await registrarNoHistoricoDeGrills($, { tipo: 'sim', documento: novo.documento })
+        // o fim do grill: o painel vai a aba Grill com o cartao Prompt no topo, o Executar a vista. A
+        // key so existe depois que o pane redesenha a aba, e a recusa de antes disso tenta de novo; o
+        // pane fechado recusa todas, e a aba fica Grill para quando ele abrir
+        // ponytail: 5 tentativas a cada 100 ms; um aviso de redesenho do engine troca o laco, se vier
+        await trocarAba($, 'grill')
+        for (let i = 0; i < 5; i++) {
+          const rolou = await $.ui.scroll({ to: { key: 'grill:prompt' }, in: PANE, block: 'start' }).catch(() => ({}))
+          if (!rolou.deny) break
+          await $.clock.sleep(100)
+        }
       }
     }
     return r
@@ -1107,25 +1177,26 @@ export function register(on, options) {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Code, Input } = $.ui.resolve(e)
     const leva = await read($, LEVA)
-    // a aba Grill mostra o ultimo grill do workspace; a aba Painel, so o que ainda esta na tela
+    // a aba Grill mostra o ultimo grill do workspace; a aba Geral, so o que ainda esta na tela
     const ultimoGrill = await read($, GRILL)
     // sem leva, o grill que o inicio tirou daqui volta, para o Limpar alcanca-lo
     const grill = leva ? naTela(ultimoGrill) : ultimoGrill
     const aba = await read($, ABA)
     const arquivos = await read($, CODIGO)
-    // as abas no topo, a da tela em destaque; o numero de cada uma a troca com o foco no pane
+    // a barra de abas: os nomes sem moldura e sem numero, as inativas apagadas e a ativa sublinhada em
+    // laranja (o Button nao tem cor, a linha e um Text da largura do nome)
     const abas = h(
       Box,
-      { gap: 1, marginBottom: 1, flexWrap: 'wrap' },
-      ...Object.entries(ABAS).map(([qual, nome], i) =>
-        h(Button, {
-          key: `aba:${qual}`,
-          label: qual === 'codigo' && arquivos.length > 0 ? `${nome} (${arquivos.length})` : nome,
-          hotkey: String(i + 1),
-          ...(qual === aba ? { variant: 'primary' } : { dimColor: true }),
-          onPress: () => trocarAba($, qual),
-        }),
-      ),
+      { gap: 2, marginBottom: 1, flexWrap: 'wrap' },
+      ...Object.entries(ABAS).map(([qual, nome]) => {
+        const label = qual === 'codigo' && arquivos.length > 0 ? `${nome} (${arquivos.length})` : nome
+        return h(
+          Box,
+          { flexDirection: 'column' },
+          h(Button, { key: `aba:${qual}`, label, plain: true, ...(qual !== aba && { dimColor: true }), onPress: () => trocarAba($, qual) }),
+          qual === aba && h(Text, { color: LARANJA }, '━'.repeat(label.length)),
+        )
+      }),
     )
     // o tamanho do corpo do pane; o viewport e o da tela inteira, e centralizar por ele joga o
     // desenho para baixo, fora do pane baixo
@@ -1289,7 +1360,7 @@ export function register(on, options) {
     }
     const ticket = t => linha(t, [[t.id.padEnd(Math.max(4, t.id.length + 2)), { color: APAGADO }], [t.titulo]], `portão ${t.testes ? `${t.testes} ` : ''}`)
     const item = i => linha(i, [[i.titulo]], i.detalhe ? `${i.detalhe} ` : '')
-    // a aba Tickets: a linha do ticket, como na aba Painel, e embaixo as notas do que ele entregou
+    // a aba Tickets: a linha do ticket, como na aba Geral, e embaixo as notas do que ele entregou
     if (aba === 'tickets') {
       if (!leva) return tela('Nenhuma leva neste workspace', 'verdes', '—', cartao(null, apagado('os tickets aparecem quando o to-tickets publica')))
       const comNotas = (t, i) =>
@@ -1363,16 +1434,21 @@ export function register(on, options) {
         // o Executar leva o texto exato a caixa de envio: copiado da tela, o terminal parte a linha
         // longa e um nome de skill partido nao autoriza a skill. O grill volta do store depois do
         // /clear do Clear, entao o Executar segue valendo na sessao nova
+        // a key e o alvo do scroll do fim do grill
         g.linha &&
-          cartao(
-            h(
-              Box,
-              { gap: 2 },
-              apagado('Prompt'),
-              h(Button, { key: 'grill:clear', label: 'Clear', dimColor: true, onPress: () => $.command.run({ command: 'clear' }) }),
-              h(Button, { key: 'grill:colar', label: 'Executar', dimColor: true, onPress: async () => (await $.prompt.fill({ text: g.linha })).isFilled || $.ui.toast('Não deu para colar o prompt') }),
+          h(
+            Box,
+            { key: 'grill:prompt', flexDirection: 'column' },
+            cartao(
+              h(
+                Box,
+                { gap: 2 },
+                apagado('Prompt'),
+                h(Button, { key: 'grill:clear', label: 'Clear', dimColor: true, onPress: () => $.command.run({ command: 'clear' }) }),
+                h(Button, { key: 'grill:colar', label: 'Executar', dimColor: true, onPress: async () => (await $.prompt.fill({ text: g.linha })).isFilled || $.ui.toast('Não deu para colar o prompt') }),
+              ),
+              h(Code, { source: g.linha }),
             ),
-            h(Code, { source: g.linha }),
           ),
       )
     }
@@ -1400,7 +1476,7 @@ export function register(on, options) {
     const fases = FASES.filter(f => ROTULO[f])
     const grade = chips =>
       cartao('Fases', h(Box, { flexDirection: 'column', gap: 1 }, ...Array.from({ length: Math.ceil(chips.length / porLinha) }, (_, i) => h(Box, { gap: 1 }, ...chips.slice(i * porLinha, (i + 1) * porLinha)))))
-    // o titulo da aba Painel com o botao Limpar ao lado, o unico que limpa o painel
+    // o titulo da aba Geral com o botao Limpar ao lado, o unico que limpa o painel
     const comLimpar = titulo => h(Box, { gap: 2 }, negrito(titulo), h(Button, { key: 'painel:limpar', label: 'Limpar', dimColor: true, onPress: () => { limpo = true; return limpar($) } }))
     // o grill na tela e sempre mais novo que a leva: o inicio de uma leva o tira de la
     if (grill) return tela(comLimpar(`Grill · ${grill.pedido}`), ...andamento(grill), cartaoDaTela(grill), grade([chipDoGrill(grill), ...fases.map(f => chip([[ROTULO[f]]], '', false, false))]))

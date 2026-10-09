@@ -2,11 +2,13 @@
 
 Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 
-- `inicio`, logo depois das três reservadas, com o `documento` da linha e os `sujos` (os caminhos
+- `inicio`, logo depois das três reservadas, com o `documento` da linha (o que vem entre `leva` e `até o fim`, sem eles) e os `sujos` (os caminhos
   do `git status --porcelain` de antes da leva); a leva já entra na fase `spec`.
 - `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
   `qualidade`), a de `implement` com o `modo` que o usuário escolheu.
-- `tickets` com a lista `{ id, titulo }` assim que o `to-tickets` publicar; `ticket` com o `id`
+- `tickets` com a lista `{ id, titulo }` assim que o `to-tickets` publicar e de novo, inteira e com
+  os novos no fim, quando a leva ganhar tickets (os que já andaram guardam o portão e o tempo; nunca
+  reenvie o `portao` deles); `ticket` com o `id`
   dele ao começar cada um; `portao` com o `ticket`, `verde` ou `vermelho`, os `reparos` (0 a 2) e
   os `testes` (ex. `3/4`, até 20 caracteres) quando o executor os informou, e as `notas` do que
   ele entregou (até 500 caracteres). No modo workflow a sessão não vê cada ticket começar: quando a notificação do

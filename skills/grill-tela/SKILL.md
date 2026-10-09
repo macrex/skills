@@ -5,7 +5,7 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.10
+# Versao: 2.11
 
 Esta skill só troca o canal do `grilling`, cujas regras continuam valendo: em vez de perguntar no
 terminal, você publica cada rodada numa página local e espera o usuário responder lá. O
@@ -92,14 +92,24 @@ salvo se a porta fixa 47110 estava ocupada e o servidor subiu noutra), que subst
 todo comando seguinte. Repita o comando que falhou ou, com a rodada já na tela, espere (passo 4):
 a resposta que você não recebeu volta no `aguardar`. A sessão já terminou
 com o sim? O `--retomar` não sobe servidor e imprime o JSON do sim na última linha: siga o passo 6
-com ele. Saiu com código 1 (a sessão voltou ao CLI, ou não há o que retomar)? Voltar ao CLI.
+com ele. A sessão voltou ao CLI? O `--retomar` a devolve à tela, na mesma URL, esperando a rodada
+seguinte. Saiu com código 1 (não há o que retomar)? Voltar ao CLI.
 
 ## Histórico
 
 `G historico` sobe o servidor se preciso, abre o navegador e imprime a URL do histórico de grills
-(a raiz do servidor): os ativos no topo e todos os grills na tela da máquina, com o projeto e o
-status de cada um. Passe-a ao usuário que pedir o histórico. `G abrir <url>` reabre um grill ou o
+(a raiz do servidor): os ativos no topo e todos os grills da máquina, com o projeto e o status de
+cada um. Passe-a ao usuário que pedir o histórico. `G abrir <url>` reabre um grill ou o
 histórico, subindo o servidor se ele caiu.
+
+O grill feito no terminal entra no histórico por `G registrar`, que grava direto no disco, sem
+servidor, só em sessão no terminal (a fase `cli`) ou na que nenhum servidor no ar segura, que ele
+leva ao terminal, e imprime a URL do grill:
+`G registrar --projeto <nome> [--pedido <texto>] <arquivo.json | ->` cria a sessão,
+`G registrar <url> <arquivo.json | ->` anexa a ela. O corpo é `{"tipo":"terminal","questoes":[…],"respostas":[…]}`
+(as questões no contrato da rodada; as respostas `{id, marca, escolha, comentario}`, a marca em
+`aceito`, `outra`, `delegado`, `esclarecer` ou `adiado`) ou `{"tipo":"sim","documento":"…"}`. No
+Claude Code o plugin o roda sozinho a cada rodada do grill da `/faz` no terminal; você não o roda.
 
 ## Voltar ao CLI
 
@@ -108,6 +118,9 @@ histórico, subindo o servidor se ele caiu.
 - O usuário escreveu no terminal enquanto você esperava: pare de esperar (no Claude Code,
   `TaskStop` no id da tarefa em background; no laço, não rode a próxima volta), rode
   `G cli <url>`, trate a mensagem dele e siga o grill no terminal.
+- O usuário pediu para o grill que foi ao terminal voltar à tela: rode
+  `G iniciar --projeto <nome> --retomar --id <id>` (Retomar), passe a URL a ele e publique a rodada
+  seguinte nela; no Claude Code com o canal tela, o plugin leva o `AskUserQuestion` seguinte à página.
 
 ## Contratos
 

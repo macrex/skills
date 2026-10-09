@@ -59,6 +59,11 @@ strong{font-weight:600}
 .ico.falando{color:var(--rec-ink);background:var(--rec);animation:pu 1.2s ease-in-out infinite}
 .sublink{border:none;background:none;color:var(--muted);font-size:13px;min-height:40px;padding:0 8px;text-decoration:underline;text-underline-offset:3px}
 .sublink:hover{color:var(--ink)}
+.seguir{margin:28px 0 0;text-align:center}
+.dlg{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 8px 28px rgba(0,0,0,.18);padding:20px 24px;max-width:440px}
+.dlg::backdrop{background:rgba(0,0,0,.35)}
+.dlg h4{margin:0 0 8px;font-size:17px}
+.dlg form{margin-top:18px;justify-content:flex-end}
 
 .wrap{max-width:1320px;margin:0 auto;padding:28px 32px 40px}
 .h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
@@ -202,6 +207,10 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
 </head>
 <body>
 <div id="app"></div>
+<!-- a confirmacao do Seguir no terminal: o form method=dialog fecha nos dois botoes, e o Esc tambem -->
+<dialog id="dlg-cli" class="dlg"><h4>Seguir no terminal?</h4>
+  <p class="sub">A próxima rodada vai ao terminal, e esta página para de receber perguntas. Para voltar à tela depois, peça ao agente.</p>
+  <form method="dialog" class="envio"><button class="btn sec" autofocus>Ficar na tela</button><button class="btn pri" onclick="paraCli()">Seguir no terminal</button></form></dialog>
 <script>
 const TOKEN = new URLSearchParams(location.search).get('t');
 // o grill fica em /g/<projeto>/<id>, com a API debaixo do caminho dele; as preferências são da máquina, na raiz
@@ -243,6 +252,7 @@ const ICONE_SOM = svg('<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 
 const ICONE_NOTA = svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 17);
 const ICONE_SINO = svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', 17);
 const ICONE_LUA =svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>');
+const ICONE_RELOGIO = svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 17);
 const ICONE_SOL = svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
 const ESTRELA = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>';
 
@@ -430,10 +440,10 @@ function barra(){
 }
 function historico(aberto){
   if(!E.historico.length) return '';
-  const linhas = E.historico.flatMap(h=>h.respostas.map(r=>({...r, rodada:h.rodada.rodada})));
+  const linhas = E.historico.flatMap(h=>h.respostas.map(r=>({...r, rodada:h.rodada.rodada, q:h.rodada.questoes.find(q=>q.id===r.id)})));
   return `<details class="caixa hist" ${aberto?'open':''}><summary>${aberto?'Rodadas':'Rodadas anteriores'} (${E.historico.length})</summary>
     <table><tr><th>Rodada</th><th>Questão</th><th>Resposta</th><th>Marca</th></tr>
-    ${linhas.map(r=>`<tr><td class="mono">${r.rodada}</td><td class="mono">${esc(r.id)}</td><td>${md(r.escolha)}${r.comentario?`<div class="muted" style="font-size:12.5px;font-style:italic">“${esc(r.comentario)}”</div>`:''}</td><td class="st"><span class="${r.marca}">${ROTULO[r.marca]}</span></td></tr>`).join('')}
+    ${linhas.map(r=>`<tr><td class="mono">${r.rodada}</td><td>${r.q?`<div class="muted" style="font-size:12px">${esc(r.q.cabecalho)}</div>${md(r.q.titulo)}`:`<span class="mono">${esc(r.id)}</span>`}</td><td>${md(r.escolha)}${r.comentario?`<div class="muted" style="font-size:12.5px;font-style:italic">“${esc(r.comentario)}”</div>`:''}</td><td class="st"><span class="${r.marca}">${ROTULO[r.marca]}</span></td></tr>`).join('')}
     </table></details>`;
 }
 function modoPanorama(){
@@ -477,7 +487,6 @@ function topo(){
   else for(let k=1;k<=feitas;k++) passos.push(`<li class="feito">Rodada ${k} ✓</li>`);
   if(E.fase==='rodada') passos.push(`<li class="agora">Rodada ${R().rodada}</li>`);
   passos.push(`<li class="${fim?'agora':''}">Fechamento${E.fase==='concluido'?' ✓':''}</li>`);
-  const ativo = !['concluido','cli'].includes(E.fase) && !S.caiu;
   // a logo é cópia de assets/logo.svg, embutida porque a skill instalada sai sem o repositório: mudou lá, muda aqui
   return `<header class="top" style="--h:${matiz(E.projeto)}"><div class="top-in"><span class="marca"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="macrex skills"><rect x="2" y="2" width="60" height="60" rx="11" fill="#24283b" stroke="#565f89" stroke-width="2"/><path d="M17 21 L29 32 L17 43" fill="none" stroke="#c0caf5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="33" y="39" width="15" height="5" rx="1.5" fill="#d77757"/></svg>GRILL</span><span class="projeto">${esc(E.projeto)}</span>
    <ol class="passos">${passos.join('<li class="traco" aria-hidden="true"></li>')}</ol>
@@ -486,8 +495,7 @@ function topo(){
    <button class="ico" aria-label="Leitura em voz alta" title="Leitura em voz alta" popovertarget="cfg-leitura">${ICONE_SOM}</button>
    <button class="ico" aria-label="Aviso de rodada nova" title="Aviso de rodada nova" popovertarget="cfg-aviso">${ICONE_SINO}</button>
    <button class="ico" aria-label="Alternar tema" title="Alternar tema" onclick="tema()">${escuro()?ICONE_SOL:ICONE_LUA}</button>
-   <a class="sublink" href="/?t=${TOKEN}">Histórico</a>
-   ${ativo?`<button class="sublink" onclick="paraCli()">Seguir no terminal</button>`:''}</div></div></header>` + painelVoz() + painelAviso();
+   <a class="ico" href="/?t=${TOKEN}" aria-label="Histórico de grills" title="Histórico de grills">${ICONE_RELOGIO}</a></div></div></header>` + painelVoz() + painelAviso();
 }
 const telaRodada = () => (V==='B' ? modoFoco : modoPanorama)();
 function telaAguarde(){
@@ -523,7 +531,8 @@ const adrMarcada = i => S.adr[chaveAdr(i)] ?? E.final.tabela[i].duravel === true
 // a leitura do grill concluído: a final com a proveniência e as ADRs que voltaram no sim, e as rodadas abaixo
 const marcadasNoSim = (tabela, ultima) => tabela.map(l => Boolean(ultima && ultima.tipo==='sim' && ultima.adrs.some(a => a.decisao===l.decisao && a.escolha===l.escolha)));
 function telaLeitura(){
-  const fecho = 'Volte ao terminal: o agente já tem o seu sim. Esta URL segue abrindo o grill.';
+  const fecho = E.canal==='cli' ? `O grill foi feito no terminal${E.ultima&&E.ultima.documento?`, e o entendimento está em ${esc(E.ultima.documento)}`:''}. Esta URL segue abrindo o grill.`
+    : 'Volte ao terminal: o agente já tem o seu sim. Esta URL segue abrindo o grill.';
   if(!E.final) return telaFim('✓','Grill concluído',fecho) + historico(true);
   const adr = marcadasNoSim(E.final.tabela, E.ultima), n = E.final.tabela.length, r = E.historico.length, a = adr.filter(Boolean).length;
   return `<div class="final"><div class="glifo">✓</div><h1 class="h1">Grill concluído</h1>
@@ -551,9 +560,11 @@ function render(){
   const corpo = S.caiu ? telaFim('!','O servidor do grill parou','Volte ao terminal: o grill segue lá. Pode fechar esta aba.')
     : { inicio:telaAguarde, rodada:telaRodada, aguarde:telaAguarde, final:telaFinal,
     concluido:telaLeitura,
-    cli:()=>telaFim('&gt;_','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.') + historico(true) }[E.fase]();
+    cli:()=>(E.canal==='cli' ? telaFim('&gt;_','Grill no terminal','As rodadas respondidas no terminal aparecem aqui conforme o agente as registra.')
+      : telaFim('&gt;_','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.')) + historico(true) }[E.fase]();
   const naRodada = E.fase==='rodada' && !S.caiu;
-  document.getElementById('app').innerHTML = topo() + `<main class="wrap ${naRodada?'com-barra':''}">${corpo}</main>` + (naRodada ? barra() : '');
+  const ativo = !['concluido','cli'].includes(E.fase) && !S.caiu;
+  document.getElementById('app').innerHTML = topo() + `<main class="wrap ${naRodada?'com-barra':''}">${corpo}${ativo?`<p class="seguir"><button class="sublink" onclick="document.getElementById('dlg-cli').showModal()">Seguir no terminal</button></p>`:''}</main>` + (naRodada ? barra() : '');
   // a aba diz de que projeto é o grill: o nome no título e a cor do projeto no ícone
   document.title = tituloAba();
   document.querySelector('link[rel=icon]').href = 'data:image/svg+xml,' + encodeURIComponent(
@@ -584,7 +595,7 @@ const HS = { projeto:'', busca:'' }; // o chip de projeto e a busca
 const ATIVOS = ['rodada','lendo','final'];
 const separar = (gs, projeto, busca) => ({ ativos: gs.filter(g=>ATIVOS.includes(g.estado)), todos: gs.filter(g=>(!projeto||g.projeto===projeto) && (!busca||g.pedido.toLowerCase().includes(busca.toLowerCase()))) });
 const ESTADO = g => ({ rodada:`Rodada ${g.rodada} aguardando você`, lendo: g.rodada ? `Agente lendo a rodada ${g.rodada}` : 'Agente preparando a primeira rodada',
-  final:'Tela final aguardando o sim', concluido:'Concluído', cli:'Voltou ao CLI', abandonado:'Abandonado' })[g.estado];
+  final:'Tela final aguardando o sim', concluido:'Concluído', cli: g.canal==='cli' ? 'No terminal' : 'Voltou ao CLI', abandonado:'Abandonado' })[g.estado];
 const linkDe = g => `${g.caminho}?t=${TOKEN}`;
 const desde = ms => { const m=Math.round((Date.now()-ms)/60000); return m<1?'agora':m<60?`há ${m} min`:m<1440?`há ${Math.floor(m/60)} h`:`há ${Math.floor(m/1440)} d`; };
 const quando = ms => new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -631,7 +642,7 @@ async function consultarHistorico(){
 
 // ---------- consulta ao servidor ----------
 async function consultar(forcar){
-  if(S.caiu || (E && ['concluido','cli'].includes(E.fase))) return;
+  if(S.caiu || (E && E.fase==='concluido')) return;
   try{
     const r = await api('estado');
     const mudou = !E || r.json.versao !== E.versao, primeira = !E;

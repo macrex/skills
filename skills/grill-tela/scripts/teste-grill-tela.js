@@ -12,7 +12,8 @@
 //   4. respostas com questao sem marca sao recusadas;
 //   5. preferencias gravam na pasta e voltam na leitura;
 //   6. depois do sim e do cli o servidor segue no ar e a URL do grill abre o estado dele; o cli
-//      chega ao aguardar; depois do sim o cli e recusado; o --retomar recusa a sessao do CLI; a
+//      chega ao aguardar; depois do sim o cli e recusado; o --retomar devolve a sessao do CLI a
+//      tela, na mesma URL, sem o cli que ficou na fila, e a rodada nova e aceita; a
 //      pagina do concluido e a leitura (a final com as ADRs do sim e as rodadas abertas), e a do
 //      CLI mostra as rodadas;
 //   8. um segundo aguardar substitui o primeiro, que sai com o JSON substituido;
@@ -33,7 +34,12 @@
 //      mais novo ao mais velho; o subcomando historico imprime a raiz, que desenha o historico, e
 //      o desenho separa os ativos e filtra pelo projeto e pela busca;
 //  17. o iniciar troca o servidor vivo de outra versao quando nenhum grill esta ativo; com grill
-//      ativo, segue com o velho e avisa.
+//      ativo, segue com o velho e avisa;
+//  18. o registrar grava o grill do terminal no disco, sem servidor: cria a sessao de canal cli,
+//      anexa as rodadas numeradas depois da ultima respondida e o sim com o documento, recusa o
+//      corpo fora do contrato, a URL ilegivel e a sessao fora do CLI com o servidor no ar (com ele
+//      caido, leva a sessao ao terminal); o servidor rele o grill do CLI que cresceu, o historico o
+//      lista como No terminal, a leitura mostra a pergunta e o --retomar sem --id o pula.
 //
 //   node skills/grill-tela/scripts/teste-grill-tela.js
 
@@ -277,6 +283,7 @@ const RODADA = {
   assert.deepStrictEqual(ultimaLinha((await espera2).saida), { tipo: 'sim', adrs: [TABELA[0], TABELA[2]] },
     'adrs: as linhas marcadas, na ordem da tabela, sem repetidas nem indices invalidos');
   assert.strictEqual(roda('cli', url).status, 1, 'cli depois do sim: recusado');
+  assert.strictEqual((await pedir(api(url, 'tela'), 'POST', {})).status, 409, 'a volta a tela depois do sim: recusada');
   // 6. o sim nao derruba o servidor: a URL do grill concluido segue abrindo o estado dele
   await espere(3500);
   estado = (await pedir(api(url, 'estado'))).json;
@@ -291,7 +298,7 @@ const RODADA = {
   assert.deepStrictEqual(leitura.marcadasNoSim(TABELA, null), [false, false, false]);
   assert.match(pagina.txt, /concluido:telaLeitura/, 'o concluido abre a leitura');
   assert.match(pagina.txt, /function telaLeitura\(\)[\s\S]*?historico\(true\)/, 'a leitura traz as rodadas abertas');
-  assert.match(pagina.txt, /cli:\(\)=>telaFim\([\s\S]*?\)\s*\+\s*historico\(true\)/, 'o grill do CLI mostra as rodadas respondidas');
+  assert.match(pagina.txt, /cli:\(\)=>\(E\.canal==='cli' \? telaFim\([\s\S]*?\)\)\s*\+\s*historico\(true\)/, 'o grill do CLI, voltado ou feito no terminal, mostra as rodadas respondidas');
   assert.doesNotMatch(pagina.txt, /a página fecha sozinha/, 'a pagina nao fecha mais no sim');
 
   // 6. cli
@@ -351,9 +358,24 @@ const RODADA = {
   assert.deepStrictEqual(ultimaLinha((await espera3).saida), { tipo: 'cli' });
   await espere(3500);
   assert.strictEqual((await pedir(api(url2, 'estado'))).json.fase, 'cli', 'o cli nao derruba o servidor');
-  r = roda('iniciar', '--sem-navegador', '--projeto', 'teste', '--retomar', '--id', idDe(url2));
-  assert.strictEqual(r.status, 1, 'sessao que voltou ao CLI: o --retomar nao a traz de volta a tela');
-  assert.match(r.stderr, /voltou ao CLI/);
+  // a sessao que voltou ao CLI volta a tela pelo --retomar, na mesma URL, esperando a rodada seguinte
+  const deVolta = () => roda('iniciar', '--sem-navegador', '--projeto', 'teste', '--retomar', '--id', idDe(url2));
+  r = deVolta();
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout.trim().split('\n').pop(), url2, 'a mesma URL');
+  assert.match(r.stdout, /de volta à tela/);
+  assert.strictEqual((await pedir(api(url2, 'estado'))).json.fase, 'aguarde', 'a pagina sai do "segue no terminal"');
+  // o evento tela vai a disco: a leitura das sessoes (a mesma do historico) nao a ve mais no CLI
+  assert.match(roda('sessoes', '--projeto', 'teste').stdout, new RegExp(`${idDe(url2)} .*fase aguarde, último evento tela`));
+  // o cli que nenhum aguardar levou nao volta depois da volta a tela
+  assert.strictEqual(roda('cli', url2).status, 0);
+  assert.strictEqual(deVolta().status, 0);
+  assert.deepStrictEqual(ultimaLinha((await aguardar(url2, '--ate', '1')).saida), { tipo: 'pendente' }, 'o cli velho saiu da fila');
+  assert.strictEqual(roda('rodada', url2, arquivo('rodada4.json', { ...RODADA, rodada: 4 })).status, 0, 'a rodada nova e aceita');
+  assert.strictEqual((await pedir(api(url2, 'tela'), 'POST', {})).status, 200, 'fora do CLI, a volta nao muda nada');
+  assert.strictEqual((await pedir(api(url2, 'estado'))).json.fase, 'rodada');
+  // de volta ao CLI, como o historico de grills abaixo espera
+  assert.strictEqual(roda('cli', url2).status, 0);
 
   // 9. outro processo na porta, respondendo HTML
   const intruso = http.createServer((req, res) => res.end('<html>outro</html>'));
@@ -495,7 +517,16 @@ const RODADA = {
   assert.strictEqual(urlHist, `http://127.0.0.1:${PORTA}/?t=${token}`);
   const raiz = await pedir(urlHist);
   assert.match(raiz.txt, /Histórico de grills/);
-  assert.match(pagina.txt, /class="sublink" href="\/\?t=\$\{TOKEN\}">Histórico</, 'a pagina do grill leva ao historico');
+  // o topo: o Historico e um icone junto dos outros, e o Seguir no terminal nao esta mais la
+  const doTopo = /function topo\(\)\{[\s\S]*?\n\}/.exec(pagina.txt)[0];
+  assert.match(doTopo, /<a class="ico" href="\/\?t=\$\{TOKEN\}" aria-label="Histórico de grills" title="Histórico de grills">\$\{ICONE_RELOGIO\}<\/a>/, 'a pagina do grill leva ao historico pelo icone');
+  assert.doesNotMatch(doTopo, /Seguir no terminal|paraCli/, 'o Seguir no terminal saiu do topo');
+  // o Seguir no terminal no fim do conteudo, so com o grill ativo, abre a confirmacao
+  assert.match(pagina.txt, /\$\{corpo\}\$\{ativo\?`<p class="seguir"><button class="sublink" onclick="document\.getElementById\('dlg-cli'\)\.showModal\(\)">Seguir no terminal<\/button><\/p>`:''\}<\/main>/);
+  const dialogo = /<dialog id="dlg-cli"[\s\S]*?<\/dialog>/.exec(pagina.txt)[0];
+  assert.match(dialogo, /<form method="dialog"/, 'Esc e os botoes fecham o dialogo');
+  assert.match(dialogo, /<button class="btn sec" autofocus>Ficar na tela<\/button>/, 'o foco comeca no Ficar na tela');
+  assert.match(dialogo, /<button class="btn pri" onclick="paraCli\(\)">Seguir no terminal<\/button>/);
   // o desenho do historico, rodado fora do navegador: os ativos no topo, a tabela pelo projeto e pela busca
   const hist = vm.runInNewContext([/const ATIVOS = .*\r?\n/, /const separar = .*\r?\n/].map((re) => re.exec(raiz.txt)[0]).join('') + '({ separar })');
   const GS = [{ projeto: 'a', pedido: 'Busca rápida', estado: 'rodada' }, { projeto: 'b', pedido: 'outra', estado: 'concluido' },
@@ -534,6 +565,80 @@ const RODADA = {
   assert.strictEqual(servidor2().pid, comAtivo.pid, 'com grill ativo: o velho fica');
   assert.match(r.stdout, /outra versão[\s\S]*2 grills ativos/, 'e o iniciar avisa');
   assert.strictEqual((await pedir(api(r.stdout.trim().split('\n').pop(), 'estado'))).status, 200, 'o grill novo funciona no velho');
+
+  // 18. o grill do terminal: o registrar grava no disco, sem servidor, e o historico o lista e abre
+  const questao = (id, rec = 0) => ({ id, cabecalho: `Tema ${id}`, titulo: `Pergunta ${id}?`, opcoes: [{ rotulo: 'A', recomendada: rec === 0 }, { rotulo: 'B', recomendada: rec === 1 }] });
+  const doTerminal = (...ids) => ({ tipo: 'terminal', questoes: ids.map((i) => questao(i)), respostas: ids.map((i) => ({ id: i, marca: 'aceito', escolha: 'A', comentario: null })) });
+  const eventosDe = (u) => fs.readFileSync(path.join(base, 'sessoes', new URL(u).pathname.split('/')[2], `${idDe(u)}.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  await derrubar();
+  r = roda('registrar', '--projeto', 'term', '--pedido', 'grill no terminal', arquivo('t1.json', doTerminal('Q1')));
+  assert.strictEqual(r.status, 0, r.stderr);
+  const urlT = r.stdout.trim().split('\n').pop();
+  assert.match(urlT, URL_DO_GRILL('term'));
+  await assert.rejects(pedir(api(urlT, 'estado')), 'o registrar nao sobe servidor');
+  let evs = eventosDe(urlT);
+  assert.deepStrictEqual([evs.map((e) => e.tipo), evs[0].canal, evs[0].pedido, evs[1].rodada.rodada], [['inicio', 'terminal'], 'cli', 'grill no terminal', 1]);
+  assert.strictEqual(roda('historico', '--sem-navegador').status, 0);
+  // o grill ja na memoria do servidor ve a rodada que o registrar grava depois
+  const antes = (await pedir(api(urlT, 'estado'))).json;
+  assert.deepStrictEqual([antes.fase, antes.historico.length], ['cli', 1]);
+  assert.strictEqual(roda('registrar', urlT, arquivo('t2.json', doTerminal('Q1', 'Q2'))).status, 0);
+  const depois = (await pedir(api(urlT, 'estado'))).json;
+  assert.deepStrictEqual([depois.historico.length, depois.historico[1].rodada.rodada, depois.historico[1].terminal], [2, 2, true]);
+  assert.notStrictEqual(depois.versao, antes.versao, 'a versao muda: a pagina aberta se redesenha');
+  const doH = async (u) => (await pedir(`http://127.0.0.1:${PORTA}/api/historico?t=${token}`)).json.find((g) => g.id === idDe(u) && u.includes(`/g/${g.projeto}/`));
+  h = await doH(urlT);
+  assert.deepStrictEqual([h.estado, h.canal, h.respondidas, h.pedido], ['cli', 'cli', 2, 'grill no terminal']);
+  // o corpo fora do contrato sai 1 sem escrever nada
+  const tamanho = () => fs.readFileSync(path.join(base, 'sessoes', 'term', `${idDe(urlT)}.jsonl`), 'utf8').length;
+  const t0 = tamanho();
+  for (const ruim of ['{', { tipo: 'terminal', questoes: [{ ...questao('Q1'), opcoes: [] }], respostas: [] },
+    { ...doTerminal('Q1'), respostas: [{ id: 'Q9', marca: 'aceito', escolha: 'A', comentario: null }] },
+    { ...doTerminal('Q1'), respostas: [{ id: 'Q1', marca: 'talvez', escolha: 'A', comentario: null }] }, { tipo: 'outro' }]) {
+    r = roda('registrar', urlT, arquivo('ruim.json', ruim));
+    assert.strictEqual(r.status, 1, JSON.stringify(ruim));
+    assert.match(r.stderr, /registrar recusado/);
+  }
+  assert.strictEqual(tamanho(), t0);
+  // o sim conclui o grill com o documento; o segundo sai 1
+  assert.strictEqual(roda('registrar', urlT, arquivo('sim.json', { tipo: 'sim', documento: 'Nota X' })).status, 0);
+  assert.deepStrictEqual(eventosDe(urlT).pop(), { ...eventosDe(urlT).pop(), tipo: 'sim', documento: 'Nota X' });
+  assert.strictEqual(roda('registrar', urlT, arquivo('sim.json', { tipo: 'sim', documento: 'Nota X' })).status, 1, 'o segundo sim');
+  assert.strictEqual((await doH(urlT)).estado, 'concluido');
+  // a sessao da tela com a rodada aberta recusa; a que voltou ao CLI recebe depois do cli, numerando em sequencia
+  const urlR = iniciar();
+  assert.strictEqual(roda('rodada', urlR, arquivo('rodada.json', RODADA)).status, 0);
+  assert.strictEqual(roda('registrar', urlR, arquivo('t1.json', doTerminal('Q1'))).status, 1, 'grill ativo na pagina');
+  assert.strictEqual((await pedir(api(urlR, 'respostas'), 'POST', { tipo: 'rodada', rodada: 1, respostas: [{ id: 'Q1', opcao: 0 }, { id: 'Q2', opcao: 0 }] })).status, 200);
+  // a rodada 2 publicada que a pagina nao respondeu nao conta: a do terminal e a 2, depois da ultima respondida
+  assert.strictEqual(roda('rodada', urlR, arquivo('rodada2.json', { ...RODADA, rodada: 2 })).status, 0);
+  assert.strictEqual(roda('cli', urlR).status, 0);
+  assert.strictEqual(roda('registrar', urlR, arquivo('t1.json', doTerminal('Q1'))).status, 0);
+  const daTela = (await pedir(api(urlR, 'estado'))).json;
+  assert.deepStrictEqual(daTela.historico.map((x) => [x.rodada.rodada, Boolean(x.terminal)]), [[1, false], [2, true]]);
+  // com o servidor caido, a sessao com a rodada aberta vai ao terminal no disco e recebe a rodada
+  const urlC = iniciar();
+  assert.strictEqual(roda('rodada', urlC, arquivo('rodada.json', RODADA)).status, 0);
+  await derrubar();
+  r = roda('registrar', urlC, arquivo('t1.json', doTerminal('Q1')));
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.deepStrictEqual(eventosDe(urlC).map((e) => e.tipo), ['inicio', 'rodada', 'cli', 'terminal']);
+  assert.strictEqual(eventosDe(urlC).pop().rodada.rodada, 1);
+  // a URL com o projeto ilegivel sai 1 com o motivo, sem a pilha
+  r = roda('registrar', urlC.replace('/g/teste/', '/g/%E0%A4%A/'), arquivo('t1.json', doTerminal('Q1')));
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /^registrar recusado: URL ilegível/);
+  // o --retomar sem --id pula o grill do terminal, que pode ser de outra janela
+  assert.strictEqual(roda('registrar', '--projeto', 'sessao', arquivo('t1.json', doTerminal('Q1'))).status, 0);
+  assert.strictEqual(urlDe(iniciarSessao('--retomar')), url8, 'a ultima sessao do projeto que nao e do terminal');
+  // a pagina: o grill no terminal e "No terminal", a leitura mostra a pergunta e o grill no CLI segue consultando
+  const estadoDaPagina = vm.runInNewContext(/const ESTADO = [\s\S]*?\[g\.estado\];/.exec(pagina.txt)[0] + ' ESTADO');
+  assert.strictEqual(estadoDaPagina({ estado: 'cli', canal: 'cli' }), 'No terminal');
+  assert.strictEqual(estadoDaPagina({ estado: 'cli', canal: 'tela' }), 'Voltou ao CLI');
+  const rodadasLidas = vm.runInNewContext(/function historico\(aberto\)\{[\s\S]*?\n\}/.exec(pagina.txt)[0] + ' historico',
+    { E: depois, esc: (s) => String(s), md: (s) => String(s), ROTULO: { aceito: 'aceito' } });
+  assert.match(rodadasLidas(true), /Tema Q2[\s\S]*Pergunta Q2\?/, 'a leitura mostra o tema e a pergunta');
+  assert.doesNotMatch(/async function consultar\(forcar\)\{\n.*\n/.exec(pagina.txt)[0], /'cli'/, 'o grill no CLI segue consultando');
 
   r = roda('sessoes', '--projeto', 'sessao');
   assert.strictEqual(r.status, 0, r.stderr);
