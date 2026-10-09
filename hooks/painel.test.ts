@@ -2254,6 +2254,44 @@ describe('painel da leva', () => {
     await ui.redraw()
     expect(await quadro(ui)).toBe(antes)
   })
+
+  test('o /clear depois do commit tira a base de novo: o Diff e a Arquivos voltam limpos', async ($, on) => {
+    const novaSessao = estadoPorSessao(on)
+    const { sessao, clear } = mundo($, on)
+    // antes do commit, a base abc123 e o register.js mudado; depois, o tree limpo no HEAD def456
+    let commitado = false
+    on('process.run', ($, e) => {
+      const a = e.argv.join(' ')
+      const stdout = /rev-parse --show-toplevel/.test(a) ? 'D:/ws/a\n'
+        : /stash create/.test(a) ? (commitado ? '' : 'abc123\n')
+        : /rev-parse HEAD/.test(a) ? 'def456\n'
+        : /ls-files --cached/.test(a) ? 'README.md\0hooks/register.js\0'
+        : /diff --name-only -z abc123/.test(a) ? 'hooks/register.js\0'
+        : /diff --no-color --no-ext-diff abc123/.test(a)
+          ? 'diff --git a/hooks/register.js b/hooks/register.js\n--- a/hooks/register.js\n+++ b/hooks/register.js\n@@ -1,1 +1,1 @@\n-a\n+b\n'
+          : ''
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('classic.SessionStart', () => ({}) as never)
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    await ui.redraw()
+    await ui.press({ key: 'no:hooks/' })
+    await ui.redraw()
+    expect(await corDe(ui, /register\.js$/)).toBe(COR.mudado)
+
+    commitado = true
+    await clear()
+    novaSessao()
+    await $.classic.SessionStart({ source: 'clear' } as never)
+    await ui.redraw()
+    expect(await corDe(ui, /register\.js$/)).toBe(COR.igual)
+    expect(await quadro(ui)).toMatch(/\[ ▾ hooks\/ \]/)
+    await ui.press({ key: 'aba:codigo' })
+    await ui.redraw()
+    expect(await ui.find({ type: 'Text', text: /nenhum arquivo alterado nesta sessão/ })).toBeDefined()
+  })
 })
 
 // A leva viva fora do pane: a faixa acima do prompt, o sufixo do spinner e a linha do marco.

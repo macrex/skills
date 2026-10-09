@@ -784,15 +784,22 @@ export function register(on, options) {
       await sugerirLinha($, e.source === 'clear')
       if (antes) {
         await update($, ABA, () => antes.aba)
-        await update($, BASE, () => antes.base)
-        await update($, CODIGO, () => antes.codigo)
+        // o /clear recomeca o Diff: a base nova e o tree de agora (o commit da sessao velha sai do Diff)
+        if (e.source === 'resume') {
+          await update($, BASE, () => antes.base)
+          await update($, CODIGO, () => antes.codigo)
+          await update($, ARVORE, () => antes.arvore)
+        }
         await update($, ABERTOS, () => antes.abertos)
-        await update($, ARVORE, () => antes.arvore)
         await update($, PASTAS, () => antes.pastas)
         await update($, FILTRO, () => antes.filtro)
         await update($, USO, () => antes.uso)
         // a lista oficial e da sessao: o herdado que ela nao conhece mais para (reconciliar)
         await update($, AGENTES, () => antes.agentes.map(a => ({ ...a, herdado: true })))
+      }
+      if (e.source === 'clear') {
+        await marcarBase($, await $.session.root())
+        await refazer($, await read($, ABA))
       }
     }
     return next(e)

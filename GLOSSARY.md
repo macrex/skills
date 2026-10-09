@@ -30,6 +30,14 @@ _Evitar_: gate, check
 O pane do Claude Code que o `/painel-macrex` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.
 _Evitar_: dashboard, monitor, statusline, TUI
 
+**Barra de abas**:
+A fileira no topo do painel da leva que troca o assunto da tela (Painel, Diff, Grill, Tickets, Uso, Arquivos, Menu).
+_Evitar_: menu, navegação
+
+**Menu**:
+Os itens que o usuário define para si, agrupados em seções, cada um um texto que vai ao prompt quando apertado; o da máquina e o do projeto somam.
+_Evitar_: atalhos, favoritos, barra de abas
+
 **Diff da sessão**:
 O que a sessão mudou nos arquivos do repositório: o working tree comparado com a foto tirada quando a sessão começou, inclusive o que mudou por shell e sem o que já estava sujo antes.
 _Evitar_: git status, alterações pendentes
