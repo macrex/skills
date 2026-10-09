@@ -4,7 +4,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'macrex-painel', props: {}, surface: 'terminal' } as const
+const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'painel-macrex', props: {}, surface: 'terminal' } as const
 const SURFACES = ['terminal', 'desktop'] as const
 const MARCO = 'mcp__macrex-skills__faz_marco'
 
@@ -56,6 +56,19 @@ function estadoPorSessao(on: On) {
   return () => { sessao++ }
 }
 
+// O $.state de cada janela do Claude Code: `janela()` diz qual responde agora; o store segue um so.
+function estadoPorJanela(on: On, janela: () => string) {
+  const valores = new Map<string, { value: unknown; version: number }>()
+  on('state.get', ($, e) => ({ value: valores.get(`${janela()}:${e.key}`) ?? { value: undefined, version: 0 } }) as never)
+  on('state.set', ($, e) => {
+    const chave = `${janela()}:${e.key}`
+    const versao = valores.get(chave)?.version ?? 0
+    if (e.ifVersion != null && e.ifVersion !== versao) return { value: { isSet: false, version: versao } } as never
+    valores.set(chave, { value: e.value, version: versao + 1 })
+    return { value: { isSet: true, version: versao + 1 } } as never
+  })
+}
+
 // O pane montado como texto, para ler o desenho sem o terminal: Text inteiro numa linha, Button
 // como [ rotulo ], Code linha a linha; a Box em coluna empilha, a em fila (o padrao) poe lado a
 // lado. Um toMatch sobre ele mostra a aba inteira quando falha.
@@ -76,7 +89,7 @@ async function quadro(ui: { drawn: () => Promise<unknown> }) {
 const TICKETS = [{ id: '01', titulo: 'Mod do painel' }, { id: '02', titulo: 'Ferramenta faz_marco' }]
 
 describe('painel da leva', () => {
-  test('/macrex-painel abre o pane e, aberto, fecha', async ($, on) => {
+  test('/painel-macrex abre o pane e, aberto, fecha', async ($, on) => {
     const abertos = new Set<string>()
     on('ui.open', ($, e) => { abertos.add(e.id); return { value: { isPlaced: true } } })
     on('ui.close', ($, e) => { abertos.delete(e.id); return { value: undefined } })
@@ -84,9 +97,9 @@ describe('painel da leva', () => {
       value: [...abertos].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })),
     }))
 
-    await $.command.run({ command: 'macrex-painel' })
-    expect([...abertos]).toEqual(['macrex-painel'])
-    await $.command.run({ command: 'macrex-painel' })
+    await $.command.run({ command: 'painel-macrex' })
+    expect([...abertos]).toEqual(['painel-macrex'])
+    await $.command.run({ command: 'painel-macrex' })
     expect([...abertos]).toEqual([])
   })
 
@@ -349,7 +362,7 @@ describe('painel da leva', () => {
 
   test('a aba Grill acompanha a grill-tela: a rodada publicada entra aguardando e a resposta chega pelo estado da pagina', async ($, on) => {
     const { marco, sessao, relogio } = mundo($, on)
-    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
     const RODADA = {
       rodada: 1,
       questoes: [
@@ -372,7 +385,7 @@ describe('painel da leva', () => {
 
     // o comando que publica a rodada leva a URL da pagina: a rodada entra, aguardando
     await $.tool.call({ tool: 'Bash', command: `node "C:/s/grill-tela/scripts/grill-tela.js" rodada ${URL} r1.json` } as never)
-    expect(consultas.at(-1)).toBe('http://127.0.0.1:4321/api/estado?t=abc123')
+    expect(consultas.at(-1)).toBe('http://127.0.0.1:4321/g/a/20261009-142524/api/estado?t=abc123')
     expect(await quadro(ui)).toMatch(/Transporte\nComo o agente e a tela conversam\?\n▸ aguardando\n/)
 
     // respondida na pagina: o relogio do painel le o estado de novo, sem esperar o agente
@@ -404,7 +417,7 @@ describe('painel da leva', () => {
 
   test('a resposta da grill-tela sem escolha (delegado, esclarecer, adiado) aparece pela marca', async ($, on) => {
     const { marco, sessao } = mundo($, on)
-    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
     const RODADA = { rodada: 1, questoes: ['Q1', 'Q2', 'Q3'].map(id => ({ id, cabecalho: `Tema ${id}`, titulo: `Pergunta ${id}?`, opcoes: [] })) }
     const estado = {
       fase: 'aguarde',
@@ -432,7 +445,7 @@ describe('painel da leva', () => {
 
   test('no canal tela, o AskUserQuestion do grill vai a pagina da grill-tela e volta com a resposta dela; o Voltar ao CLI devolve o dialogo nativo', { options: { grill_canal: 'tela' } }, async ($, on) => {
     const { marco, toasts } = mundo($, on)
-    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
     const comandos: { args: string[]; stdin?: string }[] = []
     // as voltas do aguardar, em ordem: o prazo que venceu, a mensagem a parte e a resposta da rodada 1; na rodada 2, o Voltar ao CLI
     const voltas = [
@@ -476,7 +489,7 @@ describe('painel da leva', () => {
     ])
     expect(nativas).toEqual([])
     expect(comandos.map(c => c.args)).toEqual([
-      ['iniciar', '--projeto', 'a'],
+      ['iniciar', '--projeto', 'a', '--pedido', 'grill pelo canal tela'],
       ['rodada', URL, '-'],
       ['aguardar', URL, '--ate', '120'],
       ['aguardar', URL, '--ate', '120'],
@@ -547,7 +560,7 @@ describe('painel da leva', () => {
 
   test('no canal tela, o Limpar apertado durante a espera da pagina leva a rodada ao dialogo com o motivo', { options: { grill_canal: 'tela' } }, async ($, on) => {
     const { marco, toasts } = mundo($, on)
-    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
     let ui: Awaited<ReturnType<Engine['ui']['mount']>>
     on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: '{"fase":"rodada","historico":[]}' } }))
     on('process.run', async ($, e) => {
@@ -570,14 +583,14 @@ describe('painel da leva', () => {
   test('no canal tela, a rodada avisa a URL antes de esperar; a pagina guardada que morreu e retomada ou refeita, e sem pagina a rodada volta ao terminal com o motivo', { options: { grill_canal: 'tela' } }, async ($, on) => {
     // o caso da sessao de 2026-10-09: a rodada publicada numa pagina que o usuario nunca viu, sem a URL no terminal
     const { marco, toasts } = mundo($, on)
-    const URL = (n: number) => `http://127.0.0.1:400${n}/?t=abc${n}`
+    const URL = (n: number) => `http://127.0.0.1:400${n}/g/a/2026100${n}-000000?t=abc${n}`
     const vivas = new Set<string>()
     const subidas: Record<string, string[]> = { novo: [URL(1)], retomar: [] }
     const comandos: string[][] = []
     let toastsAoEsperar: string[] = []
     let estado: Record<string, any> = { fase: 'inicio', historico: [] }
     on('http.fetch', ($, e) => {
-      const viva = [...vivas].some(u => e.url === u.replace('/?t=', '/api/estado?t='))
+      const viva = [...vivas].some(u => e.url === u.replace('?t=', '/api/estado?t='))
       return { value: viva ? { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } : { status: 502, ok: false, headers: {}, text: '' } }
     })
     on('process.run', ($, e) => {
@@ -632,7 +645,7 @@ describe('painel da leva', () => {
     subidas.novo.push(URL(3))
     comandos.length = 0
     await perguntar('Terceira?')
-    expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['iniciar', '--projeto', 'a'], ['rodada', URL(3), '-'], ['aguardar', URL(3), '--ate', '120']])
+    expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['iniciar', '--projeto', 'a', '--pedido'], ['rodada', URL(3), '-'], ['aguardar', URL(3), '--ate', '120']])
     expect(nativas).toEqual([])
 
     // nenhuma sobe: nada e publicado, o dialogo pergunta e o toast e o contexto dizem por que
@@ -645,10 +658,156 @@ describe('painel da leva', () => {
     expect(r4.context?.join('\n')).toMatch(/A rodada não ficou na grill-tela \(a página da grill-tela não subiu\)/)
   })
 
+  test('no canal tela, o grilling da /faz cria o grill na grill-tela e entrega a URL ao agente antes da primeira pergunta', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    // o caso da sessao de 2026-10-09: o grill chegou a primeira espera sem a URL em lugar nenhum a vista
+    const { marco } = mundo($, on)
+    const URL = 'http://127.0.0.1:47110/g/a/20261009-142524?t=abc123'
+    const comandos: string[][] = []
+    let estado: Record<string, any> = { fase: 'inicio', historico: [] }
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
+    on('process.run', ($, e) => {
+      const [, , sub, ...args] = e.argv
+      comandos.push([sub, ...args])
+      let stdout = 'ok\n'
+      if (sub === 'iniciar') stdout = `${URL}\n`
+      if (sub === 'rodada') estado = { fase: 'rodada', rodada: JSON.parse(e.init?.stdin ?? ''), historico: [] }
+      if (sub === 'aguardar') {
+        const respostas = [{ id: 'Q1', marca: 'aceito', escolha: 'Sim', comentario: null }]
+        estado = { fase: 'aguarde', historico: [{ rodada: estado.rodada, respostas }] }
+        stdout = `${JSON.stringify({ tipo: 'rodada', rodada: 1, respostas })}\n`
+      }
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    const r = await $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args: 'historico de grills na tela' } as never)
+    // a URL chega ao agente no resultado da skill, com a instrucao de escreve-la antes da primeira pergunta
+    expect(r.context?.join('\n')).toContain(URL)
+    expect(r.context?.join('\n')).toMatch(/antes da primeira pergunta/)
+    expect(comandos).toEqual([['iniciar', '--projeto', 'a', '--pedido', 'historico de grills na tela']])
+
+    // o marco grill da mesma leva de chamadas so troca o pedido: a URL fica
+    await marco({ marco: 'grill', pedido: 'historico na tela' })
+    comandos.length = 0
+    await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question: 'Primeira?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    // a primeira rodada vai a pagina que ja estava a vista, sem subir outra
+    expect(comandos.map(c => c.slice(0, 2))).toEqual([['rodada', URL], ['aguardar', URL]])
+  })
+
+  test('no canal tela, a segunda /faz antes de qualquer pergunta cria outro grill na grill-tela, sem herdar a URL da primeira', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { marco } = mundo($, on)
+    const URL = (n: number) => `http://127.0.0.1:47110/g/a/2026100${n}-000000?t=abc123`
+    const urls = [URL(1), URL(2)]
+    const comandos: string[][] = []
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ fase: 'inicio', historico: [] }) } }))
+    on('process.run', ($, e) => {
+      const [, , sub, ...args] = e.argv
+      comandos.push([sub, ...args])
+      const stdout = sub === 'iniciar' ? `${urls.shift()}\n` : sub === 'aguardar' ? '{"tipo":"cli"}\n' : 'ok\n'
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({ result: { questions: e.questions, answers: { 'Primeira?': 'Sim' } } }) as never)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    for (const pedido of ['primeira faz', 'segunda faz']) {
+      await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+      await $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args: pedido } as never)
+      await marco({ marco: 'grill', pedido: `${pedido} resumida` })
+    }
+    expect(comandos.filter(c => c[0] === 'iniciar').map(c => c.at(-1))).toEqual(['primeira faz', 'segunda faz'])
+    comandos.length = 0
+    await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question: 'Primeira?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    expect(comandos[0]).toEqual(['rodada', URL(2), '-'])
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/Grill · segunda faz resumida/)
+  })
+
+  test('o grill na tela ganha um cartao com a URL e o Abrir nas abas Painel e Grill, que fica depois do sim e do CLI; o Historico abre o historico', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { relogio, sessao, toasts } = mundo($, on)
+    const URL = 'http://127.0.0.1:47110/g/a/20261009-142524?t=abc123'
+    const comandos: string[][] = []
+    let consultas = 0
+    let estado: Record<string, any> = { fase: 'inicio', historico: [] }
+    on('http.fetch', () => { consultas++; return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } } })
+    on('process.run', ($, e) => {
+      if (e.argv[0] === 'git') return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+      const [, , sub, ...args] = e.argv
+      comandos.push([sub, ...args])
+      const stdout = sub === 'iniciar' || sub === 'abrir' ? `${URL}\n` : sub === 'historico' ? 'http://127.0.0.1:47110/?t=abc123\n' : sub === 'aguardar' ? '{"tipo":"cli"}\n' : 'ok\n'
+      if (sub === 'rodada') estado = { fase: 'rodada', rodada: JSON.parse(e.init?.stdin ?? ''), historico: [] }
+      if (sub === 'aguardar') estado = { ...estado, fase: 'cli' }
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({ result: { questions: e.questions, answers: { 'Primeira?': 'Sim' } } }) as never)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+
+    // sem grill, a aba Grill ja tem o Historico
+    await ui.press({ key: 'aba:grill' })
+    expect(await quadro(ui)).toMatch(/^Nenhum grill neste workspace {2}\[ Histórico \]/m)
+    await ui.press({ key: 'grill:historico' })
+    expect(comandos.at(-1)).toEqual(['historico'])
+    expect(toasts.at(-1)).toBe('Histórico de grills: http://127.0.0.1:47110/?t=abc123')
+
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    await $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args: 'cartao da tela' } as never)
+    await ui.press({ key: 'aba:painel' })
+    expect(await quadro(ui)).toMatch(new RegExp(`Grill na tela {2}\\[ Abrir \\]\\n${URL.replace(/[.?]/g, '\\$&')}\\n`))
+    await ui.press({ key: 'tela:abrir' })
+    expect(comandos.at(-1)).toEqual(['abrir', URL])
+    await ui.press({ key: 'aba:grill' })
+    expect(await quadro(ui)).toMatch(/Grill na tela {2}\[ Abrir \]/)
+
+    // o grill volta ao CLI pela pagina: o cartao fica, e a consulta da pagina para
+    await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question: 'Primeira?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    expect(await quadro(ui)).toMatch(/Grill na tela {2}\[ Abrir \]/)
+    expect(await ui.find({ type: 'Code', text: URL })).toBeDefined()
+    await relogio.advance(segundos(1))
+    const feitas = consultas
+    await relogio.advance(segundos(3))
+    expect(consultas).toBe(feitas)
+  })
+
+  test('o cartao do grill na tela fica depois do sim, e a consulta da pagina para', async ($, on) => {
+    const { marco, relogio, sessao } = mundo($, on)
+    const URL = 'http://127.0.0.1:47110/g/a/20261009-142524?t=abc123'
+    let consultas = 0
+    let estado: Record<string, any> = { fase: 'final', historico: [] }
+    on('http.fetch', () => { consultas++; return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } } })
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: 'Tela final na tela, 1 decisão.', stderr: '' } }) as never)
+    await sessao()
+    await marco({ marco: 'grill', pedido: 'grill do sim' })
+    await $.tool.call({ tool: 'Bash', command: `node "C:/s/grill-tela/scripts/grill-tela.js" final ${URL} f.json` } as never)
+    estado = { fase: 'concluido', historico: [] }
+    await relogio.advance(segundos(1))
+    const feitas = consultas
+    await relogio.advance(segundos(3))
+    expect(consultas).toBe(feitas)
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/Grill na tela {2}\[ Abrir \]/)
+    expect(await ui.find({ type: 'Code', text: URL })).toBeDefined()
+  })
+
+  test('fora do canal tela, o grilling da /faz nao sobe a grill-tela', async ($, on) => {
+    mundo($, on)
+    const comandos: string[] = []
+    on('process.run', ($, e) => { comandos.push(e.argv[2]); return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } })
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    const r = await $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args: 'pedido' } as never)
+    expect(r.context).toBeUndefined()
+    expect(comandos.filter(c => c === 'iniciar')).toEqual([])
+  })
+
   test('no canal tela, so o grill desta sessao vai a pagina; o grilling de fora da /faz vai a grill-tela; o Seguir no terminal entre rodadas leva o grill ao CLI', { options: { grill_canal: 'tela' } }, async ($, on) => {
     // o grill abandonado de outra sessao, que o store traz de volta
     const { sessao, relogio } = mundo($, on, { 'grill:D:/ws/a': { pedido: 'grill velho', inicio: 0, perguntas: [] } })
-    const URL = 'http://127.0.0.1:4321/?t=abc123'
+    const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
     const comandos: string[] = []
     let estado: Record<string, any> = { fase: 'inicio', historico: [] }
     on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
@@ -688,7 +847,7 @@ describe('painel da leva', () => {
     expect((await grilling('um grill qualquer')).context?.join('\n')).toMatch(/invoque a skill grill-tela e conduza o grill inteiro por ela/)
     // o da /faz abre o grill desta sessao, que vai a pagina
     await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
-    expect((await grilling('pedido da faz')).context).toBeUndefined()
+    expect((await grilling('pedido da faz')).context?.join('\n')).toContain(URL)
     await perguntar()
     expect(comandos).toEqual(['iniciar', 'rodada', 'aguardar'])
     expect(nativas).toEqual(['Algo mais?'])
@@ -700,6 +859,90 @@ describe('painel da leva', () => {
     await perguntar()
     expect(comandos).toEqual([])
     expect(nativas).toEqual(['Algo mais?', 'Algo mais?'])
+  })
+
+  test('cada janela tem o seu grill: a nova mostra o mais recente, o /clear mantem o da janela, o Limpar tira so o dela', async ($, on) => {
+    // duas janelas do Claude Code no mesmo workspace: o $.state e de cada uma, o store e um so
+    let janela = 'A'
+    estadoPorJanela(on, () => janela)
+    const { marco, sessao, clear, relogio } = mundo($, on)
+    on('classic.SessionStart', () => ({}) as never)
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => ({ result: { questions: e.questions, answers: { [e.questions[0].question]: 'Sim' } } }) as never)
+    const titulo = async () => { await ui.redraw(); return /\nGrill · ([^\n]+?) {2}\[ Limpar \]/.exec(await quadro(ui))?.[1] }
+    const ui = await $.ui.mount(PANE)
+
+    await sessao()
+    await marco({ marco: 'grill', pedido: 'grill da A' })
+    await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question: 'Da A?', multiSelect: false, options: [] }] } as never)
+    // a janela nova mostra o grill mais recente do workspace, e abre o seu
+    janela = 'B'
+    await sessao()
+    expect(await titulo()).toBe('grill da A')
+    await relogio.advance(segundos(5))
+    await marco({ marco: 'grill', pedido: 'grill da B' })
+    expect(await titulo()).toBe('grill da B')
+    // a janela A segue com o seu, mesmo depois de uma escrita da B
+    janela = 'A'
+    expect(await titulo()).toBe('grill da A')
+    await ui.press({ key: 'aba:grill' })
+    await ui.redraw()
+    expect(await quadro(ui)).toMatch(/Da A\?\n✓ Sim/)
+    await ui.press({ key: 'aba:painel' })
+    // o /clear na A traz o grill dela, nao o mais recente (o da B)
+    await clear()
+    janela = 'A2'
+    await $.classic.SessionStart({ source: 'clear' } as never)
+    expect(await titulo()).toBe('grill da A')
+    // o Limpar na A tira so o grill dela: uma janela nova acha o da B
+    await ui.press({ key: 'painel:limpar' })
+    expect(await titulo()).toBeUndefined()
+    janela = 'C'
+    await sessao()
+    expect(await titulo()).toBe('grill da B')
+  })
+
+  test('o grill gravado no formato antigo (um por workspace) aparece e passa a ser da janela', async ($, on) => {
+    const { sessao } = mundo($, on, { 'grill:D:/ws/a': { pedido: 'grill antigo', inicio: 0, perguntas: [] } })
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/\nGrill · grill antigo {2}\[ Limpar \]/)
+    // o Limpar o apaga de vez: a chave antiga nao o traz de volta
+    await ui.press({ key: 'painel:limpar' })
+    await sessao()
+    expect(await ui.find({ text: /grill antigo/ })).toBeUndefined()
+  })
+
+  test('o workspace guarda os 10 grills mais recentes: o 11º apaga o mais antigo', async ($, on) => {
+    // oito grills de outras janelas, entre o da janela A (o mais antigo) e o da B
+    let janela = 'A'
+    estadoPorJanela(on, () => janela)
+    const outros = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`grill:D:/ws/a:g${i}`, { id: `g${i}`, pedido: `grill ${i}`, inicio: segundos(i + 1), perguntas: [] }]))
+    const { marco, sessao, clear, relogio } = mundo($, on, outros)
+    on('classic.SessionStart', () => ({}) as never)
+    const ui = await $.ui.mount(PANE)
+    const titulo = async () => { await ui.redraw(); return /\nGrill · ([^\n]+?) {2}\[ Limpar \]/.exec(await quadro(ui))?.[1] }
+    await sessao()
+    await marco({ marco: 'grill', pedido: 'grill da A' })
+    janela = 'B'
+    await sessao()
+    await relogio.advance(segundos(60))
+    await marco({ marco: 'grill', pedido: 'o decimo' })
+    // com dez, o da A segue no store: o /clear na A o traz
+    janela = 'A'
+    await clear()
+    janela = 'A2'
+    await $.classic.SessionStart({ source: 'clear' } as never)
+    expect(await titulo()).toBe('grill da A')
+    // o decimo primeiro apaga o mais antigo, o da A: o /clear seguinte cai no mais recente
+    janela = 'C'
+    await sessao()
+    await relogio.advance(segundos(60))
+    await marco({ marco: 'grill', pedido: 'o decimo primeiro' })
+    janela = 'A2'
+    await clear()
+    janela = 'A3'
+    await $.classic.SessionStart({ source: 'clear' } as never)
+    expect(await titulo()).toBe('o decimo primeiro')
   })
 
   test('o /clear troca a sessao e o $.state recomeca vazio: o painel volta com tudo o que desenhava', async ($, on) => {
@@ -733,7 +976,7 @@ describe('painel da leva', () => {
     expect(await quadro(ui)).toMatch(/\nLeva · doc {2}\[ Limpar \] {2}0s\n[\s\S]*\[ grill \] {2}0s ✓/)
     await ui.press({ key: 'aba:grill' })
     await ui.redraw()
-    expect(await quadro(ui)).toMatch(/\nGrill {2}concluído\ngrill de antes {2}0s\n/)
+    expect(await quadro(ui)).toMatch(/\nGrill {2}concluído\ngrill de antes {2}\[ Histórico \] {2}0s\n/)
   })
 
   test('o /clear depois de um cd no shell traz o grill e a leva de volta, e o Limpar os apaga: o store e da raiz do projeto', async ($, on) => {
@@ -943,7 +1186,7 @@ describe('painel da leva', () => {
     await relogio.advance(segundos(30))
     expect(await quadro(ui)).toMatch(/\[ grill \] {2}1m20s ✓/)
     await ui.press({ key: 'aba:grill' })
-    expect(await quadro(ui)).toMatch(/concluído\ngrill sem entendimento {2}1m20s\n/)
+    expect(await quadro(ui)).toMatch(/concluído\ngrill sem entendimento {2}\[ Histórico \] {2}1m20s\n/)
     expect(await ui.find({ type: 'Text', text: /^doc do comando$/ })).toBeDefined()
 
     // o documento entre aspas simples (PowerShell), sem aspas ou numa variavel do shell fecha igual
@@ -971,7 +1214,7 @@ describe('painel da leva', () => {
     await marco({ marco: 'entendimento', documento: 'doc do marco' })
     await relogio.advance(segundos(5))
     await localizador('"doc do comando"')
-    expect(await quadro(ui)).toMatch(/concluído\ngrill com entendimento {2}10s\n/)
+    expect(await quadro(ui)).toMatch(/concluído\ngrill com entendimento {2}\[ Histórico \] {2}10s\n/)
     expect(await ui.find({ type: 'Text', text: /^doc do marco$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^doc do comando$/ })).toBeUndefined()
   })
@@ -1011,7 +1254,7 @@ describe('painel da leva', () => {
     await sessao()
     await marco({ marco: 'grill', pedido: 'grill na tela' })
     durante = () => marco({ marco: 'entendimento', documento: 'doc da tela' })
-    await $.tool.call({ tool: 'Bash', command: 'node "C:/s/grill-tela/scripts/grill-tela.js" rodada http://127.0.0.1:4321/?t=abc123 r1.json' } as never)
+    await $.tool.call({ tool: 'Bash', command: 'node "C:/s/grill-tela/scripts/grill-tela.js" rodada http://127.0.0.1:4321/g/a/20261009-142524?t=abc123 r1.json' } as never)
     const ui = await $.ui.mount(PANE)
     await ui.press({ key: 'aba:grill' })
     expect(await ui.find({ type: 'Text', text: /^doc da tela$/ })).toBeDefined()
@@ -1057,7 +1300,7 @@ describe('painel da leva', () => {
     const { toasts, marco } = mundo($, on)
 
     expect((await marco({ marco: 'inicio', documento: '2026-10-03 Painel da leva' })).deny).toBeUndefined()
-    expect(toasts).toEqual(['Leva registrada: /macrex-painel mostra o andamento'])
+    expect(toasts).toEqual(['Leva registrada: /painel-macrex mostra o andamento'])
     await marco({ marco: 'fase', fase: 'tickets' })
     await marco({ marco: 'tickets', tickets: TICKETS })
     await marco({ marco: 'fase', fase: 'implement' })
@@ -2056,7 +2299,7 @@ describe('faixa da leva', () => {
     // o Abrir painel abre o pane e some
     await larg(120)
     await ui.press({ key: 'faixa:abrir' })
-    expect([...abertos]).toEqual(['macrex-painel'])
+    expect([...abertos]).toEqual(['painel-macrex'])
     expect(await ui.find({ type: 'Button', text: /Abrir painel/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /^Leva · implement/ })).toBeDefined()
 

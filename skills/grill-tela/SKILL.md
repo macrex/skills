@@ -5,7 +5,7 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.9
+# Versao: 2.10
 
 Esta skill só troca o canal do `grilling`, cujas regras continuam valendo: em vez de perguntar no
 terminal, você publica cada rodada numa página local e espera o usuário responder lá. O
@@ -49,9 +49,11 @@ no terminal: "Voltar ao CLI", abaixo.
 
 ## O ciclo
 
-1. **Uma vez:** `G iniciar --projeto <nome do projeto>`. Ele abre o navegador e imprime a URL, que
-   todo comando seguinte recebe. Escreva-a ao usuário: o navegador pode não abrir (SSH, contêiner,
-   sandbox).
+1. **Uma vez:** `G iniciar --projeto <nome do projeto> --pedido "<o pedido do usuário, em poucas
+   palavras>"`. Ele garante o servidor da máquina (um só, que atende todos os grills e fica no ar
+   até o reboot), cria o grill com o pedido como nome no histórico, abre o navegador e imprime a
+   URL do grill, que todo comando seguinte recebe e que segue abrindo o grill depois do sim.
+   Escreva-a ao usuário: o navegador pode não abrir (SSH, contêiner, sandbox).
 2. **Cada rodada:** escreva o JSON da rodada (num arquivo temporário, ou por stdin com `-`) e rode
    `G rodada <url> <arquivo.json>`. Saiu com código 1? Corrija o JSON pela lista de erros e repita
    antes de seguir: o usuário ainda não viu nada.
@@ -73,7 +75,7 @@ no terminal: "Voltar ao CLI", abaixo.
 6. Fronteira vazia: `G final <url> <arquivo.json>` com a tabela consolidada de decisões, cada
    linha com a sua proveniência (em "Contratos"), depois espere de novo.
    - `{"tipo":"sim","adrs":[…]}` vale como o sim do usuário ao entendimento (por exemplo o sim que
-     a `/faz` pede). O servidor para sozinho. `adrs` traz as linhas que o usuário marcou como ADR:
+     a `/faz` pede). `adrs` traz as linhas que o usuário marcou como ADR:
      com o vault na sessão (alguma ferramenta do servidor `vault-docs`, seja qual for o prefixo),
      registre cada uma como ADR pela skill `obsidian-docs` (`salvar_nota tipo=adr`), com o
      `motivo` e as `alternativas` rejeitadas no corpo; sem o vault, liste-as ao usuário.
@@ -81,14 +83,23 @@ no terminal: "Voltar ao CLI", abaixo.
 
 ## Retomar
 
-Cada sessão fica em disco, e `G sessoes [--projeto <nome>]` as lista. O `aguardar` devolveu
-`{"tipo":"encerrado"}`, um comando disse que o servidor não respondeu, ou você voltou de uma
-compactação: tente **uma vez** `G iniciar --projeto <nome> --retomar`. Ele traz de volta o
-histórico, a rodada em aberto e a final, e imprime a URL (a mesma, se a porta estiver livre), que
-substitui a antiga em todo comando seguinte. Repita o comando que falhou ou, com a rodada já na
-tela, espere (passo 4): a resposta que você não recebeu volta no `aguardar`. A sessão já terminou
+Cada sessão fica em disco, e `G sessoes [--projeto <nome>]` as lista. Um comando disse que o
+servidor não respondeu, ou você voltou de uma compactação: tente **uma vez**
+`G iniciar --projeto <nome> --retomar --id <id>`, com o `<id>` o carimbo `AAAAMMDD-HHMMSS` da URL
+(sem `--id`, a última sessão do projeto, que pode ser o grill de outra janela). Ele sobe o servidor
+se preciso, traz de volta o histórico, a rodada em aberto e a final, e imprime a URL (a mesma,
+salvo se a porta fixa 47110 estava ocupada e o servidor subiu noutra), que substitui a antiga em
+todo comando seguinte. Repita o comando que falhou ou, com a rodada já na tela, espere (passo 4):
+a resposta que você não recebeu volta no `aguardar`. A sessão já terminou
 com o sim? O `--retomar` não sobe servidor e imprime o JSON do sim na última linha: siga o passo 6
 com ele. Saiu com código 1 (a sessão voltou ao CLI, ou não há o que retomar)? Voltar ao CLI.
+
+## Histórico
+
+`G historico` sobe o servidor se preciso, abre o navegador e imprime a URL do histórico de grills
+(a raiz do servidor): os ativos no topo e todos os grills na tela da máquina, com o projeto e o
+status de cada um. Passe-a ao usuário que pedir o histórico. `G abrir <url>` reabre um grill ou o
+histórico, subindo o servidor se ele caiu.
 
 ## Voltar ao CLI
 

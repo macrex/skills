@@ -27,7 +27,7 @@ A verificação que decide se um ticket fechou: verde ou vermelho, com até dois
 _Evitar_: gate, check
 
 **Painel da leva**:
-O pane do Claude Code que o `/macrex-painel` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.
+O pane do Claude Code que o `/painel-macrex` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.
 _Evitar_: dashboard, monitor, statusline, TUI
 
 **Diff da sessão**:
@@ -53,3 +53,15 @@ _Evitar_: auditoria, checklist
 **Histórico de levas**:
 As levas já fechadas de um workspace, com tempos, portões, reparos, modo do implement e modelos observados.
 _Evitar_: log, métricas
+
+**Grill na tela**:
+Um grill respondido na página da grill-tela, de qualquer projeto da máquina, com endereço próprio que segue valendo depois do sim.
+_Evitar_: sessão da tela, página do grill
+
+**Grill ativo**:
+Um grill na tela sem o sim e sem a volta ao CLI, com algo acontecendo nele nas últimas 2 horas; o aberto mais velho que isso é um grill abandonado.
+_Evitar_: grill em curso, grill aberto
+
+**Histórico de grills**:
+A tela inicial da grill-tela: os grills ativos num bloco no topo e, abaixo, todos os grills na tela já feitos na máquina, com o projeto e o status de cada um.
+_Evitar_: lista de sessões, histórico (sozinho, que também é o de levas)

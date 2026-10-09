@@ -2,26 +2,32 @@
 'use strict';
 // O grill do Matt numa tela HTML local. Um programa so, com os subcomandos que o agente usa:
 //
-//   node grill-tela.js iniciar [--projeto <nome>] [--sem-navegador]   imprime a URL
+//   node grill-tela.js iniciar [--projeto <nome>] [--pedido <texto>] [--sem-navegador]
+//                                                                      cria o grill e imprime a URL dele
 //   node grill-tela.js rodada <url> <arquivo.json | ->                 publica a rodada
 //   node grill-tela.js final <url> <arquivo.json | ->                  publica a tela final
 //   node grill-tela.js aguardar <url> [--ate <segundos>]              espera a pagina
 //   node grill-tela.js cli <url>                                       o grill foi para o terminal
-//   node grill-tela.js iniciar --projeto <nome> --retomar               retoma a ultima sessao
+//   node grill-tela.js iniciar --projeto <nome> --retomar [--id <id>]  retoma a sessao (sem --id, a ultima)
 //   node grill-tela.js sessoes [--projeto <nome>]                      lista as sessoes em disco
+//   node grill-tela.js historico [--sem-navegador]                     imprime a URL do historico de grills
+//   node grill-tela.js abrir <url> [--sem-navegador]                   reabre um grill ou o historico
 //
-// O servidor (subcomando `servidor`, que o `iniciar` sobe destacado) escuta so em 127.0.0.1,
-// numa porta que o sistema escolhe, e recusa todo pedido sem o token da URL. Ele para alguns
-// segundos depois do sim ou do CLI e depois de 2 horas sem a pagina consultar o estado.
+// Um servidor por maquina (subcomando `servidor`, que o iniciar sobe destacado quando nenhum
+// responde) atende todos os grills e fica no ar ate o reboot. Ele escuta so em 127.0.0.1, na
+// porta fixa 47110 (GRILL_TELA_PORTA a troca; ocupada ou reservada, outra do sistema), recusa
+// todo pedido sem o token da maquina (o arquivo `token` da pasta) e grava porta, pid e versao em
+// `servidor.json`; o iniciar de outra versao troca o servidor quando nenhum grill esta ativo.
+// Cada grill fica em /g/<projeto>/<id>, com a API debaixo do caminho dele; a
+// raiz e o historico de grills.
 // O aguardar sem prazo e para o harness que roda comando em background e reacorda o agente
 // (Claude Code); com --ate, quem desiste e o servidor, que devolve {"tipo":"pendente"} e
 // guarda a resposta para a proxima volta — o laco dos harnesses que esperam em primeiro plano.
 // Preferencias da pagina ficam em ~/.grill-tela/preferencias.json (GRILL_TELA_DIR troca a pasta).
 // Cada sessao e um ~/.grill-tela/sessoes/<projeto>/<AAAAMMDD-HHMMSS>.jsonl, uma linha por evento
-// (inicio com porta e token, rodada, respostas, final, ajuste, sim, cli); o --retomar refaz o
-// estado por ele, na mesma porta e com o mesmo token se der, e a resposta que o agente nao
-// recebeu volta no proximo aguardar; a sessao do sim devolve o sim no proprio --retomar, e a que
-// voltou ao CLI nao e retomada.
+// (inicio com o projeto e o pedido, rodada, respostas, final, ajuste, sim, cli); o servidor refaz o grill por
+// ele na primeira vez que alguem o pede, e a resposta que o agente nao recebeu volta no proximo
+// aguardar; a sessao do sim devolve o sim no proprio --retomar, e a que voltou ao CLI nao e retomada.
 // So biblioteca padrao.
 
 const crypto = require('crypto');
@@ -35,8 +41,17 @@ const PASTA = process.env.GRILL_TELA_DIR || path.join(os.homedir(), '.grill-tela
 const PREFERENCIAS = path.join(PASTA, 'preferencias.json');
 const CHAVES_PREF = ['modo', 'tema', 'voz', 'velocidade', 'volume', 'aviso'];
 const SESSOES = path.join(PASTA, 'sessoes');
-const OCIOSO_MS = Number(process.env.GRILL_TELA_OCIOSO_MS) || 2 * 60 * 60 * 1000;
-const ENCERRAR_MS = 3000; // tempo para a pagina, que consulta a cada segundo, ver a fase final
+const TOKEN = path.join(PASTA, 'token');
+const SERVIDOR = path.join(PASTA, 'servidor.json');
+const PORTA = Number(process.env.GRILL_TELA_PORTA) || 47110;
+// a versao do servidor e o hash deste arquivo: qualquer mudanca nele e outra versao
+const VERSAO = crypto.createHash('sha1').update(fs.readFileSync(__filename)).digest('hex').slice(0, 12);
+const ID = /^\d{8}-\d{6}$/;
+// o grill aberto sem evento ha mais que isto, e sem aguardar pendurado, e um grill abandonado
+const ATIVO_MS = 2 * 60 * 60 * 1000;
+const ESTADO_DA_FASE = { inicio: 'lendo', rodada: 'rodada', aguarde: 'lendo', final: 'final', concluido: 'concluido', cli: 'cli' };
+// os estados de um grill ativo, que o servidor nao larga
+const ESTADOS_ATIVOS = ['rodada', 'lendo', 'final'];
 
 // ---------- contratos ----------
 
@@ -132,9 +147,10 @@ function lerSessao(arquivo) {
 // Refaz o estado na ordem em que o servidor gravou. A resposta sem rodada ou final publicada
 // depois fica pendente: o agente pode nao a ter recebido.
 function restaurar(eventos) {
-  const R = { fase: 'inicio', rodada: null, final: null, historico: [], ultima: null, pendente: null, porta: 0, token: null };
+  const R = { fase: 'inicio', rodada: null, final: null, historico: [], ultima: null, pendente: null, projeto: null, pedido: null };
   for (const ev of eventos) {
-    if (ev.tipo === 'inicio') Object.assign(R, { porta: ev.porta, token: ev.token });
+    // a sessao antiga tem um inicio a cada subida do servidor: vale o primeiro
+    if (ev.tipo === 'inicio') Object.assign(R, { projeto: R.projeto ?? ev.projeto ?? null, pedido: R.pedido ?? ev.pedido ?? null });
     else if (ev.tipo === 'rodada') Object.assign(R, { fase: 'rodada', rodada: ev.rodada, final: null, pendente: null });
     else if (ev.tipo === 'final') Object.assign(R, { fase: 'final', final: ev.final, rodada: null, pendente: null });
     else if (ev.tipo === 'respostas' && R.rodada) {
@@ -153,124 +169,221 @@ function restaurar(eventos) {
 
 // ---------- servidor ----------
 
-function servidor(projeto, saida, sessao, retomar) {
-  const R = retomar ? restaurar(lerSessao(sessao)) : restaurar([]);
-  const token = R.token || crypto.randomBytes(16).toString('hex');
-  const S = { fase: R.fase, versao: 0, projeto, rodada: R.rodada, final: R.final, historico: R.historico, ultima: R.ultima, rascunho: null };
-  // o que os proximos aguardar devolvem, na ordem: a mensagem livre nao fecha a rodada, e as
-  // respostas que vem depois dela nao podem tomar o lugar dela
-  const pendentes = R.pendente ? [R.pendente] : [];
-  let espera = null; // o aguardar que esta pendurado
-  let ultimaVisita = Date.now();
-  const mudou = () => S.versao++;
-  // disco cheio ou pasta sem permissao nao derrubam o grill: so a retomada se perde
-  const registrar = (ev) => {
-    try { fs.appendFileSync(sessao, JSON.stringify({ em: new Date().toISOString(), ...ev }) + '\n'); } catch (e) { /* segue */ }
-  };
+const lerJson = (arquivo) => {
+  try { return JSON.parse(fs.readFileSync(arquivo, 'utf8')); } catch (e) { return null; }
+};
 
-  function entregar(msg) {
-    pendentes.push(msg);
-    if (espera) {
-      responder(espera, 200, pendentes.shift());
-      espera = null;
+// O token da maquina, criado na primeira vez; na corrida, fica o de quem gravou primeiro.
+function tokenDaMaquina() {
+  const lido = () => {
+    try {
+      const t = fs.readFileSync(TOKEN, 'utf8').trim();
+      return /^[0-9a-f]{32}$/.test(t) ? t : null;
+    } catch (e) { return null; }
+  };
+  if (lido()) return lido();
+  fs.mkdirSync(PASTA, { recursive: true });
+  const novo = crypto.randomBytes(16).toString('hex');
+  try { fs.writeFileSync(TOKEN, novo, { flag: 'wx', mode: 0o600 }); } catch (e) { if (!lido()) fs.writeFileSync(TOKEN, novo, { mode: 0o600 }); }
+  return lido();
+}
+
+// A versao e o pid da grill-tela que responde na porta com este token, ou null. Com prazo: outro
+// processo na porta pode aceitar a conexao e nunca responder.
+function sondar(porta, token) {
+  return new Promise((ok) => {
+    if (!porta) return ok(null);
+    const req = http.get(`http://127.0.0.1:${porta}/api/versao?t=${token}`, { timeout: 1000 }, (res) => {
+      let txt = '';
+      res.setEncoding('utf8');
+      res.on('data', (d) => (txt += d));
+      res.on('end', () => {
+        try {
+          const j = JSON.parse(txt);
+          ok(res.statusCode === 200 && j && j.versao ? j : null);
+        } catch (e) { ok(null); }
+      });
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => ok(null));
+  });
+}
+
+function servidor() {
+  const token = tokenDaMaquina();
+  // os grills ja pedidos, por `<pasta do projeto>/<id>`; o resto fica em disco ate alguem pedir
+  const grills = new Map();
+  function grill(pasta, id) {
+    const chave = `${pasta}/${id}`;
+    if (grills.has(chave)) return grills.get(chave);
+    const arquivo = path.join(pastaDoProjeto(pasta), `${id}.jsonl`);
+    if (!ID.test(id) || ['.', '..'].includes(pasta) || !fs.existsSync(arquivo)) return null;
+    const R = restaurar(lerSessao(arquivo));
+    const G = {
+      arquivo,
+      S: { fase: R.fase, versao: 0, projeto: R.projeto || pasta, rodada: R.rodada, final: R.final, historico: R.historico, ultima: R.ultima, rascunho: null },
+      // o que os proximos aguardar devolvem, na ordem: a mensagem livre nao fecha a rodada, e as
+      // respostas que vem depois dela nao podem tomar o lugar dela
+      pendentes: R.pendente ? [R.pendente] : [],
+      espera: null, // o aguardar que esta pendurado
+    };
+    grills.set(chave, G);
+    return G;
+  }
+  // disco cheio ou pasta sem permissao nao derrubam o grill: so a retomada se perde
+  const registrar = (G, ev) => {
+    try { fs.appendFileSync(G.arquivo, JSON.stringify({ em: new Date().toISOString(), ...ev }) + '\n'); } catch (e) { /* segue */ }
+  };
+  function entregar(G, msg) {
+    G.pendentes.push(msg);
+    if (G.espera) {
+      responder(G.espera, 200, G.pendentes.shift());
+      G.espera = null;
     }
   }
-  function encerrar(ms) {
-    setTimeout(() => process.exit(0), ms).unref();
+  // Todos os grills da maquina, do mais novo ao mais velho, lidos do disco a cada consulta: o estado
+  // vem dos eventos, e o aguardar pendurado so o servidor conhece.
+  // ponytail: le todas as sessoes por consulta; um indice entra se a maquina juntar milhares de grills
+  function historicoDeGrills() {
+    let pastas = [];
+    try { pastas = fs.readdirSync(SESSOES); } catch (e) { /* nenhum grill ainda */ }
+    return pastas.flatMap((p) => sessoesDe(path.join(SESSOES, p))).map((arquivo) => {
+      const pasta = path.basename(path.dirname(arquivo));
+      const id = path.basename(arquivo, '.jsonl');
+      const eventos = lerSessao(arquivo);
+      const R = restaurar(eventos);
+      const em = eventos.map((e) => Date.parse(e.em)).filter(Number.isFinite);
+      const inicio = em[0] ?? 0;
+      const ultimo = em[em.length - 1] ?? 0;
+      const pendurado = Boolean((grills.get(`${pasta}/${id}`) || {}).espera);
+      let estado = ESTADO_DA_FASE[R.fase];
+      if (ESTADOS_ATIVOS.includes(estado) && Date.now() - ultimo > ATIVO_MS && !pendurado) estado = 'abandonado';
+      // a sessao sem pedido (de antes do --pedido) leva o nome da primeira questao
+      const q = ((R.historico[0] || {}).rodada || R.rodada || { questoes: [] }).questoes[0];
+      return {
+        projeto: R.projeto || pasta, id, estado, inicio, ultimo,
+        pedido: R.pedido || (q ? `${q.cabecalho}: ${q.titulo}` : ''),
+        rodada: R.rodada ? R.rodada.rodada : R.historico.length ? R.historico[R.historico.length - 1].rodada.rodada : 0,
+        respondidas: R.historico.length,
+        decisoes: R.final ? R.final.tabela.length : 0,
+        adrs: R.ultima && R.ultima.tipo === 'sim' ? R.ultima.adrs.length : 0,
+        caminho: `/g/${encodeURIComponent(pasta)}/${id}`,
+      };
+    }).sort((a, b) => b.inicio - a.inicio);
+  }
+  const pagina = (res) => {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(fs.readFileSync(path.join(__dirname, 'pagina.html')));
+  };
+
+  // a API de um grill: `rota` e o metodo e o nome, como `GET estado`
+  function doGrill(G, rota, url, corpo, res) {
+    const S = G.S;
+    const mudou = () => S.versao++;
+    if (rota === 'GET estado') return responder(res, 200, S);
+    if (rota === 'POST rodada' || rota === 'POST final') {
+      if (S.fase === 'concluido' || S.fase === 'cli') return responder(res, 409, { erros: [`o grill já terminou (${S.fase})`] });
+      const final = rota === 'POST final';
+      const erros = final ? errosDaFinal(corpo) : errosDaRodada(corpo);
+      if (erros.length) return responder(res, 400, { erros });
+      Object.assign(S, { rascunho: null }, final ? { fase: 'final', final: corpo, rodada: null } : { fase: 'rodada', rodada: corpo, final: null });
+      G.pendentes.length = 0; // publicar e a prova de que o agente recebeu a resposta anterior
+      registrar(G, final ? { tipo: 'final', final: corpo } : { tipo: 'rodada', rodada: corpo });
+      mudou();
+      return responder(res, 200, { ok: true });
+    }
+    if (rota === 'POST respostas') {
+      const tipo = corpo && corpo.tipo;
+      if (tipo === 'rodada' && S.fase === 'rodada' && corpo.rodada === S.rodada.rodada) {
+        const r = respostasDaRodada(S.rodada, corpo.respostas);
+        if (r.erro) return responder(res, 400, { erro: r.erro });
+        const msg = { tipo: 'rodada', rodada: S.rodada.rodada, respostas: r.respostas };
+        S.historico.push({ rodada: S.rodada, respostas: r.respostas });
+        Object.assign(S, { fase: 'aguarde', ultima: msg, rascunho: null });
+        registrar(G, { tipo: 'respostas', rodada: msg.rodada, respostas: msg.respostas });
+        mudou();
+        entregar(G, msg);
+        return responder(res, 200, { ok: true });
+      }
+      // a mensagem livre vai ao agente e a rodada segue aberta
+      if (tipo === 'texto' && S.fase === 'rodada') {
+        if (!texto(corpo.texto)) return responder(res, 400, { erro: 'escreva a mensagem' });
+        entregar(G, { tipo, texto: corpo.texto.trim() });
+        return responder(res, 200, { ok: true });
+      }
+      if ((tipo === 'sim' || tipo === 'ajuste') && S.fase === 'final') {
+        if (tipo === 'ajuste' && !texto(corpo.texto)) return responder(res, 400, { erro: 'diga o que ajustar' });
+        // a pagina manda os indices marcados; as linhas que voltam sao as da final publicada
+        const marcadas = new Set(Array.isArray(corpo.adrs) ? corpo.adrs : []);
+        const msg = tipo === 'sim' ? { tipo, adrs: S.final.tabela.filter((l, i) => marcadas.has(i)) } : { tipo, texto: corpo.texto.trim() };
+        Object.assign(S, { fase: tipo === 'sim' ? 'concluido' : 'aguarde', ultima: msg });
+        registrar(G, msg);
+        mudou();
+        entregar(G, msg);
+        return responder(res, 200, { ok: true });
+      }
+      return responder(res, 409, { erro: `resposta '${tipo}' fora de hora (fase ${S.fase})` });
+    }
+    // As marcas ainda nao enviadas, para a pagina recarregada nao as perder. Nao muda a versao:
+    // a pagina que grava nao deve se redesenhar com o proprio rascunho.
+    if (rota === 'PUT rascunho') {
+      if (S.fase !== 'rodada' || !corpo || corpo.rodada !== S.rodada.rodada) {
+        return responder(res, 409, { erro: `rascunho fora da rodada atual (fase ${S.fase})` });
+      }
+      if (!corpo.resp || typeof corpo.resp !== 'object' || Array.isArray(corpo.resp)) return responder(res, 400, { erro: 'resp: objeto por questão' });
+      S.rascunho = { rodada: corpo.rodada, resp: corpo.resp };
+      return responder(res, 200, { ok: true });
+    }
+    if (rota === 'POST cli') {
+      if (S.fase === 'concluido') return responder(res, 409, { erro: 'o grill já terminou com o sim' });
+      S.fase = 'cli';
+      registrar(G, { tipo: 'cli' });
+      mudou();
+      entregar(G, { tipo: 'cli' });
+      return responder(res, 200, { ok: true });
+    }
+    if (rota === 'GET aguardar') {
+      if (G.pendentes.length) return responder(res, 200, G.pendentes.shift());
+      if (G.espera) responder(G.espera, 200, { tipo: 'substituido' }); // um aguardar por vez: o velho nao fica pendurado
+      G.espera = res;
+      // O prazo corre aqui, e nao no cliente: so o servidor sabe se a resposta ja saiu.
+      const ate = Number(url.searchParams.get('ate'));
+      const relogio = ate > 0 ? setTimeout(() => {
+        if (G.espera !== res) return;
+        G.espera = null;
+        responder(res, 200, { tipo: 'pendente' });
+      }, ate * 1000) : null;
+      res.on('close', () => {
+        clearTimeout(relogio);
+        if (G.espera === res) G.espera = null;
+      });
+      return;
+    }
+    responder(res, 404, { erro: 'rota desconhecida' });
   }
 
   const servidorHttp = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     if (url.searchParams.get('t') !== token) return responder(res, 403, { erro: 'token ausente ou errado' });
     lerCorpo(req).then((corpo) => {
+      const caminho = /^\/g\/([^/]+)\/([^/]+)(?:\/api\/([a-z]+))?$/.exec(url.pathname);
+      if (caminho) {
+        let pasta = '';
+        try { pasta = decodeURIComponent(caminho[1]); } catch (e) { /* abaixo, 404 */ }
+        const G = grill(pasta, caminho[2]);
+        if (!G) return responder(res, 404, { erro: 'grill não encontrado' });
+        return caminho[3] ? doGrill(G, `${req.method} ${caminho[3]}`, url, corpo, res) : pagina(res);
+      }
       const rota = `${req.method} ${url.pathname}`;
-      if (rota === 'GET /') {
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-        return res.end(fs.readFileSync(path.join(__dirname, 'pagina.html')));
-      }
-      if (rota === 'GET /api/estado') {
-        ultimaVisita = Date.now();
-        return responder(res, 200, S);
-      }
-      if (rota === 'POST /api/rodada' || rota === 'POST /api/final') {
-        if (S.fase === 'concluido' || S.fase === 'cli') return responder(res, 409, { erros: [`o grill já terminou (${S.fase})`] });
-        const final = rota === 'POST /api/final';
-        const erros = final ? errosDaFinal(corpo) : errosDaRodada(corpo);
-        if (erros.length) return responder(res, 400, { erros });
-        Object.assign(S, { rascunho: null }, final ? { fase: 'final', final: corpo, rodada: null } : { fase: 'rodada', rodada: corpo, final: null });
-        pendentes.length = 0; // publicar e a prova de que o agente recebeu a resposta anterior
-        registrar(final ? { tipo: 'final', final: corpo } : { tipo: 'rodada', rodada: corpo });
-        mudou();
-        return responder(res, 200, { ok: true });
-      }
-      if (rota === 'POST /api/respostas') {
-        const tipo = corpo && corpo.tipo;
-        if (tipo === 'rodada' && S.fase === 'rodada' && corpo.rodada === S.rodada.rodada) {
-          const r = respostasDaRodada(S.rodada, corpo.respostas);
-          if (r.erro) return responder(res, 400, { erro: r.erro });
-          const msg = { tipo: 'rodada', rodada: S.rodada.rodada, respostas: r.respostas };
-          S.historico.push({ rodada: S.rodada, respostas: r.respostas });
-          Object.assign(S, { fase: 'aguarde', ultima: msg, rascunho: null });
-          registrar({ tipo: 'respostas', rodada: msg.rodada, respostas: msg.respostas });
-          mudou();
-          entregar(msg);
-          return responder(res, 200, { ok: true });
-        }
-        // a mensagem livre vai ao agente e a rodada segue aberta
-        if (tipo === 'texto' && S.fase === 'rodada') {
-          if (!texto(corpo.texto)) return responder(res, 400, { erro: 'escreva a mensagem' });
-          entregar({ tipo, texto: corpo.texto.trim() });
-          return responder(res, 200, { ok: true });
-        }
-        if ((tipo === 'sim' || tipo === 'ajuste') && S.fase === 'final') {
-          if (tipo === 'ajuste' && !texto(corpo.texto)) return responder(res, 400, { erro: 'diga o que ajustar' });
-          // a pagina manda os indices marcados; as linhas que voltam sao as da final publicada
-          const marcadas = new Set(Array.isArray(corpo.adrs) ? corpo.adrs : []);
-          const msg = tipo === 'sim' ? { tipo, adrs: S.final.tabela.filter((l, i) => marcadas.has(i)) } : { tipo, texto: corpo.texto.trim() };
-          Object.assign(S, { fase: tipo === 'sim' ? 'concluido' : 'aguarde', ultima: msg });
-          registrar(msg);
-          mudou();
-          entregar(msg);
-          if (tipo === 'sim') encerrar(ENCERRAR_MS);
-          return responder(res, 200, { ok: true });
-        }
-        return responder(res, 409, { erro: `resposta '${tipo}' fora de hora (fase ${S.fase})` });
-      }
-      // As marcas ainda nao enviadas, para a pagina recarregada nao as perder. Nao muda a versao:
-      // a pagina que grava nao deve se redesenhar com o proprio rascunho.
-      if (rota === 'PUT /api/rascunho') {
-        if (S.fase !== 'rodada' || !corpo || corpo.rodada !== S.rodada.rodada) {
-          return responder(res, 409, { erro: `rascunho fora da rodada atual (fase ${S.fase})` });
-        }
-        if (!corpo.resp || typeof corpo.resp !== 'object' || Array.isArray(corpo.resp)) return responder(res, 400, { erro: 'resp: objeto por questão' });
-        S.rascunho = { rodada: corpo.rodada, resp: corpo.resp };
-        return responder(res, 200, { ok: true });
-      }
-      if (rota === 'POST /api/cli') {
-        if (S.fase === 'concluido') return responder(res, 409, { erro: 'o grill já terminou com o sim' });
-        S.fase = 'cli';
-        registrar({ tipo: 'cli' });
-        mudou();
-        entregar({ tipo: 'cli' });
-        encerrar(ENCERRAR_MS);
-        return responder(res, 200, { ok: true });
-      }
-      if (rota === 'GET /api/aguardar') {
-        if (pendentes.length) return responder(res, 200, pendentes.shift());
-        if (espera) responder(espera, 200, { tipo: 'substituido' }); // um aguardar por vez: o velho nao fica pendurado
-        espera = res;
-        // O prazo corre aqui, e nao no cliente: so o servidor sabe se a resposta ja saiu.
-        const ate = Number(url.searchParams.get('ate'));
-        const relogio = ate > 0 ? setTimeout(() => {
-          if (espera !== res) return;
-          espera = null;
-          responder(res, 200, { tipo: 'pendente' });
-        }, ate * 1000) : null;
-        res.on('close', () => {
-          clearTimeout(relogio);
-          if (espera === res) espera = null;
-        });
-        return;
+      if (rota === 'GET /') return pagina(res);
+      if (rota === 'GET /api/versao') return responder(res, 200, { versao: VERSAO, pid: process.pid });
+      if (rota === 'GET /api/historico') return responder(res, 200, historicoDeGrills());
+      // o iniciar de outra versao pede a troca: so sai quem nao segura nenhum grill ativo
+      if (rota === 'POST /api/parar') {
+        const ativos = historicoDeGrills().filter((g) => ESTADOS_ATIVOS.includes(g.estado)).length;
+        if (ativos) return responder(res, 409, { ativos });
+        responder(res, 200, { ok: true });
+        return setTimeout(() => process.exit(0), 100);
       }
       if (rota === 'GET /api/preferencias') return responder(res, 200, lerPreferencias());
       if (rota === 'POST /api/preferencias') {
@@ -284,28 +397,75 @@ function servidor(projeto, saida, sessao, retomar) {
     }, () => responder(res, 400, { erro: 'corpo não é JSON' }));
   });
 
-  // a retomada tenta a porta antiga, para a URL e a aba aberta valerem de novo; ocupada, outra
-  servidorHttp.on('error', (e) => {
-    // no Windows, a porta que caiu numa faixa reservada (Hyper-V, WSL, Docker) devolve EACCES
-    if (!['EADDRINUSE', 'EACCES'].includes(e.code) || !R.porta) throw e;
-    R.porta = 0;
+  // a porta fixa ocupada: se e uma grill-tela desta maquina, outro iniciar ganhou a corrida e esta
+  // sai; senao (ou numa faixa reservada do Windows, que devolve EACCES), outra porta do sistema
+  let outra = false;
+  servidorHttp.on('error', async (e) => {
+    if (outra || !['EADDRINUSE', 'EACCES'].includes(e.code)) throw e;
+    if (await sondar(PORTA, token)) process.exit(0);
+    outra = true;
     servidorHttp.listen(0, '127.0.0.1');
   });
   servidorHttp.once('listening', () => {
-    const porta = servidorHttp.address().port;
-    const url = `http://127.0.0.1:${porta}/?t=${token}`;
-    try { fs.mkdirSync(path.dirname(sessao), { recursive: true }); } catch (e) { /* o registrar segue sem disco */ }
-    registrar({ tipo: 'inicio', projeto, porta, token });
-    fs.writeFileSync(saida + '.tmp', url); // rename e atomico: o iniciar nunca le o arquivo vazio
-    fs.renameSync(saida + '.tmp', saida);
+    fs.mkdirSync(PASTA, { recursive: true });
+    // rename e atomico: quem le nunca pega o arquivo pela metade
+    fs.writeFileSync(SERVIDOR + '.tmp', JSON.stringify({ porta: servidorHttp.address().port, pid: process.pid, versao: VERSAO }));
+    fs.renameSync(SERVIDOR + '.tmp', SERVIDOR);
   });
-  servidorHttp.listen(R.porta, '127.0.0.1');
-  setInterval(() => {
-    if (Date.now() - ultimaVisita <= OCIOSO_MS) return;
-    if (espera) responder(espera, 200, { tipo: 'encerrado', motivo: 'a página ficou fechada por tempo demais' });
-    encerrar(500); // depois de a resposta sair pelo socket
-  }, Math.min(60000, OCIOSO_MS / 2));
+  servidorHttp.listen(PORTA, '127.0.0.1');
 }
+
+// O servidor da maquina no ar: o vivo (pelo servidor.json, ou na porta fixa) ou um novo, destacado.
+// O vivo de outra versao e trocado quando nao segura grill ativo; senao fica, e `aviso` diz por que.
+async function garantirServidor() {
+  const token = tokenDaMaquina();
+  const vivo = async () => {
+    for (const porta of new Set([(lerJson(SERVIDOR) || {}).porta, PORTA])) {
+      const v = await sondar(porta, token);
+      if (v) return { porta, ...v };
+    }
+    return null;
+  };
+  let s = await vivo();
+  let aviso = '';
+  if (s && s.versao !== VERSAO) {
+    const r = await pedir(`http://127.0.0.1:${s.porta}/?t=${token}`, 'parar', 'POST', {}).catch(() => null);
+    if (r && r.status === 409) {
+      const n = r.json.ativos;
+      aviso = `O servidor da grill-tela no ar é de outra versão e segue, porque ${n} ${n === 1 ? 'grill ativo depende' : 'grills ativos dependem'} dele; a versão nova entra quando nenhum estiver ativo.`;
+    } else {
+      for (const fim = Date.now() + 3000; Date.now() < fim && (await sondar(s.porta, token)); ) await new Promise((ok) => setTimeout(ok, 100));
+      s = null;
+    }
+  }
+  if (!s) {
+    subirDestacado(process.execPath, [__filename, 'servidor']);
+    for (const fim = Date.now() + 5000; !s && Date.now() < fim; s = await vivo()) await new Promise((r) => setTimeout(r, 50));
+    if (!s) sai('o servidor não subiu em 5 segundos');
+  }
+  return { porta: s.porta, token, aviso };
+}
+
+// o arquivo da sessao nasce com o inicio, exclusivo: dois grills do mesmo projeto no mesmo
+// segundo nao dividem o arquivo, o segundo anda um segundo
+function criarSessao(projeto, pedido) {
+  const pasta = pastaDoProjeto(projeto);
+  fs.mkdirSync(pasta, { recursive: true });
+  const linha = JSON.stringify({ em: new Date().toISOString(), tipo: 'inicio', projeto, ...(texto(pedido) && { pedido: pedido.trim() }) }) + '\n';
+  for (let t = Date.now(); ; t += 1000) {
+    // o carimbo na hora local: AAAAMMDD-HHMMSS
+    const local = new Date(t - new Date().getTimezoneOffset() * 60000).toISOString();
+    const arquivo = path.join(pasta, local.slice(0, 19).replace(/[-:]/g, '').replace('T', '-') + '.jsonl');
+    try {
+      fs.writeFileSync(arquivo, linha, { flag: 'wx' });
+      return arquivo;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+  }
+}
+const urlDoGrill = (porta, token, sessao) =>
+  `http://127.0.0.1:${porta}/g/${encodeURIComponent(path.basename(path.dirname(sessao)))}/${path.basename(sessao, '.jsonl')}?t=${token}`;
 
 function lerPreferencias() {
   try {
@@ -333,9 +493,11 @@ function responder(res, status, obj) {
 
 // ---------- cliente: os subcomandos do agente ----------
 
+// a API de um grill fica debaixo do caminho dele: a mesma regra no painel (hooks/register.js)
+const rotaDa = (url, rota) => url.replace(/\/?\?t=/, `/api/${rota}?t=`);
+
 function pedir(url, rota, metodo = 'GET', corpo, consulta = '') {
-  const u = new URL(url);
-  const alvo = `${u.origin}/api/${rota}?t=${u.searchParams.get('t')}${consulta}`;
+  const alvo = rotaDa(url, rota) + consulta;
   return new Promise((ok, falha) => {
     const req = http.request(alvo, { method: metodo, headers: { 'content-type': 'application/json' } }, (res) => {
       let txt = '';
@@ -367,10 +529,11 @@ function tabelaDasRespostas(msg) {
 // Sobe um processo que sobrevive ao comando que o lancou. No Windows o detached nao basta: o
 // Antigravity roda cada comando num Job com KILL_ON_JOB_CLOSE e sem breakaway, e o Job leva o
 // filho junto quando o comando termina. Quem cria pelo WMI e o servico dele, fora do Job; o
-// ambiente e a pasta vao explicitos, porque o WMI nao os herda. Falhou, cai no detached.
+// ambiente e a pasta vao explicitos, porque o WMI nao os herda. Falhou, cai no detached. So vai
+// entre aspas o argumento com espaco: o rundll32 nao abre o navegador com "url.dll,FileProtocolHandler".
 function subirDestacado(cmd, args) {
   if (process.platform === 'win32') {
-    const linha = [cmd, ...args].map((a) => `"${String(a).replace(/"/g, '')}"`).join(' ');
+    const linha = [cmd, ...args].map((a) => String(a).replace(/"/g, '')).map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ');
     const ps = '$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow=[uint16]0; EnvironmentVariables=[string[]]($env:GT_AMBIENTE -split "`n")}; ' +
       '(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$env:GT_LINHA; CurrentDirectory=$env:GT_PASTA; ProcessStartupInformation=$s}).ReturnValue';
     const ambiente = Object.entries(process.env).map(([k, v]) => `${k}=${v}`).join('\n');
@@ -393,7 +556,7 @@ async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   const opcao = (nome) => { const i = args.indexOf(nome); return i === -1 ? undefined : args[i + 1]; };
 
-  if (cmd === 'servidor') return servidor(opcao('--projeto'), opcao('--saida'), opcao('--sessao'), args.includes('--retomar'));
+  if (cmd === 'servidor') return servidor();
 
   if (cmd === 'sessoes') {
     const pastas = opcao('--projeto') ? [pastaDoProjeto(opcao('--projeto'))]
@@ -413,45 +576,47 @@ async function main() {
     let sessao;
     let R;
     if (retomar) {
-      sessao = sessoesDe(pastaDoProjeto(projeto)).pop();
-      if (!sessao) sai(`nenhuma sessão do projeto ${projeto} para retomar em ${SESSOES}`);
+      // com --id, a sessao dele: a ultima do projeto pode ser o grill de outra janela
+      const id = opcao('--id');
+      sessao = id ? (ID.test(id) ? path.join(pastaDoProjeto(projeto), `${id}.jsonl`) : null) : sessoesDe(pastaDoProjeto(projeto)).pop();
+      if (!sessao || !fs.existsSync(sessao)) sai(`nenhuma sessão do projeto ${projeto}${id ? ` com o id ${id}` : ''} para retomar em ${SESSOES}`);
       R = restaurar(lerSessao(sessao));
-      // o sim que o agente pode nao ter recebido (o servidor para logo depois dele) volta como o aguardar o daria
+      // o sim que o agente pode nao ter recebido volta como o aguardar o daria
       if (R.fase === 'concluido') {
-        return console.log(`A última sessão do projeto ${projeto} já terminou com o sim, que segue abaixo; para outro grill, rode o iniciar sem --retomar.\n${JSON.stringify(R.ultima)}`);
+        return console.log(`A sessão ${path.basename(sessao, '.jsonl')} do projeto ${projeto} já terminou com o sim, que segue abaixo; para outro grill, rode o iniciar sem --retomar.\n${JSON.stringify(R.ultima)}`);
       }
-      if (R.fase === 'cli') sai(`a última sessão do projeto ${projeto} voltou ao CLI: siga o grill no terminal`);
-      // depois de uma compactacao o servidor pode estar vivo: so faltava a URL
-      const antiga = `http://127.0.0.1:${R.porta}/?t=${R.token}`;
-      // com prazo: outro processo na porta pode aceitar a conexao e nunca responder
-      const viva = R.porta && R.token && await new Promise((ok) => {
-        const req = http.get(`http://127.0.0.1:${R.porta}/api/estado?t=${R.token}`, { timeout: 1000 }, (res) => {
-          res.resume();
-          ok(res.statusCode === 200);
-        });
-        req.on('timeout', () => req.destroy());
-        req.on('error', () => ok(false));
-      });
-      if (viva) return console.log(`O servidor da sessão ${path.basename(sessao)} segue vivo.\n${antiga}`);
-    } else {
-      // o carimbo na hora local: AAAAMMDD-HHMMSS
-      const agora = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString();
-      sessao = path.join(pastaDoProjeto(projeto), agora.slice(0, 19).replace(/[-:]/g, '').replace('T', '-') + '.jsonl');
+      if (R.fase === 'cli') sai(`a sessão ${path.basename(sessao, '.jsonl')} do projeto ${projeto} voltou ao CLI: siga o grill no terminal`);
     }
-    const saida = path.join(os.tmpdir(), `grill-tela-${process.pid}-${Date.now()}.url`);
-    subirDestacado(process.execPath, [__filename, 'servidor', '--projeto', projeto, '--saida', saida, '--sessao', sessao, ...(retomar ? ['--retomar'] : [])]);
-    for (let i = 0; i < 100 && !fs.existsSync(saida); i++) await new Promise((r) => setTimeout(r, 50));
-    let url = '';
-    try { url = fs.readFileSync(saida, 'utf8'); fs.unlinkSync(saida); } catch (e) { /* abaixo */ }
-    if (!url) sai('o servidor não subiu em 5 segundos');
+    const { porta, token, aviso } = await garantirServidor();
+    if (aviso) console.log(aviso);
+    if (!retomar) sessao = criarSessao(projeto, opcao('--pedido'));
+    const url = urlDoGrill(porta, token, sessao);
     if (!args.includes('--sem-navegador')) abrirNavegador(url);
-    if (R) console.log(`Sessão ${path.basename(sessao)} retomada na fase ${R.fase}, ${R.historico.length} rodada(s) respondida(s).`);
+    if (R) console.log(`Sessão ${path.basename(sessao, '.jsonl')} retomada na fase ${R.fase}, ${R.historico.length} rodada(s) respondida(s).`);
     return console.log(url);
   }
 
+  if (cmd === 'historico') {
+    const { porta, token, aviso } = await garantirServidor();
+    if (aviso) console.log(aviso);
+    const raiz = `http://127.0.0.1:${porta}/?t=${token}`;
+    if (!args.includes('--sem-navegador')) abrirNavegador(raiz);
+    return console.log(raiz);
+  }
+
+  // reabre um grill ou o historico, subindo o servidor se ele caiu; a porta segue a do servidor de agora
+  if (cmd === 'abrir') {
+    if (!/^http:\/\/127\.0\.0\.1:\d+\//.test(args[0] || '')) sai('uso: grill-tela.js abrir <url de um grill ou do histórico> [--sem-navegador]');
+    const { porta, aviso } = await garantirServidor();
+    const alvo = args[0].replace(/^(http:\/\/127\.0\.0\.1:)\d+/, `$1${porta}`);
+    if (aviso) console.log(aviso);
+    if (!args.includes('--sem-navegador')) abrirNavegador(alvo);
+    return console.log(alvo);
+  }
+
   const url = args[0];
-  if (!url || !/^http:\/\/127\.0\.0\.1:\d+\/\?t=/.test(url)) {
-    sai('uso: grill-tela.js <iniciar|sessoes|rodada|final|aguardar|cli> <url que o iniciar imprimiu> [arquivo.json | - | --ate <segundos>]');
+  if (!url || !/^http:\/\/127\.0\.0\.1:\d+\/g\/[^/?\s]+\/\d{8}-\d{6}\?t=/.test(url)) {
+    sai('uso: grill-tela.js <iniciar|sessoes|historico|abrir|rodada|final|aguardar|cli> <url que o iniciar imprimiu> [arquivo.json | - | --ate <segundos>]');
   }
   const ate = opcao('--ate');
   if (ate !== undefined && !(/^\d+$/.test(ate) && ate >= 1 && ate <= 7200)) sai('--ate: segundos, inteiro de 1 a 7200');

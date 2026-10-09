@@ -27,7 +27,7 @@ function espera(url) {
   const saida = g('aguardar', url);
   console.log(saida, '\n');
   const msg = JSON.parse(saida.split('\n').pop());
-  if (['cli', 'encerrado'].includes(msg.tipo)) { console.log('O grill foi para o terminal; fim da demo.'); process.exit(0); }
+  if (msg.tipo === 'cli') { console.log('O grill foi para o terminal; fim da demo.'); process.exit(0); }
   return msg;
 }
 

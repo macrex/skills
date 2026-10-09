@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- A tela da grill-tela: o servidor (grill-tela.js) a serve com o token na URL; ela consulta
-     /api/estado a cada segundo e desenha a fase atual (rodada, aguarde, final, concluido, cli).
+<!-- A tela da grill-tela: o servidor (grill-tela.js) a serve com o token na URL. Na raiz, desenha o
+     histórico de grills da máquina; em /g/<projeto>/<id>, o grill: consulta a API dele a cada
+     segundo e desenha a fase atual (rodada, aguarde, final, concluido, cli).
      A rodada tem dois modos: Panorama, uma tabela com todas as questões numa tela só, e Uma por
      vez, com as descrições de cada opção e as teclas 1–9. -->
 <html lang="pt-BR">
@@ -167,7 +168,27 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
 .cfg input[type=range]{padding:0;border:none;min-height:0;accent-color:var(--rec);margin:8px 0 12px}
 .cfg select{width:100%;font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--pill-line);border-radius:8px;padding:8px 10px;margin:8px 0 12px}
 
+/* histórico de grills: os ativos em cartões, todos numa tabela */
+.secao{margin:28px 0 12px;font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.ativo{display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:10px;background:var(--surface);border:1px solid var(--line);color:inherit;text-decoration:none;border-top:3px solid hsl(var(--h) 55% 45%)}
+.ativo:hover{border-color:var(--muted)}
+.ativo .linha{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.ativo .pedido{font-size:16px;font-weight:600}
+.ativo .url{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ativo .btn{align-self:flex-start;display:inline-flex;align-items:center;min-height:36px}
+.projeto.p{font-size:12.5px;padding:1px 10px}
+.pulso{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--rec);margin-right:6px;animation:pu 1.2s ease-in-out infinite}
+.filtros{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filtros input{flex:0 1 260px;margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--pill-line);background:var(--surface);font-size:13px}
+.chip.on{background:var(--sel);color:var(--sel-ink);border-color:var(--sel)}
+.chip i{width:8px;height:8px;border-radius:50%;background:hsl(var(--h) 55% 45%)}
+.tab-hist .nw{white-space:nowrap}.tab-hist tr[data-href]{cursor:pointer}.tab-hist tr[data-href]:hover td{background:var(--surface2)}
+.tab-hist .est-concluido{color:var(--rec)}.tab-hist .est-cli,.tab-hist .est-abandonado{color:var(--muted)}.tab-hist .est-final,.tab-hist .est-rodada,.tab-hist .est-lendo{color:var(--troca)}
+
 @media (max-width:760px){
+  .tab-hist .estreita{display:none}
   .top-in,.wrap{padding-left:16px;padding-right:16px}
   .cols{display:none}
   .c-tema{flex-basis:100%;display:flex;gap:8px;align-items:baseline;padding-right:92px}
@@ -183,15 +204,19 @@ pre{background:var(--surface2);border:1px solid var(--line2);border-radius:8px;p
 <div id="app"></div>
 <script>
 const TOKEN = new URLSearchParams(location.search).get('t');
+// o grill fica em /g/<projeto>/<id>, com a API debaixo do caminho dele; as preferências são da máquina, na raiz
+const GRILL = location.pathname.replace(/\/$/, '');
+const rotaDa = rota => rota==='preferencias' ? `/api/${rota}` : `${GRILL}/api/${rota}`;
+const NO_HISTORICO = !GRILL;
 // E: o estado do servidor; S: o que só a página sabe (marcas ainda não enviadas, campos abertos)
 let E = null;
 const S = { resp:{}, adr:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false, abreTexto:false, texto:'', enviada:false };
-// modo e tema ficam no JSON de preferências do servidor, porque a porta muda a cada grill
+// modo e tema ficam no JSON de preferências do servidor, que valem para todos os grills da máquina
 const VAR = {A:'Panorama', B:'Uma por vez'};
 let V = 'A';
 
 async function api(rota, metodo='GET', corpo){
-  const r = await fetch(`/api/${rota}?t=${TOKEN}`, { method:metodo, headers:{'content-type':'application/json'},
+  const r = await fetch(`${rotaDa(rota)}?t=${TOKEN}`, { method:metodo, headers:{'content-type':'application/json'},
     body: corpo===undefined ? undefined : JSON.stringify(corpo) });
   const json = await r.json().catch(()=>null);
   return { ok:r.ok, json };
@@ -315,7 +340,7 @@ function gravaRascunho(){
   tRascunho = null;
   if(!E || E.fase!=='rodada') return;
   const r = Object.fromEntries(Q().map(q=>{ const a=resp(q); return [q.id, { opcao:a.opcao, propria:a.propria, com:a.com, nao:a.nao }]; }));
-  fetch(`/api/rascunho?t=${TOKEN}`, { method:'PUT', keepalive:true, headers:{'content-type':'application/json'},
+  fetch(`${rotaDa('rascunho')}?t=${TOKEN}`, { method:'PUT', keepalive:true, headers:{'content-type':'application/json'},
     body: JSON.stringify({ rodada:R().rodada, resp:r }) }).catch(()=>{});
 }
 function salvaRascunho(){ clearTimeout(tRascunho); tRascunho = setTimeout(gravaRascunho, 500); }
@@ -403,10 +428,10 @@ function barra(){
      ${i<t-1?`<button class="btn pri" onclick="S.foco++;render()">Próxima →<span class="kbd">Enter</span></button>`:''}`:''}
      <button class="btn ${ultima?'ok':'ok-l'}" id="enviar" ${n<t?'disabled':''} onclick="enviar()">Enviar rodada ${R().rodada}<span class="kbd">Ctrl Enter</span></button></div></div></div>`;
 }
-function historico(){
+function historico(aberto){
   if(!E.historico.length) return '';
   const linhas = E.historico.flatMap(h=>h.respostas.map(r=>({...r, rodada:h.rodada.rodada})));
-  return `<details class="caixa hist"><summary>Rodadas anteriores (${E.historico.length})</summary>
+  return `<details class="caixa hist" ${aberto?'open':''}><summary>${aberto?'Rodadas':'Rodadas anteriores'} (${E.historico.length})</summary>
     <table><tr><th>Rodada</th><th>Questão</th><th>Resposta</th><th>Marca</th></tr>
     ${linhas.map(r=>`<tr><td class="mono">${r.rodada}</td><td class="mono">${esc(r.id)}</td><td>${md(r.escolha)}${r.comentario?`<div class="muted" style="font-size:12.5px;font-style:italic">“${esc(r.comentario)}”</div>`:''}</td><td class="st"><span class="${r.marca}">${ROTULO[r.marca]}</span></td></tr>`).join('')}
     </table></details>`;
@@ -461,6 +486,7 @@ function topo(){
    <button class="ico" aria-label="Leitura em voz alta" title="Leitura em voz alta" popovertarget="cfg-leitura">${ICONE_SOM}</button>
    <button class="ico" aria-label="Aviso de rodada nova" title="Aviso de rodada nova" popovertarget="cfg-aviso">${ICONE_SINO}</button>
    <button class="ico" aria-label="Alternar tema" title="Alternar tema" onclick="tema()">${escuro()?ICONE_SOL:ICONE_LUA}</button>
+   <a class="sublink" href="/?t=${TOKEN}">Histórico</a>
    ${ativo?`<button class="sublink" onclick="paraCli()">Seguir no terminal</button>`:''}</div></div></header>` + painelVoz() + painelAviso();
 }
 const telaRodada = () => (V==='B' ? modoFoco : modoPanorama)();
@@ -488,12 +514,27 @@ function telaFinal(){
         <button class="btn sec" onclick="S.abreAjuste=false;render()">Cancelar</button>${S.erro?`<span class="erro">${esc(S.erro)}</span>`:''}</div>`
      : `<div class="envio"><button class="btn ok" onclick="confirmar()">Confirmo o entendimento</button>
         <button class="btn sec" onclick="S.abreAjuste=true;render();document.getElementById('ajuste').focus()">Quero ajustar</button>
-        <span class="muted" style="font-size:12.5px">O sim volta ao terminal com as decisões marcadas como ADR, e a página fecha sozinha.</span></div>`}</div></div>`;
+        <span class="muted" style="font-size:12.5px">O sim volta ao terminal com as decisões marcadas como ADR, e esta URL segue abrindo o grill.</span></div>`}</div></div>`;
 }
 // de onde veio a escolha, e a caixa de ADR, que nasce marcada nas decisões duráveis; a chave leva a versão, para uma final republicada recomeçar
 const ORIGEM = { aceitou:'<span class="aceito">recomendada aceita</span>', ditou:'<span class="outra">ditada por você</span>', agente:'delegada ao agente' };
 const chaveAdr = i => `${E.versao}:${i}`;
 const adrMarcada = i => S.adr[chaveAdr(i)] ?? E.final.tabela[i].duravel === true;
+// a leitura do grill concluído: a final com a proveniência e as ADRs que voltaram no sim, e as rodadas abaixo
+const marcadasNoSim = (tabela, ultima) => tabela.map(l => Boolean(ultima && ultima.tipo==='sim' && ultima.adrs.some(a => a.decisao===l.decisao && a.escolha===l.escolha)));
+function telaLeitura(){
+  const fecho = 'Volte ao terminal: o agente já tem o seu sim. Esta URL segue abrindo o grill.';
+  if(!E.final) return telaFim('✓','Grill concluído',fecho) + historico(true);
+  const adr = marcadasNoSim(E.final.tabela, E.ultima), n = E.final.tabela.length, r = E.historico.length, a = adr.filter(Boolean).length;
+  return `<div class="final"><div class="glifo">✓</div><h1 class="h1">Grill concluído</h1>
+   <p class="sub" style="margin-bottom:20px">${n} ${n===1?'decisão':'decisões'}${r?` em ${r} ${r===1?'rodada':'rodadas'}`:''}, confirmadas com o sim${a?`; ${a} registrada${a===1?'':'s'} como ADR`:''}. ${fecho}</p>
+   <div class="caixa" style="overflow-x:auto"><table><tr><th style="width:56px">#</th><th style="width:200px">Decisão</th><th>Escolha</th><th>Motivo</th><th>Alternativas</th><th>ADR</th></tr>
+   ${E.final.tabela.map((l,i)=>`<tr><td class="mono muted">${i+1}</td><td style="font-weight:600">${md(l.decisao)}</td>
+     <td>${md(l.escolha)}${ORIGEM[l.origem]?`<div class="st">${ORIGEM[l.origem]}</div>`:''}</td>
+     <td>${l.motivo?md(l.motivo):'<span class="muted">—</span>'}</td>
+     <td class="alts">${(l.alternativas||[]).map(md).join('<br>')||'—'}</td>
+     <td>${adr[i]?'<span class="st"><span class="aceito">✓ ADR</span></span>':'<span class="muted">—</span>'}</td></tr>`).join('')}</table></div>${historico(true)}</div>`;
+}
 const telaFim = (glifo,t,s) => `<div class="centro"><div><div class="glifo">${glifo}</div><h1 class="h1">${t}</h1><p class="sub">${s}</p></div></div>`;
 
 async function confirmar(){ await api('respostas','POST',{tipo:'sim', adrs:E.final.tabela.map((l,i)=>i).filter(adrMarcada)}); await consultar(true); }
@@ -505,11 +546,12 @@ async function ajustar(){
 async function paraCli(){ await api('cli','POST',{}); await consultar(true); }
 
 function render(){
+  if(NO_HISTORICO) return renderHistorico();
   if(!E){ document.getElementById('app').innerHTML = telaFim('…','Conectando…',''); return; }
   const corpo = S.caiu ? telaFim('!','O servidor do grill parou','Volte ao terminal: o grill segue lá. Pode fechar esta aba.')
     : { inicio:telaAguarde, rodada:telaRodada, aguarde:telaAguarde, final:telaFinal,
-    concluido:()=>telaFim('✓','Grill concluído','Volte ao terminal: o agente já tem o seu sim. Pode fechar esta aba.'),
-    cli:()=>telaFim('&gt;_','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.') }[E.fase]();
+    concluido:telaLeitura,
+    cli:()=>telaFim('&gt;_','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.') + historico(true) }[E.fase]();
   const naRodada = E.fase==='rodada' && !S.caiu;
   document.getElementById('app').innerHTML = topo() + `<main class="wrap ${naRodada?'com-barra':''}">${corpo}</main>` + (naRodada ? barra() : '');
   // a aba diz de que projeto é o grill: o nome no título e a cor do projeto no ícone
@@ -534,6 +576,57 @@ function atualiza(i){ // resumo, marca, linha, opções e lateral, sem render(),
     const on = el.dataset.o in NAO ? a.nao===el.dataset.o : el.dataset.o==='outra' ? a.opcao===null && !a.nao : a.opcao===+el.dataset.o;
     el.classList.toggle('sel', on); el.setAttribute('aria-pressed', on);
   });
+}
+
+// ---------- histórico de grills (a raiz) ----------
+let H = null;                       // os grills da máquina, do mais novo ao mais velho
+const HS = { projeto:'', busca:'' }; // o chip de projeto e a busca
+const ATIVOS = ['rodada','lendo','final'];
+const separar = (gs, projeto, busca) => ({ ativos: gs.filter(g=>ATIVOS.includes(g.estado)), todos: gs.filter(g=>(!projeto||g.projeto===projeto) && (!busca||g.pedido.toLowerCase().includes(busca.toLowerCase()))) });
+const ESTADO = g => ({ rodada:`Rodada ${g.rodada} aguardando você`, lendo: g.rodada ? `Agente lendo a rodada ${g.rodada}` : 'Agente preparando a primeira rodada',
+  final:'Tela final aguardando o sim', concluido:'Concluído', cli:'Voltou ao CLI', abandonado:'Abandonado' })[g.estado];
+const linkDe = g => `${g.caminho}?t=${TOKEN}`;
+const desde = ms => { const m=Math.round((Date.now()-ms)/60000); return m<1?'agora':m<60?`há ${m} min`:m<1440?`há ${Math.floor(m/60)} h`:`há ${Math.floor(m/1440)} d`; };
+const quando = ms => new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+const pilula = p => `<span class="projeto p" style="--h:${matiz(p)}">${esc(p)}</span>`;
+function cartaoAtivo(g){
+  const responder = g.estado==='rodada';
+  return `<a class="ativo" href="${linkDe(g)}" style="--h:${matiz(g.projeto)}"><span class="linha">${pilula(g.projeto)}<span class="muted" style="font-size:12.5px">${desde(g.ultimo)}</span></span>
+    <span class="pedido">${esc(g.pedido||'(sem nome)')}</span><span><span class="pulso"></span>${ESTADO(g)}</span>
+    <span class="btn ${responder?'ok':'sec'}">${responder?'Responder':'Abrir'}</span><span class="mono url">${esc(location.origin+linkDe(g))}</span></a>`;
+}
+function tabelaHist(todos){
+  if(!todos.length) return '<p class="sub">Nenhum grill com este filtro.</p>';
+  return `<div class="caixa" style="overflow-x:auto"><table class="tab-hist"><tr><th>Data</th><th>Projeto</th><th>Pedido</th><th>Status</th><th class="estreita">Rodadas</th><th class="estreita">Decisões</th><th class="estreita">Duração</th></tr>
+    ${todos.map(g=>`<tr data-href="${esc(linkDe(g))}" onclick="location.href=this.dataset.href"><td class="mono muted nw">${quando(g.inicio)}</td><td class="nw">${pilula(g.projeto)}</td>
+      <td><a href="${esc(linkDe(g))}" style="color:inherit;text-decoration:none">${esc(g.pedido||'(sem nome)')}</a></td><td class="est-${g.estado}">${ESTADO(g)}</td>
+      <td class="estreita mono">${g.respondidas}</td><td class="estreita mono">${g.decisoes}${g.adrs?` · ${g.adrs} ADR`:''}</td>
+      <td class="estreita mono muted">${Math.max(1,Math.round((g.ultimo-g.inicio)/60000))} min</td></tr>`).join('')}</table></div>`;
+}
+// o esqueleto sai uma vez, e a consulta so troca as partes: a busca nao perde o foco
+function renderHistorico(){
+  const app = document.getElementById('app');
+  if(!document.getElementById('busca')){
+    document.title = 'Histórico · Grill';
+    app.innerHTML = `<header class="top" style="--h:220"><div class="top-in"><span class="marca"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="macrex skills"><rect x="2" y="2" width="60" height="60" rx="11" fill="#24283b" stroke="#565f89" stroke-width="2"/><path d="M17 21 L29 32 L17 43" fill="none" stroke="#c0caf5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="33" y="39" width="15" height="5" rx="1.5" fill="#d77757"/></svg>GRILL</span>
+      <span style="font-weight:600">Histórico</span><span class="mono muted" style="font-size:12.5px">${esc(location.host)}</span>
+      <div class="acoes"><button class="ico" aria-label="Alternar tema" title="Alternar tema" onclick="tema()" id="tema"></button></div></div></header>
+      <main class="wrap"><h1 class="h1">Histórico de grills</h1><p class="sub" id="contagem"></p>
+      <div id="ativos"></div><h2 class="secao">Todos os grills</h2>
+      <div class="filtros"><span id="chips" style="display:contents"></span><input id="busca" type="search" aria-label="Buscar pelo pedido" placeholder="Buscar pelo pedido…" oninput="HS.busca=this.value;renderHistorico()"></div>
+      <div id="lista" style="margin-top:12px"></div></main>`;
+  }
+  document.getElementById('tema').innerHTML = escuro()?ICONE_SOL:ICONE_LUA;
+  if(!H){ document.getElementById('lista').innerHTML = '<p class="sub">Carregando…</p>'; return; }
+  const { ativos, todos } = separar(H, HS.projeto, HS.busca.trim());
+  const projetos = [...new Set(H.map(g=>g.projeto))].sort();
+  document.getElementById('contagem').textContent = `${H.length} ${H.length===1?'grill':'grills'} em ${projetos.length} ${projetos.length===1?'projeto':'projetos'} nesta máquina`;
+  document.getElementById('ativos').innerHTML = ativos.length ? `<h2 class="secao">Ativos</h2><div class="grade">${ativos.map(cartaoAtivo).join('')}</div>` : '';
+  document.getElementById('chips').innerHTML = ['', ...projetos].map(p=>`<button class="chip ${HS.projeto===p?'on':''}" ${p?`style="--h:${matiz(p)}"`:''} aria-pressed="${HS.projeto===p}" onclick="HS.projeto=${esc(JSON.stringify(p))};renderHistorico()">${p?'<i></i>':''}${p?esc(p):'Todos'}</button>`).join('');
+  document.getElementById('lista').innerHTML = tabelaHist(todos);
+}
+async function consultarHistorico(){
+  try{ const r = await api('historico'); if(r.ok){ H = r.json; renderHistorico(); } }catch(e){}
 }
 
 // ---------- consulta ao servidor ----------
@@ -563,8 +656,11 @@ api('preferencias').then(r=>{
   if([0.5,0.75,1,1.25,1.5,1.75,2].includes(p.velocidade)) LEIT.vel=p.velocidade;
   if(typeof p.volume==='number' && p.volume>=0 && p.volume<=1) LEIT.vol=p.volume;
   if(NIVEIS[p.aviso]) AV.nivel=p.aviso;
-}).catch(()=>{}).finally(()=>{ render(); consultar(); });
-setInterval(consultar, 1000);
+}).catch(()=>{}).finally(()=>{
+  render();
+  if(NO_HISTORICO){ consultarHistorico(); setInterval(consultarHistorico, 3000); }
+  else { consultar(); setInterval(consultar, 1000); }
+});
 </script>
 </body>
 </html>

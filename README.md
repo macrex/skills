@@ -5,7 +5,7 @@
 <h1 align="center">macrex skills</h1>
 
 <p align="center">
-  <b>Skills para agentes de IA. Um pedido vira código verificado: interrogatório, spec, tickets, implementação, revisão e teste de qualidade.<br>O <code>/macrex-painel</code> mostra a leva ao lado da conversa, e a documentação vive num vault Obsidian fora do repositório.</b>
+  <b>Skills para agentes de IA. Um pedido vira código verificado: interrogatório, spec, tickets, implementação, revisão e teste de qualidade.<br>O <code>/painel-macrex</code> mostra a leva ao lado da conversa, e a documentação vive num vault Obsidian fora do repositório.</b>
 </p>
 
 <p align="center">
@@ -17,12 +17,12 @@
 
 ```
 > /faz exportar os chamados em CSV
-> /macrex-painel
+> /painel-macrex
 > /cpv
 ```
 
 O `/faz` interroga até o pedido ficar claro e entrega a linha da leva. Colada numa sessão nova, a leva
-roda sozinha até tudo estar verificado, sem commitar nada, e o `/macrex-painel` acompanha cada passo:
+roda sozinha até tudo estar verificado, sem commitar nada, e o `/painel-macrex` acompanha cada passo:
 
 https://github.com/user-attachments/assets/b1894356-3e85-48c4-9da4-b91bd38bb613
 
@@ -33,16 +33,16 @@ https://github.com/user-attachments/assets/b1894356-3e85-48c4-9da4-b91bd38bb613
 | Comando | O que faz |
 |---|---|
 | `/faz <pedido>` | Interroga, grava o entendimento e entrega a linha que roda a leva: spec, tickets, implementação, revisão em dois eixos e teste de qualidade |
-| `/macrex-painel` | Abre e fecha o painel da leva ao lado da conversa (só no Claude Code; as abas estão abaixo) |
+| `/painel-macrex` | Abre e fecha o painel da leva ao lado da conversa (só no Claude Code; as abas estão abaixo) |
 | `/cpv` | Commita no estilo do repositório, empurra e registra a evolução no vault; `/cpv sem-vault` fecha só o git |
 | `/obsidian-docs` | Registra spec, plano, ADR, bug, evolução ou análise no vault, um hub por projeto; `migrar` e `migrar tudo` copiam a documentação que já está no repositório. Também dispara sozinha quando um documento nasce |
-| `/grill-tela` | Faz o grill do Matt Pocock numa página HTML local. O canal do grill é `cli` (o padrão, no terminal), `perguntar` (o agente pergunta no início) ou `tela`: opção **Canal do grill** em `/config` no Claude Code, `GRILL_CANAL` no Pi, regra no `AGENTS.md` no Codex e no Antigravity |
+| `/grill-tela` | Faz o grill do Matt Pocock numa página HTML local. O canal do grill é `cli` (o padrão, no terminal), `perguntar` (o agente pergunta no início) ou `tela`: opção **Canal do grill** em `/config` no Claude Code, `GRILL_CANAL` no Pi, regra no `AGENTS.md` no Codex e no Antigravity. Um servidor só por máquina atende todos os grills, cada um na sua URL, que segue abrindo a leitura do grill depois do sim; a raiz é o histórico de grills, com os ativos no topo |
 
 | Aba do painel | Mostra |
 |---|---|
 | Painel | As fases, do grill à qualidade, cada uma com o estado e o tempo; com a leva, também os tickets com o portão, os passos da revisão, das correções e da qualidade e os sub-agentes, teammates e workflows com modelo e estado; fechada a leva, o lembrete do `/cpv` e o histórico. O grill da grade abre a aba Grill. Só o botão Limpar, sempre ao lado do título, limpa o painel: tira o grill e a leva, aberta ou fechada, com o uso dela (a aberta perde a retomada); o `/clear` não mexe nele |
 | Diff | Os arquivos que a sessão mudou, com as linhas somadas e tiradas; o clique num arquivo abre o diff |
-| Grill | Cada pergunta do último grill com a resposta, venha ela do terminal ou da página da `/grill-tela`, e o prompt do `/faz leva` com os botões Clear, que roda o `/clear`, e Executar, que põe o texto exato na caixa de envio; fica até o Limpar da aba Painel |
+| Grill | Cada pergunta do grill desta janela com a resposta, venha ela do terminal ou da página da `/grill-tela`, o cartão do grill na tela com a URL e o Abrir (também na aba Painel, e segue lá depois do sim), o botão Histórico, que abre o histórico de grills, e o prompt do `/faz leva` com os botões Clear, que roda o `/clear`, e Executar, que põe o texto exato na caixa de envio; fica até o Limpar da aba Painel |
 | Tickets | O portão e as notas de cada ticket |
 | Uso | Os tokens desde o início da leva, por modelo e por agente |
 | Arquivos | A árvore do projeto, sem o que o git ignora, com o nome do que a sessão criou em verde e do que ela alterou em amarelo, `•` na pasta fechada que tem algum deles e um filtro por trecho do caminho; o clique na pasta a abre e fecha, e o `›` do arquivo alterado ou novo abre embaixo dele o mesmo diff da aba Diff |
@@ -67,7 +67,7 @@ sem Obsidian, pule o que fala de vault.
 ```
 
 - Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces, `macrex`.
-- Pede o Claude Code 2.1.287 ou mais novo. O `/macrex-painel` é um mod: só aparece onde a Anthropic já
+- Pede o Claude Code 2.1.287 ou mais novo. O `/painel-macrex` é um mod: só aparece onde a Anthropic já
   liberou os mods, e sem eles o resto do plugin funciona igual.
 - Depois de instalar ou atualizar, reinicie a sessão (`claude --continue` mantém a conversa); até lá
   vale a versão anterior.
