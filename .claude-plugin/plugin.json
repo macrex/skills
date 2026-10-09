@@ -1,6 +1,6 @@
 {
   "name": "macrex-skills",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "description": "As quatro skills que trabalham juntas: /faz leva um pedido até código verificado encadeando o SDD/TDD do Matt Pocock, /obsidian-docs guarda o porquê num vault Obsidian fora do repositório, /cpv fecha a leva no git e na documentação ao mesmo tempo, e a /grill-tela leva o grill do Matt a uma página HTML local, com um hook opcional que pergunta o canal (CLI ou tela). Traz o servidor MCP vault-docs, o agent vault-migrador, o painel da leva com a faixa acima do prompt e a opção que só deixa o agente commitar ou dar push no turno em que você pediu.",
   "author": {
     "name": "Guilherme Gabriel",

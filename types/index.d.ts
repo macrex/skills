@@ -129,6 +129,8 @@ declare module 'claude-code' {
       skills: string[]
       historico: LevaHistorico[]
       grill: Grill | null
+      // o grill foi aberto nesta sessao: so ele leva o AskUserQuestion a pagina
+      grillDaSessao: boolean
       aba: 'painel' | 'codigo' | 'grill' | 'tickets' | 'uso'
       // por loop: 'sessao' para o principal, o agentId para cada sub-agente
       uso: Record<string, UsoDoLoop>
