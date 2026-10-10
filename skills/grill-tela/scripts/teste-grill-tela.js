@@ -112,17 +112,20 @@ function iniciar(...extra) {
   assert.match(url, URL_DO_GRILL('teste'));
   return url;
 }
-// derruba o servidor da maquina, como uma queda, e espera a porta parar de responder
+// derruba o servidor da maquina, como uma queda, e espera a porta soltar; os sockets keep-alive
+// dele saem do agente, senao o proximo pedir pega um morto
 async function derrubar() {
   const s = servidorDoTeste();
   process.kill(s.pid);
+  http.globalAgent.destroy();
   for (let i = 0; i < 50; i++, await espere(100)) {
-    try { await pedir(`http://127.0.0.1:${s.porta}/`); } catch (e) { return; }
+    if (await portaLivre(s.porta)) return;
   }
   throw new Error('o servidor nao caiu');
 }
-const portaLivre = () => new Promise((ok) => {
-  const s = http.createServer().listen(0, '127.0.0.1', () => {
+// a porta, se der para ocupa-la (a 0 pede uma ao sistema), ou null
+const portaLivre = (porta = 0) => new Promise((ok) => {
+  const s = http.createServer().once('error', () => ok(null)).listen(porta, '127.0.0.1', () => {
     const { port } = s.address();
     s.close(() => ok(port));
   });
@@ -638,7 +641,7 @@ const RODADA = {
   const rodadasLidas = vm.runInNewContext(/function historico\(aberto\)\{[\s\S]*?\n\}/.exec(pagina.txt)[0] + ' historico',
     { E: depois, esc: (s) => String(s), md: (s) => String(s), ROTULO: { aceito: 'aceito' } });
   assert.match(rodadasLidas(true), /Tema Q2[\s\S]*Pergunta Q2\?/, 'a leitura mostra o tema e a pergunta');
-  assert.doesNotMatch(/async function consultar\(forcar\)\{\n.*\n/.exec(pagina.txt)[0], /'cli'/, 'o grill no CLI segue consultando');
+  assert.doesNotMatch(/async function consultar\(forcar\)\{\r?\n.*\r?\n/.exec(pagina.txt)[0], /'cli'/, 'o grill no CLI segue consultando');
 
   r = roda('sessoes', '--projeto', 'sessao');
   assert.strictEqual(r.status, 0, r.stderr);

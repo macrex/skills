@@ -9,7 +9,8 @@
 //      repositorio do Matt dentro dela, e a pasta global do Antigravity tambem;
 //   4. exit 1 enquanto falta alguma, 0 com as seis;
 //   5. o nome da propria faz leva o prefixo do plugin que a carrega, do cache ou de uma pasta local;
-//   6. --linha imprime o prompt da leva pronto, cada nome de skill abrindo uma linha.
+//   6. --linha imprime o prompt da leva pronto, so com o documento, cada nome de skill abrindo uma
+//      linha; os modelos nao vao nela, e so no Claude Code ela pede que venham junto com os modos.
 //
 //   node scripts/teste-skills-do-matt.js
 
@@ -85,7 +86,7 @@ assert.deepStrictEqual(completo.faltam, []);
 // uma linha; fora do Claude Code a abertura fica para o agente
 skill('.agents', 'skills', 'to-tickets');
 const linha = (env) =>
-  spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha', 'Spec do CSV', 'da sessão', 'sonnet'], {
+  spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha', 'Spec do CSV'], {
     cwd,
     encoding: 'utf8',
     env: { ...process.env, HOME: base, USERPROFILE: base, CLAUDECODE: '', PI_SESSION_ID: '', ...env },
@@ -94,14 +95,25 @@ const noClaude = linha({ CLAUDECODE: '1' });
 assert.strictEqual(noClaude.status, 0, noClaude.stderr);
 const linhas = noClaude.stdout.trimEnd().split('\n');
 assert.match(linhas[0], /^rode \/\S*faz leva Spec do CSV até o fim\.$/);
-assert.strictEqual(linhas.length, 14);
+assert.strictEqual(linhas.length, 13);
 assert.ok(linhas.includes('/mattpocock-skills:to-spec expandiu esse documento in-place;'), noClaude.stdout);
 for (const s of ['to-tickets', 'implement', 'code-review']) assert.ok(linhas.some((l) => new RegExp(`^/\\S*${s} `).test(l)), s);
-assert.ok(linhas.includes('com os agentes dele (se houver) no modelo da sessão;'));
-assert.ok(linhas.includes('com agentes no modelo sonnet;'));
+assert.ok(linhas.includes('e me pergunte junto os modelos dos agentes;'), 'no Claude Code os modelos vem com os modos');
+assert.ok(!/no modelo/.test(noClaude.stdout), 'a linha nao cita modelo');
 assert.ok(linhas.every((l) => l.length <= 62 || l === linhas[0]), 'linhas curtas');
-assert.match(linha({}).stdout, /^<abertura> até o fim\.\n/);
+const fora = linha({}).stdout;
+assert.match(fora, /^<abertura> até o fim\.\n/);
+assert.strictEqual(fora.trimEnd().split('\n').length, 12);
+assert.ok(!/modelo/.test(fora), 'fora do Claude Code nada pergunta modelo');
 assert.strictEqual(spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha'], { cwd, encoding: 'utf8' }).status, 1, 'sem argumentos, exit 1');
+// os modelos que a linha antiga recebia depois do documento sobram sem quebrar nada
+const comSobra = spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha', 'Spec do CSV', 'opus', 'sonnet'], {
+  cwd,
+  encoding: 'utf8',
+  env: { ...process.env, HOME: base, USERPROFILE: base, CLAUDECODE: '1', PI_SESSION_ID: '' },
+});
+assert.strictEqual(comSobra.status, 0, comSobra.stderr);
+assert.strictEqual(comSobra.stdout, noClaude.stdout, 'argumentos a mais nao entram na linha');
 
 // A faz copiada para `<raiz>/skills/faz`; com `comPlugin`, a raiz e a de um plugin.
 function fazEm(comPlugin, ...raiz) {

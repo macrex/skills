@@ -5,7 +5,7 @@
 // harness a chama. Roda igual em win/mac/linux, sem dependencia.
 //
 //   node skills-do-matt.js [--json]
-//   node skills-do-matt.js --linha <documento> <modelo do implement> <modelo da revisao>
+//   node skills-do-matt.js --linha <documento>
 //
 // Com --linha imprime o prompt da leva pronto para colar.
 //
@@ -126,22 +126,25 @@ function nomeDaFaz(pasta) {
 // A linha da leva pronta, para o agente imprimir como sai: modelo preenchido por um agente fraco
 // troca a abertura e tira o prefixo dos nomes. Cada nome de skill abre uma linha, para a quebra
 // que o terminal faz na linha longa nunca o partir na copia. So o Claude Code tem a abertura aqui;
-// nos outros harnesses ela fica `<abertura>`, para o agente trocar pela da referencia dele.
-function linhaDaLeva(harness, faz, nome, documento, modeloDoImplement, modeloDaRevisao) {
-  const abertura = harness === 'claude-code' ? `rode /${faz} leva ${documento}` : '<abertura>';
+// nos outros harnesses ela fica `<abertura>`, para o agente trocar pela da referencia dele. Os
+// modelos dos agentes nao vao na linha: so o Claude Code aceita modelo por sub-agente, e la eles
+// sao perguntados junto com o modo do implement, com os tickets na mesa.
+function linhaDaLeva(harness, faz, nome, documento) {
+  const claude = harness === 'claude-code';
+  const abertura = claude ? `rode /${faz} leva ${documento}` : '<abertura>';
   return [
     `${abertura} até o fim.`,
     'O documento é o entendimento já fechado comigo e o insumo',
     'desta leva. Ela está fechada quando:',
     `/${nome['to-spec']} expandiu esse documento in-place;`,
     `/${nome['to-tickets']} publicou os tickets;`,
-    `/${nome.implement} rodou no modo que eu escolhi,`,
-    `com os agentes dele (se houver) no modelo ${modeloDoImplement};`,
+    `/${nome.implement} rodou no modo que eu escolhi;`,
     'antes de executá-lo, me proponha os modos que este harness',
-    'tem (inline, sub-agents, workflow) e a sua recomendação;',
-    `/${nome['code-review']} revisou em dois eixos,`,
-    `com agentes no modelo ${modeloDaRevisao};`,
-    'todas as correções foram aplicadas com esse mesmo modelo,',
+    ...(claude
+      ? ['tem (inline, sub-agents, workflow) e a sua recomendação,', 'e me pergunte junto os modelos dos agentes;']
+      : ['tem (inline, sub-agents, workflow) e a sua recomendação;']),
+    `/${nome['code-review']} revisou em dois eixos;`,
+    'todas as correções foram aplicadas,',
     'o teste de qualidade passou e você me garantiu que está',
     'tudo funcionando, sem commitar nada.',
   ].join('\n');
@@ -157,13 +160,13 @@ function main() {
   const faz = nomeDaFaz(pasta);
   const pedeLinha = process.argv.indexOf('--linha');
   if (pedeLinha > 0) {
-    const [documento, modeloDoImplement, modeloDaRevisao] = process.argv.slice(pedeLinha + 1);
-    if (!documento || !modeloDoImplement || !modeloDaRevisao || faltam.length) {
-      process.stderr.write(faltam.length ? `faltam ${faltam.join(', ')}\n` : 'uso: --linha <documento> <modelo do implement> <modelo da revisao>\n');
+    const documento = process.argv[pedeLinha + 1];
+    if (!documento || faltam.length) {
+      process.stderr.write(faltam.length ? `faltam ${faltam.join(', ')}\n` : 'uso: --linha <documento>\n');
       process.exit(1);
     }
     const nome = Object.fromEntries(skills.map((s) => [s.skill, s.nome]));
-    process.stdout.write(linhaDaLeva(harness, faz, nome, documento, modeloDoImplement, modeloDaRevisao) + '\n');
+    process.stdout.write(linhaDaLeva(harness, faz, nome, documento) + '\n');
     process.exit(0);
   }
   if (json) {

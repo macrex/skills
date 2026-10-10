@@ -96,6 +96,11 @@ const FILTRO = atom({ plugin: 'macrex-skills', key: 'filtro' }, '')
 const USO = atom({ plugin: 'macrex-skills', key: 'uso' }, {})
 // A ultima medida da sessao (session.measure): o custo, o contexto e a janela de 5 h, so na sessao.
 const MEDIDA = atom({ plugin: 'macrex-skills', key: 'medida' }, null)
+// As chaves dos alertas ja avisados num toast, so na sessao: a chave que volta depois de sumir avisa de novo.
+const ALERTADOS = atom({ plugin: 'macrex-skills', key: 'alertados' }, [])
+// A permissao que o Claude Code pediu e ainda espera o usuario, com o loop que a pediu, so na sessao.
+// ponytail: uma por vez; duas pendentes juntas mostram a ultima
+const PERMISSAO = atom({ plugin: 'macrex-skills', key: 'permissao' }, null)
 const ABAS = { painel: 'Geral', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso', arquivos: 'Arquivos' }
 const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']
 // os caracteres de controle que um Code recusa: todos menos tab e quebra de linha
@@ -185,8 +190,9 @@ function duracao(ms) {
   return m < 60 ? `${m}m${dois(s % 60)}s` : `${Math.floor(m / 60)}h${dois(m % 60)}m`
 }
 
-// Aplica um marco ao estado na hora `agora`, com o custo da sessao `usd` (no inicio e no
-// fechamento); devolve o estado novo ou { erro } sem tocar no antigo.
+// Aplica um marco ao estado na hora `agora`, com o custo da sessao `usd` (no inicio, no
+// fechamento e, no modo inline, no ticket e no portao); devolve o estado novo ou { erro } sem
+// tocar no antigo.
 function aplicar(leva, m, agora, usd) {
   if (m.marco === 'inicio') {
     if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'inicio exige documento (titulo da nota ou caminho)' }
@@ -224,7 +230,8 @@ function aplicar(leva, m, agora, usd) {
     case 'ticket':
       return {
         ...leva,
-        tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, estado: 'em-curso', inicioEm: t.inicioEm ?? agora } : t)),
+        // o custo do ticket conta do primeiro inicio, como o tempo, e so no inline
+        tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, estado: 'em-curso', inicioEm: t.inicioEm ?? agora, custoInicio: t.custoInicio ?? usd } : t)),
       }
     case 'portao': {
       if (!PORTOES.includes(m.portao)) return { erro: `portao deve ser verde ou vermelho, veio ${m.portao}` }
@@ -232,7 +239,8 @@ function aplicar(leva, m, agora, usd) {
       if (m.testes != null && String(m.testes).length > 20) return { erro: `testes cabe em 20 caracteres, veio ${m.testes}` }
       if (m.notas != null && (typeof m.notas !== 'string' || m.notas.length > 500)) return { erro: 'notas e um texto de ate 500 caracteres' }
       const portao = { estado: m.portao, reparos: m.reparos, testes: m.testes == null ? undefined : String(m.testes), notas: m.notas, fimEm: agora }
-      return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, ...portao } : t)) }
+      const custo = t => (usd == null || t.custoInicio == null ? {} : { custo: usd - t.custoInicio })
+      return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, ...portao, ...custo(t) } : t)) }
     }
     case 'item': {
       const f = m.fase ?? leva.fase
@@ -489,11 +497,12 @@ async function abrirHistorico($) {
 // ($.session.root()), que o cd do shell nao move. O grill e o desta janela (`idDoGrill`), senao o
 // mais recente do workspace, para a janela nova poder executar o prompt da leva. O custo da sessao
 // nova recomeca: o inicio do custo da leva aberta passa a ser o de agora menos o que ela ja custou,
-// antes do primeiro session.measure dela.
+// antes do primeiro session.measure dela. Os tickets perdem o inicio do custo: o portao do ticket
+// em curso sai sem custo, que a sessao velha nao deixou medido ate o fim.
 async function carregar($, raiz, idDoGrill) {
   const salva = await $.store.get(chave(raiz))
   const usd = salva && !salva.fechada ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
-  if (salva) await update($, LEVA, () => (usd == null ? salva : { ...salva, custoInicio: usd - (salva.custo ?? 0) }))
+  if (salva) await update($, LEVA, () => (usd == null ? salva : { ...salva, custoInicio: usd - (salva.custo ?? 0), tickets: salva.tickets.map(({ custoInicio, ...t }) => t) }))
   const historico = await $.store.get(chaveDoHistorico(raiz))
   if (historico) await update($, HISTORICO, () => historico)
   const antigo = await $.store.get(chaveAntigaDoGrill(raiz))
@@ -537,9 +546,10 @@ async function limpar($) {
 
 // O stdout do git na pasta `cwd`, ou '' quando sai com codigo acima de `aceito` (o diff
 // --no-index sai 1 quando ha diferenca) ou nem roda (sem git); quotePath desligado guarda os
-// acentos dos caminhos.
+// acentos dos caminhos. O gitCru devolve o resultado inteiro, para quem decide pelo codigo de saida.
+const gitCru = ($, cwd, args) => $.process.run(['git', '-c', 'core.quotePath=false', ...args], { cwd }).catch(() => ({ exitCode: 1, stdout: '' }))
 async function git($, cwd, args, aceito = 0) {
-  const r = await $.process.run(['git', '-c', 'core.quotePath=false', ...args], { cwd }).catch(() => ({ exitCode: 1, stdout: '' }))
+  const r = await gitCru($, cwd, args)
   return r.exitCode <= aceito ? r.stdout : ''
 }
 const naoRastreados = async ($, raiz) => (await git($, raiz, ['ls-files', '--others', '--exclude-standard', '-z'])).split('\0').filter(Boolean)
@@ -559,7 +569,8 @@ async function marcarBase($, cwd) {
   } catch {}
 }
 
-// O diff do git em arquivos: o caminho, as linhas somadas e tiradas, e os hunks sem CONTROLE (o \r inclusive).
+// O diff do git em arquivos: o caminho, as linhas somadas e tiradas, os hunks sem CONTROLE (o \r
+// inclusive) e o patch cru do arquivo, que o Copiar diff leva (o git apply pede o \r do CRLF).
 function arquivosDoDiff(texto) {
   return texto.split(/^diff --git /m).slice(1).map(bloco => {
     const limpo = bloco.replace(CONTROLE, '')
@@ -567,7 +578,7 @@ function arquivosDoDiff(texto) {
     const inicio = limpo.search(/^@@ /m)
     const diff = inicio < 0 ? '' : limpo.slice(inicio).replace(/\n+$/, '')
     const linhas = diff.split('\n')
-    return { caminho, mais: linhas.filter(l => l[0] === '+').length, menos: linhas.filter(l => l[0] === '-').length, diff }
+    return { caminho, mais: linhas.filter(l => l[0] === '+').length, menos: linhas.filter(l => l[0] === '-').length, diff, patch: `diff --git ${bloco}` }
   })
 }
 
@@ -682,6 +693,10 @@ const trocarAba = async ($, aba) => {
 
 const mexer = ($, qual, como) => update($, AGENTES, lista => lista.map(a => (qual(a) ? { ...a, ...como(a) } : a)))
 const vivo = a => VIVOS.includes(a.estado)
+// o agente rodando sem ferramenta ha mais de SEM_SAIDA; o workflow nao: as ferramentas dele trazem
+// o agentId dos sub-agentes de dentro
+const semSaida = (a, quieto) => a.tipo === 'agente' && a.estado === 'rodando' && quieto > SEM_SAIDA
+const textoSemSaida = quieto => `sem saída há ${Math.floor(quieto / 60000)} min`
 
 // Acerta os agentes vivos da leva pela lista oficial: casa pelo agentId, ou pelo nome enquanto nao
 // tem um (o teammate); o herdado de outra sessao que a lista nao conhece mais para. Os workflows
@@ -711,6 +726,22 @@ async function reconciliar($) {
   })
 }
 
+// O Descartar do diff aberto: confirma e volta o arquivo a foto do inicio da sessao (o commit da
+// base), so no working tree; o novo da sessao (solto que a base nao tinha) sai pelo clean. O
+// codigo de saida decide, entao vai o gitCru, nao o git que engole a falha.
+async function descartar($, caminho) {
+  // o dialogo dispensado rejeita: e o mesmo que manter
+  const resposta = await $.ui.ask(`Descartar a mudança em ${caminho}?`, ['Descartar', 'Manter']).catch(() => '')
+  const base = await read($, BASE)
+  if (resposta !== 'Descartar' || !base) return
+  const novo = (await naoRastreados($, base.raiz)).includes(caminho) && !base.soltos.includes(caminho)
+  const args = novo ? ['clean', '-f', '--', caminho] : ['restore', `--source=${base.commit}`, '--worktree', '--', caminho]
+  const r = await gitCru($, base.raiz, args)
+  if (r.exitCode !== 0) return $.ui.toast(`Não deu para descartar ${caminho}`)
+  await update($, ABERTOS, l => l.filter(c => c !== caminho))
+  await refazer($, await read($, ABA))
+}
+
 // O Parar de um agente vivo: confirma e encerra pela TaskStop, que aceita o id da tarefa em
 // background, o agentId ou o nome do teammate.
 const idDeParar = a => a.taskId ?? a.agentId ?? a.nome
@@ -728,6 +759,49 @@ const ativa = async $ => {
   const leva = await read($, LEVA)
   return Boolean(leva && !leva.fechada)
 }
+
+// Os alertas de agora, o que faz a sessao esperar pelo usuario, derivados do estado: cada um com
+// a chave (o toast sai uma vez por chave nova), o texto da faixa e se e vermelho. O alerta some
+// sozinho quando a causa deixa de valer: o ticket que recomeca nao esta mais vermelho.
+function alertas({ leva, agentes, permissao, agora }) {
+  const lista = []
+  if (leva && !leva.fechada) {
+    for (const t of leva.tickets) if (t.estado === 'vermelho') lista.push({ chave: `portao:${t.id}`, texto: `ticket ${t.id} com portão vermelho`, vermelho: true })
+  }
+  if (permissao) lista.push({ chave: 'permissao', texto: `permissão pendente: ${permissao.ferramenta}` })
+  for (const a of agentes) {
+    if (a.estado === 'aguardando') lista.push({ chave: `aguardando:${a.id}`, texto: `${a.nome} aguardando` })
+    const quieto = agora - (a.atividade ?? a.inicio)
+    if (semSaida(a, quieto)) lista.push({ chave: `semsaida:${a.id}`, texto: `${a.nome} ${textoSemSaida(quieto)}` })
+  }
+  return lista
+}
+const alertasDe = async $ => alertas({ leva: await read($, LEVA), agentes: await read($, AGENTES), permissao: await read($, PERMISSAO), agora: await $.clock.now() })
+// A permissao respondida: a ferramenta rodou ou o turno acabou no loop que a pediu (`agentId`,
+// ausente no principal); a ferramenta de outro loop nao a responde.
+async function semPermissao($, agentId) {
+  const permissao = await read($, PERMISSAO)
+  if (!permissao || permissao.agentId !== agentId) return
+  await update($, PERMISSAO, () => null)
+  await alertar($)
+}
+// Avisa num toast os alertas novos e redesenha a faixa quando a lista muda; diz se ha algum.
+async function alertar($) {
+  const lista = await alertasDe($)
+  // o caso comum, sem alerta antes nem agora, nao escreve no estado
+  if (lista.length === 0 && (await read($, ALERTADOS)).length === 0) return false
+  const chaves = lista.map(a => a.chave)
+  let novos = []
+  let mudou = false
+  await update($, ALERTADOS, antes => {
+    novos = lista.filter(a => !antes.includes(a.chave))
+    mudou = JSON.stringify(antes) !== JSON.stringify(chaves)
+    return mudou ? chaves : antes
+  })
+  for (const a of novos) $.ui.toast(`Alerta: ${a.texto}`)
+  if (mudou) $.ui.invalidate('ui.render')
+  return lista.length > 0
+}
 const emGrill = async $ => {
   const grill = await read($, GRILL)
   return Boolean(naTela(grill) && grill.documento == null)
@@ -739,20 +813,28 @@ export function register(on, options) {
   if (options?.so_com_pedido) soComPedido(on)
   // o canal do grill na opcao do plugin (/config); no tela, o AskUserQuestion do grill vai a pagina
   const canalTela = options?.grill_canal === 'tela'
+  // os tiques do session.start, que o session.start seguinte cancela antes de ligar os dele: sem
+  // isso, cada um somava mais um tique por segundo
+  let tiques = []
   on('session.start', async ($, e, next) => {
     // o hot reload roda o session.start de novo: a janela fica com o grill dela
     await carregar($, await $.session.root(), (await read($, GRILL))?.id)
     await sugerirLinha($, false)
     await marcarBase($, e.cwd)
-    // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
-    // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente
-    $.clock.every(1000, async () => {
-      if (await emGrill($)) await sincronizarTela($)
-      if (await ativa($)) await reconciliar($)
-      if ((await ativa($)) || (await emGrill($))) $.ui.invalidate('ui.render')
-    })
-    // no repouso, o ronco: so o pane montado redesenha
-    $.clock.every(RONCO, async () => !(await read($, LEVA)) && !naTela(await read($, GRILL)) && $.ui.invalidate('ui.render'))
+    for (const t of tiques) t.cancel()
+    tiques = [
+      // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
+      // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente;
+      // os alertas novos avisam
+      $.clock.every(1000, async () => {
+        const noGrill = await emGrill($)
+        if (noGrill) await sincronizarTela($)
+        await reconciliar($)
+        if ((await alertar($)) || noGrill || (await ativa($))) $.ui.invalidate('ui.render')
+      }),
+      // no repouso, o ronco: so o pane montado redesenha
+      $.clock.every(RONCO, async () => !(await read($, LEVA)) && !naTela(await read($, GRILL)) && $.ui.invalidate('ui.render')),
+    ]
     await $.command.register({
       name: PANE,
       description: '(macrex-skills) Abre ou fecha o painel da leva ao lado da conversa',
@@ -871,8 +953,10 @@ export function register(on, options) {
       return { result: `marco registrado; ${e.marco}` }
     }
     const antes = await read($, LEVA)
-    // o custo da sessao, que o inicio e o fechamento guardam; erro aqui nunca para a leva
-    const usd = ['inicio', 'fechamento'].includes(e.marco) ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
+    // o custo da sessao, que o inicio e o fechamento guardam, e no inline o ticket e o portao (nos
+    // modos paralelos os tickets correm juntos); erro aqui nunca para a leva
+    const comUsd = ['inicio', 'fechamento'].includes(e.marco) || (['ticket', 'portao'].includes(e.marco) && antes?.modo === 'inline')
+    const usd = comUsd ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
     const leva = aplicar(antes, e, await $.clock.now(), usd)
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
@@ -893,6 +977,7 @@ export function register(on, options) {
     const raiz = await $.session.root()
     await $.store.set(chave(raiz), leva)
     await update($, LEVA, () => leva)
+    await alertar($)
     if (avisa) $.ui.toast(`Janela de 5 h em ${porcento(janela)}: os sub-agentes dividem o limite com esta sessão`)
     if (e.marco === 'fechamento' && !antes.fechada) {
       const modelos = [...new Set((await read($, AGENTES)).map(a => a.modelo).filter(Boolean))]
@@ -903,7 +988,8 @@ export function register(on, options) {
       await update($, SKILLS, () => [])
     }
     if (e.marco === 'inicio') {
-      await update($, AGENTES, () => [])
+      // o vivo de fora da leva fica, para o alerta dele; o cartao Sub-agentes nao o mostra
+      await update($, AGENTES, lista => lista.filter(a => a.foraDaLeva && vivo(a)))
       await update($, USO, () => ({}))
       $.ui.toast('Leva registrada: /painel-macrex mostra o andamento')
     }
@@ -1001,12 +1087,14 @@ export function register(on, options) {
     return voltou ? { ...r, context: [...(r.context ?? []), voltou] } : r
   })
 
+  // os agentes e workflows entram com ou sem leva, para o alerta; o aberto fora da leva nao vai ao
+  // cartao Sub-agentes dela
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
-    if (!(await ativa($))) return next(e)
     const id = e.tool_use_id
     const inicio = await $.clock.now()
     const nome = e.name || e.description || e.subagent_type || 'agente'
-    await update($, AGENTES, lista => [...lista, { id, tipo: 'agente', nome, modelo: e.model ?? '', estado: 'rodando', inicio }])
+    const foraDaLeva = !(await ativa($))
+    await update($, AGENTES, lista => [...lista, { id, tipo: 'agente', nome, modelo: e.model ?? '', estado: 'rodando', inicio, foraDaLeva }])
     const r = await next(e)
     const fim = await $.clock.now()
     const feito = r.result
@@ -1023,10 +1111,10 @@ export function register(on, options) {
   })
 
   on('tool.call', { tool: 'Workflow' }, async ($, e, next) => {
-    if (!(await ativa($))) return next(e)
     const id = e.tool_use_id
     const inicio = await $.clock.now()
-    await update($, AGENTES, lista => [...lista, { id, tipo: 'workflow', nome: 'workflow', modelo: '', estado: 'rodando', inicio }])
+    const foraDaLeva = !(await ativa($))
+    await update($, AGENTES, lista => [...lista, { id, tipo: 'workflow', nome: 'workflow', modelo: '', estado: 'rodando', inicio, foraDaLeva }])
     const r = await next(e)
     const feito = r.result
     await mexer($, a => a.id === id, () =>
@@ -1037,8 +1125,17 @@ export function register(on, options) {
     return r
   })
 
-  // o fim de cada turno: soma os tokens do loop para a aba Uso e fecha o sub-agente em background
+  // o pedido de permissao acende o alerta; o mod so observa, a decisao segue com o Claude Code
+  on('classic.PermissionRequest', async ($, e, next) => {
+    await update($, PERMISSAO, () => ({ ferramenta: e.tool_name, agentId: e.agent_id }))
+    await alertar($)
+    return next(e)
+  })
+
+  // o fim de cada turno: soma os tokens do loop para a aba Uso, fecha o sub-agente em background e
+  // apaga a permissao pendente
   on('turn.complete', async ($, e, next) => {
+    await semPermissao($, e.agentId)
     if (e.usage) {
       const loop = e.agentId ?? 'sessao'
       await update($, USO, uso => ({ ...uso, [loop]: { ...somar(uso[loop], e.usage), modelo: e.usage.model ?? uso[loop]?.modelo ?? '' } }))
@@ -1112,11 +1209,12 @@ export function register(on, options) {
   // marco entendimento, fecha o grill na tela com o documento do prompt: senao o tempo nao para
   on('tool.call', async ($, e, next) => {
     // a ferramenta chamada dentro de um sub-agente traz o agentId dele: e a ultima atividade dele
-    if (e.agentId && (await ativa($))) {
+    if (e.agentId) {
       const agora = await $.clock.now()
       await mexer($, a => a.agentId === e.agentId, () => ({ atividade: agora }))
     }
     const r = await next(e)
+    await semPermissao($, e.agentId)
     if (MUDAM.includes(e.tool)) await refazer($, await read($, ABA))
     const tela = /grill-tela\.js/.test(e.command ?? '') && URL_DA_TELA.exec(e.command)?.[0]
     if (tela && (await emGrill($))) {
@@ -1258,7 +1356,19 @@ export function register(on, options) {
     // o diff de um arquivo da aba Diff, aberto na aba Diff ou na Arquivos: a mesma lista de abertos
     const abertos = await read($, ABERTOS)
     const alternarDiff = caminho => update($, ABERTOS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho]))
-    const diffDe = a => (a.diff ? pedacos(a.diff).map(source => h(Code, { source, format: 'diff', path: a.caminho })) : [apagado('  binário, sem diff de texto')])
+    // o cabecalho do diff aberto: Copiar diff, com o patch inteiro, e Descartar
+    const copiar = async (a, press) => {
+      const r = await $.ui.copy({ text: a.patch, surface: press?.surface }).catch(() => ({ isCopied: false }))
+      if (!r.isCopied) $.ui.toast(`Não deu para copiar o diff de ${a.caminho}`)
+    }
+    const acoes = a =>
+      h(
+        Box,
+        { gap: 2, paddingX: 1 },
+        h(Button, { key: `diff:copiar:${a.caminho}`, label: 'Copiar diff', dimColor: true, onPress: press => copiar(a, press) }),
+        h(Button, { key: `diff:descartar:${a.caminho}`, label: 'Descartar', dimColor: true, onPress: () => descartar($, a.caminho) }),
+      )
+    const diffDe = a => [acoes(a), ...(a.diff ? pedacos(a.diff).map(source => h(Code, { source, format: 'diff', path: a.caminho })) : [apagado('  binário, sem diff de texto')])]
     if (aba === 'codigo') {
       const base = await read($, BASE)
       const arquivo = (a, i) => {
@@ -1289,9 +1399,9 @@ export function register(on, options) {
     }
     // a aba Arquivos: a arvore do projeto, com a pasta que abre e fecha no clique; o nome do arquivo
     // novo vai em verde, o do alterado em amarelo, e a pasta fechada com algum deles leva o ponto. O
-    // arquivo com diff na aba Diff ganha o › que abre o diff embaixo dele (o Button nao tem cor, e o
-    // nome colorido fica num Text ao lado). Com o filtro, a arvore da lugar a lista plana dos
-    // caminhos que casam
+    // arquivo com diff na aba Diff vira o botao › nome, que abre o diff embaixo dele; o Button nao tem
+    // cor, entao o ponto a esquerda, pendurado no recuo, marca novo ou alterado. Com o filtro, a
+    // arvore da lugar a lista plana dos caminhos que casam
     if (aba === 'arquivos') {
       const arvore = await read($, ARVORE)
       const abertas = await read($, PASTAS)
@@ -1305,12 +1415,13 @@ export function register(on, options) {
         ? todos.filter(c => c.toLowerCase().includes(termo)).map(caminho => ({ caminho, nome: caminho, nivel: 0, pasta: false, doFiltro: true }))
         : linhasDaArvore(todos, abertas)
       const vazio = arvore ? (termo ? 'nenhum caminho casa com o filtro' : 'nenhum arquivo no projeto') : 'lendo a árvore…'
-      const recuo = nivel => '  '.repeat(nivel)
+      // a arvore comeca 2 colunas para dentro: e onde cabe o ponto do arquivo com diff na raiz
+      const recuo = nivel => '  '.repeat(nivel + 1)
       const noDaArvore = ({ caminho, nome, nivel, pasta, doFiltro }) => {
         if (!pasta) {
           const cor = arvore.novos.includes(caminho) ? VERDE : arvore.mudados.includes(caminho) ? AMARELO : TEXTO
           const comDiff = arquivos.find(a => a.caminho === caminho)
-          if (!comDiff) return h(Text, { color: cor }, `${recuo(nivel)}${doFiltro ? '' : '  '}${nome}`)
+          if (!comDiff) return h(Text, { color: cor }, `${doFiltro ? '' : `${recuo(nivel)}  `}${nome}`)
           const aberto = abertos.includes(caminho)
           return h(
             Box,
@@ -1318,9 +1429,9 @@ export function register(on, options) {
             h(
               Box,
               {},
-              h(Text, {}, recuo(nivel)),
-              h(Button, { key: `no:${caminho}`, plain: true, label: aberto ? '⌄' : '›', onPress: () => alternarDiff(caminho) }),
-              h(Text, { color: cor }, ` ${nome}`),
+              h(Text, {}, recuo(nivel).slice(2)),
+              h(Text, { color: cor }, cor === TEXTO ? '  ' : '• '),
+              h(Button, { key: `no:${caminho}`, plain: true, label: `${aberto ? '⌄' : '›'} ${nome}`, onPress: () => alternarDiff(caminho) }),
             ),
             ...(aberto ? diffDe(comDiff) : []),
           )
@@ -1356,7 +1467,8 @@ export function register(on, options) {
     }
     const linha = (t, esquerda, rotulo) => {
       const [texto, cor] = portao(t, rotulo)
-      return linhaLarga(largura, esquerda, [[texto, { color: cor }], ['  '], [tempoDe(t).padStart(6), { color: APAGADO }]])
+      const custo = t.custo != null ? [[dolares(t.custo), { color: APAGADO }], ['  ']] : []
+      return linhaLarga(largura, esquerda, [[texto, { color: cor }], ['  '], ...custo, [tempoDe(t).padStart(6), { color: APAGADO }]])
     }
     const ticket = t => linha(t, [[t.id.padEnd(Math.max(4, t.id.length + 2)), { color: APAGADO }], [t.titulo]], `portão ${t.testes ? `${t.testes} ` : ''}`)
     const item = i => linha(i, [[i.titulo]], i.detalhe ? `${i.detalhe} ` : '')
@@ -1496,7 +1608,7 @@ export function register(on, options) {
     }
     // a leva que nasceu do grill guardado (o mesmo documento) mostra a fase dele
     const doGrill = ultimoGrill?.documento === leva.documento ? ultimoGrill : null
-    const agentes = await read($, AGENTES)
+    const agentes = (await read($, AGENTES)).filter(a => !a.foraDaLeva)
     const visiveis = [...agentes.filter(vivo), ...agentes.filter(a => !vivo(a)).slice(-5)]
     const agente = a => {
       const [estado, cor] = DO_AGENTE[a.estado]
@@ -1518,7 +1630,7 @@ export function register(on, options) {
           Box,
           { gap: 2, paddingLeft: 2 },
           h(Button, { key: `agente:parar:${idDeParar(a)}`, label: 'Parar', dimColor: true, onPress: () => parar($, a) }),
-          a.tipo === 'agente' && a.estado === 'rodando' && quieto > SEM_SAIDA && h(Text, { color: AMARELO }, `sem saída há ${Math.floor(quieto / 60000)} min`),
+          semSaida(a, quieto) && h(Text, { color: AMARELO }, textoSemSaida(quieto)),
         ),
       )
     }
@@ -1545,12 +1657,17 @@ export function register(on, options) {
     )
   })
 
-  // a faixa acima do prompt: a leva aberta numa linha, sem abrir o pane; o que outro mod desenha
-  // na faixa segue embaixo
+  // a faixa acima do prompt: a leva aberta numa linha, sem abrir o pane, e embaixo a linha do
+  // alerta, que vale com ou sem leva; durante o turno a linha da leva sai, porque o spinner ja leva
+  // a fase e o ticket. O que outro mod desenha na faixa segue embaixo
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const leva = await read($, LEVA)
-    if (e.props.hasSurvey || !leva || leva.fechada) return next(e)
+    const comLeva = Boolean(leva && !leva.fechada) && !e.props.isWorking
+    const lista = await alertasDe($)
+    if (e.props.hasSurvey || (!comLeva && lista.length === 0)) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
+    const doAlerta = lista.length > 0 && h(Text, { color: lista.some(a => a.vermelho) ? VERMELHO : AMARELO, wrap: 'truncate-end' }, lista.map(a => a.texto).join(' · '))
+    if (!comLeva) return h(Box, { flexDirection: 'column' }, doAlerta, await next(e))
     const aberto = (await $.ui.panes()).some(pane => pane.id === PANE)
     const contagem = ticketDaLeva(leva)
     const partes = ['Leva', ROTULO[leva.fase] ?? leva.fase, ...(contagem ? [contagem] : []), duracao((await $.clock.now()) - leva.inicio)]
@@ -1567,6 +1684,7 @@ export function register(on, options) {
       Box,
       { flexDirection: 'column' },
       h(Box, { gap: 1 }, h(Text, { wrap: 'truncate-end' }, partes.join(' · ')), comBotao && h(Button, { key: 'faixa:abrir', label: 'Abrir painel', dimColor: true, onPress: abrir })),
+      doAlerta,
       await next(e),
     )
   })

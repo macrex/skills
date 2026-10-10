@@ -41,12 +41,12 @@ tracker que `to-spec`, `to-tickets` e `code-review` esperam ter recebido:
 | to-spec | `to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
 | to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada | um ticket por fatia vertical |
 | implement | `implement`, cumprida **no modo que o usuário escolher na terceira parada** (logo abaixo). Ela manda commitar; aqui a leva fica na working tree | código, suíte verde por ticket |
-| code-review | `code-review`. Sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no `<modelo da revisão>` da linha; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
-| correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo `<modelo da revisão>`, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
+| code-review | `code-review`. Sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no modelo da revisão escolhido na terceira parada; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
+| correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo modelo da revisão, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
 | qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (no Claude Code a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
 | fechamento | nota de evolução no tracker | o que mudou, o que a revisão pegou, o que não foi verificado |
 
-## A terceira parada: o modo do implement
+## A terceira parada: o modo do implement e os modelos
 
 Com a tabela de tickets na mesa, pare. Os modos que existem são os da referência do seu harness
 (o workflow, só no Claude Code);
@@ -80,9 +80,18 @@ não vira workflow, vira inline com o humano vendo, porque portão que não repr
 não garante nada. Escolha um modo e diga **em uma linha qual parâmetro decidiu**.
 
 Pergunte, pelo mecanismo do seu harness: os modos que ele tem, o seu marcado, e a linha do
-parâmetro que decidiu. Diga que o `<modelo do implement>` da linha vale para os agentes de
-sub-agents e de workflow — no inline quem executa é a sessão. Se o usuário trocar, é decisão
-dele: nomeie a garantia de que ele está abrindo mão, uma linha, e siga sem reabrir.
+parâmetro que decidiu. Se o usuário trocar, é decisão dele: nomeie a garantia de que ele está
+abrindo mão, uma linha, e siga sem reabrir.
+
+**Os modelos vão na mesma pergunta**, só no Claude Code, o único harness que aceita modelo por
+sub-agente; nos outros, todo agente roda no modelo que o harness configura e nada se pergunta.
+Cada modelo é respondido por **o da sessão** (recomendado) ou outro, que o usuário nomeia:
+
+- **o modelo da revisão**, sempre — os dois sub-agentes do `code-review` (Standards e Spec) e o
+  agente das correções;
+- **o modelo do implement**, só quando o seu modo marcado é `sub-agents` ou `workflow` — os
+  agentes por ticket e os reparos deles; no inline quem executa é a sessão. Recomendou inline e o
+  usuário trocou para um modo paralelo? Pergunte esse modelo logo em seguida.
 
 **O que cada modo cumpre igual.** O preâmbulo — o `PREAMBULO` de
 `workflow-tickets.md`, ao lado deste arquivo: TDD nos seams acordados,
@@ -93,9 +102,9 @@ muda quem os executa:
 - **inline**: você, ticket a ticket, na ordem. O portão roda antes de passar ao
   próximo; dois vermelhos param a leva no mesmo ponto em que parariam a cadeia.
 - **sub-agents**: um sub-agente por ticket ("Sub-agente" na referência do seu harness), no
-  `<modelo do implement>` da linha, disparados **um de cada vez**: a working tree é uma só. O
-  prompt de cada um é o preâmbulo mais as notas dos anteriores, e o portão é você lendo o que ele
-  devolve.
+  modelo do implement escolhido na terceira parada, disparados **um de cada vez**: a working
+  tree é uma só. O prompt de cada um é o preâmbulo mais as notas dos anteriores, e o portão é
+  você lendo o que ele devolve.
 - **workflow** (só no Claude Code): o esqueleto de `workflow-tickets.md`, sem
   mudanças.
 

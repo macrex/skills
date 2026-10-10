@@ -39,12 +39,16 @@ O que a sessão mudou nos arquivos do repositório: o working tree comparado com
 _Evitar_: git status, alterações pendentes
 
 **Árvore do projeto**:
-Os arquivos e pastas da raiz do projeto, sem o que o git ignora, que o painel da leva mostra com o nome do arquivo novo em verde e o do alterado em amarelo; a lista muda quando surge arquivo novo, nunca pelo diff da sessão.
+Os arquivos e pastas da raiz do projeto, sem o que o git ignora, que o painel da leva mostra com o arquivo novo marcado em verde e o alterado em amarelo; a lista muda quando surge arquivo novo, nunca pelo diff da sessão.
 _Evitar_: explorer, files, navegador de arquivos
 
 **Agentes da leva**:
-Os sub-agentes, teammates e workflows que a leva abriu, que o próprio mod observa enquanto ela está ativa.
+Os sub-agentes, teammates e workflows que a leva abriu, que o próprio mod observa enquanto ela está ativa. Fora da leva o mod também os observa, mas só para o alerta.
 _Evitar_: Agora, atividade, feed
+
+**Alerta**:
+O aviso na faixa acima do prompt e num toast de que a sessão espera por você: portão vermelho, agente aguardando ou sem saída, permissão pendente. Vale em qualquer sessão, com ou sem leva.
+_Evitar_: notificação, aviso
 
 **Retomada**:
 Uma sessão nova que continua a leva aberta do mesmo documento a partir do estado da leva, sem refazer os tickets que já fecharam.

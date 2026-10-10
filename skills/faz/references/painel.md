@@ -24,7 +24,9 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 **Retomada:** resposta do `inicio` que começa com `retomada na fase` traz a leva aberta do mesmo
 documento. Diga ao usuário em uma linha de onde retomou, pule as fases já passadas, comece o
 implement do primeiro ticket que não está verde (as notas dos verdes semeiam `entregues`, no fim
-de `workflow-tickets.md`) e use no `code-review` os sujos gravados.
+de `workflow-tickets.md`) e use no `code-review` os sujos gravados. Os modelos não ficam no
+estado da leva: com implement ou revisão pela frente, pergunte-os de novo como na terceira parada
+(`leva.md`), o do implement só se ele roda em sub-agents ou workflow.
 
 **Conferência das skills:** resposta terminada em `sem /<skill> invocada` quer dizer que esta
 sessão entrou na fase sem ter invocado a skill dela. O `code-review` você invoca na hora; uma

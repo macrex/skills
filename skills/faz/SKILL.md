@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /faz — do pedido à leva verificada
 
-# Versao: 3.19
+# Versao: 3.20
 
 Esta skill **simplifica um fluxo que já existe**, o SDD/TDD do Matt Pocock: as skills dele fazem
 o trabalho, esta só encadeia e para três vezes para o usuário decidir. São dois movimentos:

@@ -2237,6 +2237,61 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /^doc · / }))?.text).toMatch(/ · US\$ 1,50 · /)
   })
 
+  test('no inline, o ticket mostra antes do tempo o custo da sessao entre o marco ticket e o portao, nas abas Geral e Tickets; nos modos paralelos, nada', async ($, on) => {
+    const { marco, usar, relogio } = mundo($, on)
+    usar({ cost: { usd: 1 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
+    usar({ cost: { usd: 1.1 } })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await relogio.advance(segundos(60))
+    usar({ cost: { usd: 1.3 } })
+    await marco({ marco: 'portao', ticket: '01', portao: 'vermelho' })
+    // o reparo soma desde o primeiro inicio do ticket, como o tempo
+    usar({ cost: { usd: 1.5 } })
+    await marco({ marco: 'ticket', ticket: '01' })
+    usar({ cost: { usd: 1.52 } })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', reparos: 1 })
+    await marco({ marco: 'ticket', ticket: '02' })
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/01 {2}Mod do painel {2,}portão ✓ · 1 reparo {2}US\$ 0,42 {2,}1m00s/)
+    expect(await quadro(ui)).toMatch(/02 {2}Ferramenta faz_marco {2,}em curso ◐ {2,}0s/)
+    await ui.press({ key: 'aba:tickets' })
+    expect(await quadro(ui)).toMatch(/01 {2}Mod do painel {2,}portão ✓ · 1 reparo {2}US\$ 0,42 {2,}1m00s/)
+
+    // nos modos paralelos os tickets correm juntos: nenhum custo
+    await marco({ marco: 'inicio', documento: 'outra' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'sub-agents' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    usar({ cost: { usd: 2 } })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    expect(await ui.find({ text: /US\$/ })).toBeUndefined()
+  })
+
+  test('a retomada numa sessao nova tira o custo do ticket em curso, que nao sai errado nem negativo', async ($, on) => {
+    const { marco, usar, sessao } = mundo($, on)
+    const medir = (usd: number) => $.session.measure({ context: { window: 200000 }, rateLimits: [], cost: { usd }, changed: ['cost'] } as never)
+    usar({ cost: { usd: 1 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
+    await medir(1.5)
+    // o marco ticket le um custo depois da ultima medida, e a sessao morre sem medir de novo
+    usar({ cost: { usd: 1.6 } })
+    await marco({ marco: 'ticket', ticket: '01' })
+    // a sessao nova recomeca o custo dela: o portao do ticket em curso sai sem custo
+    usar({ cost: { usd: 0 } })
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    usar({ cost: { usd: 0.05 } })
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/01 {2}Mod do painel {2,}portão ✓ {2,}\d+s/)
+    expect((await ui.find({ type: 'Text', text: /Mod do painel/ }))?.text).not.toMatch(/US\$/)
+  })
+
   test('a retomada numa sessao nova soma o custo das duas sessoes', async ($, on) => {
     const { marco, usar, sessao } = mundo($, on)
     const medir = (usd: number) => $.session.measure({ context: { window: 200000 }, rateLimits: [], cost: { usd }, changed: ['cost'] } as never)
@@ -2351,9 +2406,14 @@ describe('painel da leva', () => {
   // O git da arvore do projeto: os rastreados, os soltos (o que o .gitignore nao ignora) e os
   // apagados do working tree, cada um pelo seu ls-files, e os mudados desde a base da sessao (o
   // diff contra o abc123); o velho.txt ja estava solto no inicio.
-  function repo(on: On, git = { rastreados: ['README.md', 'hooks/register.js', 'hooks/painel.test.ts', 'skills/faz/SKILL.md'], soltos: ['velho.txt'], apagados: [] as string[], mudados: [] as string[], diff: '' }) {
+  function repo(on: On, git = { rastreados: ['README.md', 'hooks/register.js', 'hooks/painel.test.ts', 'skills/faz/SKILL.md'], soltos: ['velho.txt'], apagados: [] as string[], mudados: [] as string[], diff: '', novos: {} as Record<string, string>, rodados: [] as string[], falha: false }) {
     on('process.run', ($, e) => {
       const a = e.argv.join(' ')
+      // o Descartar: o clean e o restore ficam registrados, e falham com a falha ligada
+      if (/ (clean|restore) /.test(a)) {
+        git.rodados.push(a)
+        return { value: { exitCode: git.falha ? 1 : 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+      }
       const lista = (l: string[]) => l.map(c => `${c}\0`).join('')
       const stdout = /rev-parse --show-toplevel/.test(a) ? 'D:/ws/a\n'
         : /stash create/.test(a) ? 'abc123\n'
@@ -2362,6 +2422,7 @@ describe('painel da leva', () => {
         : /ls-files --deleted/.test(a) ? lista(git.apagados)
         : /diff --name-only -z abc123/.test(a) ? lista(git.mudados)
         : /diff --no-color --no-ext-diff abc123/.test(a) ? git.diff
+        : /--no-index/.test(a) ? (git.novos[e.argv.at(-1) ?? ''] ?? '')
         : ''
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
@@ -2383,19 +2444,19 @@ describe('painel da leva', () => {
     // a sexta aba: as pastas fechadas antes dos arquivos, o cabecalho com a raiz e o total
     await ui.press({ key: 'aba:arquivos' })
     expect(await quadro(ui)).toMatch(/Arquivos {2}arquivos\na {2}5\n/)
-    expect(await quadro(ui)).toMatch(/\[ ▸ hooks\/ \]\n\[ ▸ skills\/ \]\n {2}README\.md\n {2}velho\.txt$/)
+    expect(await quadro(ui)).toMatch(/\[ {3}▸ hooks\/ \]\n\[ {3}▸ skills\/ \]\n {4}README\.md\n {4}velho\.txt$/)
     // o arquivo nao e botao, e nada manda caminho ao prompt
     expect(await ui.find({ type: 'Button', text: /README/ })).toBeUndefined()
     expect(await ui.find({ text: /Enviar/ })).toBeUndefined()
 
     await ui.press({ key: 'no:hooks/' })
-    expect(await quadro(ui)).toMatch(/\[ ▾ hooks\/ \]\n {4}painel\.test\.ts\n {4}register\.js\n\[ ▸ skills\/ \]/)
+    expect(await quadro(ui)).toMatch(/\[ {3}▾ hooks\/ \]\n {6}painel\.test\.ts\n {6}register\.js\n\[ {3}▸ skills\/ \]/)
 
     // o arquivo criado na sessao aparece depois da ferramenta, com o nome em verde
     git.soltos = [...git.soltos, 'docs/novo.md']
     await $.tool.call({ tool: 'Write', file_path: 'D:/ws/a/docs/novo.md', content: 'x' } as never)
     await ui.press({ key: 'no:docs/' })
-    expect(await quadro(ui)).toMatch(/\[ ▾ docs\/ \]\n {4}novo\.md\n/)
+    expect(await quadro(ui)).toMatch(/\[ {3}▾ docs\/ \]\n {6}novo\.md\n/)
     expect(await corDe(ui, /novo\.md$/)).toBe(COR.novo)
 
     // o editado so muda de cor: a arvore em si nao mexe
@@ -2422,19 +2483,19 @@ describe('painel da leva', () => {
     git.soltos = [...git.soltos, 'docs/novo.md']
     const ui = await $.ui.mount(PANE)
     await ui.press({ key: 'aba:arquivos' })
-    expect(await quadro(ui)).toMatch(/\[ ▸ docs\/ \] {2}•\n\[ ▸ hooks\/ \] {2}•\n\[ ▸ skills\/ \]\n/)
+    expect(await quadro(ui)).toMatch(/\[ {3}▸ docs\/ \] {2}•\n\[ {3}▸ hooks\/ \] {2}•\n\[ {3}▸ skills\/ \]\n/)
 
     // aberta, a pasta perde o ponto: a cor esta no nome dos filhos
     await ui.press({ key: 'no:hooks/' })
     await ui.press({ key: 'no:docs/' })
-    expect(await quadro(ui)).toMatch(/\[ ▾ docs\/ \]\n {4}novo\.md\n\[ ▾ hooks\/ \]\n {4}painel\.test\.ts\n {4}register\.js\n/)
+    expect(await quadro(ui)).toMatch(/\[ {3}▾ docs\/ \]\n {6}novo\.md\n\[ {3}▾ hooks\/ \]\n {6}painel\.test\.ts\n {6}register\.js\n/)
     expect(await corDe(ui, /register\.js$/)).toBe(COR.mudado)
     expect(await corDe(ui, /novo\.md$/)).toBe(COR.novo)
     expect(await corDe(ui, /painel\.test\.ts$/)).toBe(COR.igual)
     expect(await ui.find({ type: 'Text', text: /^(novo|mudou)$/ })).toBeUndefined()
   })
 
-  test('o clique no arquivo alterado abre embaixo o diff dele, o mesmo da aba Diff; o arquivo sem mudanca nao abre nada', async ($, on) => {
+  test('o clique no nome do arquivo alterado abre embaixo o diff dele, o mesmo da aba Diff; o ponto marca novo e alterado; o arquivo sem mudanca nao abre nada', async ($, on) => {
     const { sessao } = mundo($, on)
     const { git } = repo(on)
     git.mudados = ['hooks/register.js']
@@ -2449,22 +2510,110 @@ describe('painel da leva', () => {
       '',
     ].join('\n')
     await sessao()
+    // o novo da sessao tem diff inteiro, do --no-index
+    git.soltos = [...git.soltos, 'hooks/novo.js']
+    git.novos['hooks/novo.js'] = ['diff --git a/hooks/novo.js b/hooks/novo.js', 'new file mode 100644', '--- /dev/null', '+++ b/hooks/novo.js', '@@ -0,0 +1,1 @@', '+x', ''].join('\n')
     const ui = await $.ui.mount(PANE)
     await ui.press({ key: 'aba:arquivos' })
     await ui.press({ key: 'no:hooks/' })
     expect(await ui.find({ type: 'Code' })).toBeUndefined()
-    // so o alterado tem o › para abrir; o nome segue amarelo
-    expect(await quadro(ui)).toMatch(/\n {4}painel\.test\.ts\n.*\[ › \].*register\.js\n/)
-    expect(await corDe(ui, /register\.js$/)).toBe(COR.mudado)
+    // o arquivo com diff e o proprio botao, com o nome; o ponto a esquerda, verde no novo e amarelo
+    // no alterado; o sem mudanca segue texto
+    expect(await quadro(ui)).toMatch(/\n.*• .*\[ › novo\.js \]\n {6}painel\.test\.ts\n.*• .*\[ › register\.js \]\n/)
+    const pontos = await ui.findAll({ type: 'Text', text: /^• $/ })
+    expect(pontos.map(p => p.props.color)).toEqual([COR.novo, COR.mudado])
+    expect(await corDe(ui, /painel\.test\.ts$/)).toBe(COR.igual)
 
     await ui.press({ key: 'no:hooks/register.js' })
     const code = await ui.find({ type: 'Code' })
     expect(code?.props.format).toBe('diff')
     expect(code?.props.source).toBe('@@ -10,1 +10,1 @@ export function register(on) {\n-const b = 2\n+const b = 3')
-    expect(await quadro(ui)).toMatch(/\[ ⌄ \].*register\.js\n@@ -10,1/)
+    expect(await quadro(ui)).toMatch(/\[ ⌄ register\.js \]\n\[ Copiar diff \]  \[ Descartar \]\n@@ -10,1/)
 
     await ui.press({ key: 'no:hooks/register.js' })
     expect(await ui.find({ type: 'Code' })).toBeUndefined()
+  })
+
+  test('na raiz da arvore, o ponto do arquivo com diff cabe a esquerda e o nome dele alinha com o do irmao sem diff', async ($, on) => {
+    const { sessao } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['README.md']
+    git.diff = ['diff --git a/README.md b/README.md', '--- a/README.md', '+++ b/README.md', '@@ -1,1 +1,1 @@', '-a', '+b', ''].join('\n')
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:arquivos' })
+    // o ponto (2) e o › (2) ocupam o recuo de 4 do irmao
+    expect(await quadro(ui)).toMatch(/\n• +\[ › README\.md \]\n {4}velho\.txt$/)
+  })
+
+  test('o diff aberto tem Copiar diff e Descartar no cabecalho, nas abas Diff e Arquivos; o Descartar confirma e volta o arquivo a base da sessao', async ($, on) => {
+    const { sessao, toasts } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['hooks/register.js']
+    git.diff = ['diff --git a/hooks/register.js b/hooks/register.js', '--- a/hooks/register.js', '+++ b/hooks/register.js', '@@ -10,1 +10,1 @@', '-const b = 2', '+const b = 3', ''].join('\n')
+    const copias: string[] = []
+    let copiou = true
+    on('ui.copy', ($, e) => { copias.push(e.text); return { value: copiou ? { isCopied: true } : { isCopied: false, reason: 'sem area' } } as never })
+    let escolha = 'Manter'
+    const perguntas: string[] = []
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+      perguntas.push(e.questions[0].question)
+      return { result: { questions: e.questions, answers: { [e.questions[0].question]: escolha } } } as never
+    })
+    await sessao()
+    git.soltos = [...git.soltos, 'hooks/novo.js']
+    git.novos['hooks/novo.js'] = ['diff --git a/hooks/novo.js b/hooks/novo.js', 'new file mode 100644', '--- /dev/null', '+++ b/hooks/novo.js', '@@ -0,0 +1,1 @@', '+x', ''].join('\n')
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:codigo' })
+    // so o diff aberto tem as acoes
+    expect(await ui.find({ type: 'Button', text: /Copiar diff|Descartar/ })).toBeUndefined()
+    await ui.press({ key: 'arquivo:0' })
+    expect(await quadro(ui)).toMatch(/\[ ⌄ hooks\/register\.js \].*\n\[ Copiar diff \]  \[ Descartar \]\n@@ -10,1/)
+
+    // o Copiar leva o patch inteiro do arquivo; a copia que nao pega avisa
+    await ui.press({ key: 'diff:copiar:hooks/register.js' })
+    expect(copias).toEqual([git.diff])
+    copiou = false
+    await ui.press({ key: 'diff:copiar:hooks/register.js' })
+    expect(toasts).toContain('Não deu para copiar o diff de hooks/register.js')
+
+    // o Descartar pergunta; Manter nao roda git nenhum
+    await ui.press({ key: 'diff:descartar:hooks/register.js' })
+    expect(perguntas).toEqual(['Descartar a mudança em hooks/register.js?'])
+    expect(git.rodados).toEqual([])
+    // Descartar volta o alterado ao commit da base, so no working tree, e o Diff se refaz sem ele
+    escolha = 'Descartar'
+    git.diff = ''
+    await ui.press({ key: 'diff:descartar:hooks/register.js' })
+    expect(git.rodados).toEqual(['git -c core.quotePath=false restore --source=abc123 --worktree -- hooks/register.js'])
+    expect(await ui.find({ type: 'Button', text: /register\.js/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^1 arquivo alterado$/ })).toBeDefined()
+
+    // na aba Arquivos o diff aberto tem as mesmas acoes; o novo da sessao sai pelo clean, e a falha avisa
+    await ui.press({ key: 'aba:arquivos' })
+    await ui.press({ key: 'no:hooks/' })
+    await ui.press({ key: 'no:hooks/novo.js' })
+    expect(await quadro(ui)).toMatch(/\[ ⌄ novo\.js \]\n.*\[ Copiar diff \]  \[ Descartar \]\n@@ -0,0/)
+    git.falha = true
+    await ui.press({ key: 'diff:descartar:hooks/novo.js' })
+    expect(git.rodados.at(-1)).toBe('git -c core.quotePath=false clean -f -- hooks/novo.js')
+    expect(toasts).toContain('Não deu para descartar hooks/novo.js')
+  })
+
+  test('o Copiar diff de um arquivo CRLF leva o patch cru, com o \\r que o git apply pede; o diff desenhado segue sem ele', async ($, on) => {
+    const { sessao } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['win.txt']
+    git.diff = ['diff --git a/win.txt b/win.txt', '--- a/win.txt', '+++ b/win.txt', '@@ -1,1 +1,1 @@', '-a\r', '+b\r', ''].join('\n')
+    const copias: string[] = []
+    on('ui.copy', ($, e) => { copias.push(e.text); return { value: { isCopied: true } } as never })
+    await sessao()
+    const ui = await $.ui.mount(PANE)
+    await ui.press({ key: 'aba:codigo' })
+    await ui.press({ key: 'arquivo:0' })
+    expect((await ui.find({ type: 'Code' }))?.props.source).toBe('@@ -1,1 +1,1 @@\n-a\n+b')
+    await ui.press({ key: 'diff:copiar:win.txt' })
+    expect(copias).toEqual([git.diff])
   })
 
   test('o filtro da aba Arquivos casa trecho do caminho sem diferenciar maiusculas e, vazio, volta a arvore', async ($, on) => {
@@ -2522,7 +2671,7 @@ describe('painel da leva', () => {
     await ui.press({ key: 'no:hooks/' })
     await ui.redraw()
     const antes = await quadro(ui)
-    expect(antes).toMatch(/\[ ▾ hooks\/ \]\n {4}painel\.test\.ts\n/)
+    expect(antes).toMatch(/\[ {3}▾ hooks\/ \]\n {6}painel\.test\.ts\n/)
 
     await clear()
     novaSessao()
@@ -2555,7 +2704,8 @@ describe('painel da leva', () => {
     await ui.redraw()
     await ui.press({ key: 'no:hooks/' })
     await ui.redraw()
-    expect(await corDe(ui, /register\.js$/)).toBe(COR.mudado)
+    // com diff, o nome e o botao, e o ponto amarelo marca o alterado
+    expect((await ui.find({ type: 'Text', text: /^• $/ }))?.props.color).toBe(COR.mudado)
 
     commitado = true
     await clear()
@@ -2563,7 +2713,7 @@ describe('painel da leva', () => {
     await $.classic.SessionStart({ source: 'clear' } as never)
     await ui.redraw()
     expect(await corDe(ui, /register\.js$/)).toBe(COR.igual)
-    expect(await quadro(ui)).toMatch(/\[ ▾ hooks\/ \]/)
+    expect(await quadro(ui)).toMatch(/\[ {3}▾ hooks\/ \]/)
     await ui.press({ key: 'aba:codigo' })
     await ui.redraw()
     expect(await ui.find({ type: 'Text', text: /nenhum arquivo alterado nesta sessão/ })).toBeDefined()
@@ -2623,6 +2773,209 @@ describe('faixa da leva', () => {
     await ui.redraw(PROPS_DA_FAIXA as never)
     expect(await ui.find({ text: /^Leva/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /^outro mod$/ })).toBeDefined()
+  })
+
+  test('o portao vermelho acende o alerta na faixa e num toast, uma vez; o ticket que recomeca, o verde e o fechamento o apagam', async ($, on) => {
+    const { marco, relogio, sessao, toasts } = mundo($, on)
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}))
+    on('ui.panes', () => ({ value: [] }))
+    await sessao()
+    const ui = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    const alertas = () => toasts.filter(t => t.startsWith('Alerta:'))
+    const linhaDoAlerta = async () => {
+      await ui.redraw(PROPS_DA_FAIXA as never)
+      return ui.find({ type: 'Text', text: /portão vermelho/ })
+    }
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    expect(await linhaDoAlerta()).toBeUndefined()
+
+    await marco({ marco: 'portao', ticket: '01', portao: 'vermelho' })
+    const alerta = await linhaDoAlerta()
+    expect(alerta?.text).toBe('ticket 01 com portão vermelho')
+    expect(alerta?.props.color).toBe('#f7768e')
+    // a linha do alerta fica embaixo da linha da leva
+    expect(await quadro(ui)).toMatch(/^.*implement · ticket 1\/2.*\nticket 01 com portão vermelho\n?$/)
+    // o toast sai uma vez, nao a cada tique
+    await relogio.advance(segundos(3))
+    expect(alertas()).toEqual(['Alerta: ticket 01 com portão vermelho'])
+
+    // o reparo recomeca o ticket e apaga o alerta; vermelho de novo e um alerta novo
+    await marco({ marco: 'ticket', ticket: '01' })
+    expect(await linhaDoAlerta()).toBeUndefined()
+    await marco({ marco: 'portao', ticket: '01', portao: 'vermelho', reparos: 1 })
+    expect(alertas()).toHaveLength(2)
+
+    // dois ao mesmo tempo dividem a linha; o verde apaga o dele
+    await marco({ marco: 'ticket', ticket: '02' })
+    await marco({ marco: 'portao', ticket: '02', portao: 'vermelho' })
+    expect((await linhaDoAlerta())?.text).toBe('ticket 01 com portão vermelho · ticket 02 com portão vermelho')
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', reparos: 2 })
+    expect((await linhaDoAlerta())?.text).toBe('ticket 02 com portão vermelho')
+
+    // o fechamento apaga o alerta e a faixa fica vazia
+    await marco({ marco: 'fechamento' })
+    expect(await linhaDoAlerta()).toBeUndefined()
+    expect(await quadro(ui)).toBe('')
+    expect(alertas()).toHaveLength(3)
+    expect(await ui.find({ text: /Leva/ })).toBeUndefined()
+  })
+
+  test('durante o turno a faixa tira a linha da leva, que o spinner ja mostra, e guarda a do alerta', async ($, on) => {
+    const { marco } = mundo($, on)
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}))
+    on('ui.panes', () => ({ value: [] }))
+    const ui = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await ui.redraw({ ...PROPS_DA_FAIXA, isWorking: true } as never)
+    expect(await quadro(ui)).toBe('')
+    await marco({ marco: 'portao', ticket: '01', portao: 'vermelho' })
+    await ui.redraw({ ...PROPS_DA_FAIXA, isWorking: true } as never)
+    expect(await quadro(ui)).toMatch(/^ticket 01 com portão vermelho\n?$/)
+    // parada, a linha da leva volta com o Abrir painel
+    await ui.redraw(PROPS_DA_FAIXA as never)
+    expect(await quadro(ui)).toMatch(/^Leva · implement · ticket 1\/2 · 0s {2}\[ Abrir painel \]\nticket 01 com portão vermelho/)
+  })
+
+  test('sem leva, o agente aguardando e o sem saida acendem o alerta na faixa e num toast, e somem com a causa; a Geral segue quieta', async ($, on) => {
+    const { relogio, sessao, toasts } = mundo($, on)
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}))
+    on('ui.panes', () => ({ value: [] }))
+    on('tool.call', { tool: 'Agent' }, ($, e) => ({ result: { status: 'async_launched', agentId: e.name === 'sonnet-espera' ? 'a1' : 'a2' } }) as never)
+    on('tool.call', { tool: 'Read' }, () => ({ result: {} }) as never)
+    const info = (id: string, status: string) => ({ id, description: 'd', type: 'general-purpose', status })
+    let lista = [info('a1', 'running'), info('a2', 'running')]
+    on('agent.list', () => ({ value: lista }))
+    await sessao()
+    const faixa = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    const alerta = async () => {
+      await faixa.redraw(PROPS_DA_FAIXA as never)
+      return faixa.find({ type: 'Text', text: /aguardando|sem saída/ })
+    }
+    const alertas = () => toasts.filter(t => t.startsWith('Alerta:'))
+    for (const name of ['sonnet-espera', 'sonnet-lento']) await $.tool.call({ tool: 'Agent', name, description: 'd', prompt: 'p' } as never)
+    await relogio.advance(segundos(1))
+    expect(await alerta()).toBeUndefined()
+
+    // a lista oficial diz que o agente aguarda: alerta amarelo, so a linha dele, sem leva
+    lista = [info('a1', 'waiting'), info('a2', 'running')]
+    await relogio.advance(segundos(1))
+    const aguardando = await alerta()
+    expect(aguardando?.text).toBe('sonnet-espera aguardando')
+    expect(aguardando?.props.color).toBe('#e0af68')
+    expect(await faixa.find({ text: /Leva/ })).toBeUndefined()
+    expect(alertas()).toEqual(['Alerta: sonnet-espera aguardando'])
+    // de volta a rodar, o alerta some
+    lista = [info('a1', 'running'), info('a2', 'running')]
+    await relogio.advance(segundos(1))
+    expect(await alerta()).toBeUndefined()
+
+    // o que chama ferramenta segue quieto do alerta; o outro passa de 2 min sem saida
+    await relogio.advance(segundos(60))
+    await $.tool.call({ tool: 'Read', file_path: 'a.md', agentId: 'a1' } as never)
+    await relogio.advance(segundos(61))
+    expect((await alerta())?.text).toBe('sonnet-lento sem saída há 2 min')
+    await relogio.advance(segundos(5))
+    expect(alertas()).toEqual(['Alerta: sonnet-espera aguardando', 'Alerta: sonnet-lento sem saída há 2 min'])
+    // a proxima ferramenta dele apaga o alerta
+    await $.tool.call({ tool: 'Read', file_path: 'b.md', agentId: 'a2' } as never)
+    await relogio.advance(segundos(1))
+    expect(await alerta()).toBeUndefined()
+
+    // sem leva, a aba Geral segue no repouso, sem os agentes
+    const pane = await $.ui.mount(PANE)
+    expect(await pane.find({ text: /sonnet/ })).toBeUndefined()
+    expect(await pane.find({ text: /▐▛███▜▌/ })).toBeDefined()
+  })
+
+  test('o inicio da leva guarda o agente vivo de fora dela: o alerta dele segue, e o cartao Sub-agentes nao o mostra', async ($, on) => {
+    const { marco, relogio, sessao } = mundo($, on)
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}))
+    on('ui.panes', () => ({ value: [] }))
+    on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'a1' } }) as never)
+    on('agent.list', () => ({ value: [{ id: 'a1', description: 'd', type: 'general-purpose', status: 'waiting' }] }))
+    await sessao()
+    const faixa = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    await $.tool.call({ tool: 'Agent', name: 'sonnet-antes', description: 'd', prompt: 'p' } as never)
+    await relogio.advance(segundos(1))
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await relogio.advance(segundos(1))
+    await faixa.redraw(PROPS_DA_FAIXA as never)
+    expect((await faixa.find({ type: 'Text', text: /aguardando/ }))?.text).toBe('sonnet-antes aguardando')
+    const pane = await $.ui.mount(PANE)
+    expect(await pane.find({ text: /sonnet-antes/ })).toBeUndefined()
+  })
+
+  test('a permissao pendente acende o alerta, sem decidir nada; o fim da ferramenta ou do turno o apaga', async ($, on) => {
+    const { sessao, toasts } = mundo($, on)
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}))
+    on('ui.panes', () => ({ value: [] }))
+    on('classic.PermissionRequest', () => ({}) as never)
+    on('tool.call', { tool: 'Bash' }, () => ({ result: {} }) as never)
+    on('tool.call', { tool: 'Read' }, () => ({ result: {} }) as never)
+    on('turn.complete', () => ({ text: '' }))
+    await sessao()
+    const faixa = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    const alerta = async () => {
+      await faixa.redraw(PROPS_DA_FAIXA as never)
+      return faixa.find({ type: 'Text', text: /permissão/ })
+    }
+    const r = await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'rm x' } } as never)
+    // so observa: a decisao fica com o Claude Code
+    expect((r as { decision?: unknown })?.decision).toBeUndefined()
+    const pendente = await alerta()
+    expect(pendente?.text).toBe('permissão pendente: Bash')
+    expect(pendente?.props.color).toBe('#e0af68')
+    expect(toasts).toEqual(['Alerta: permissão pendente: Bash'])
+
+    // a ferramenta de um sub-agente nao responde a permissao do loop principal
+    await $.tool.call({ tool: 'Read', file_path: 'a.md', agentId: 'a1' } as never)
+    expect((await alerta())?.text).toBe('permissão pendente: Bash')
+    await $.tool.call({ tool: 'Bash', command: 'rm x' } as never)
+    expect(await alerta()).toBeUndefined()
+
+    await $.classic.PermissionRequest({ tool_name: 'Write', tool_input: {} } as never)
+    expect((await alerta())?.text).toBe('permissão pendente: Write')
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' } as never)
+    expect(await alerta()).toBeUndefined()
+
+    // a do sub-agente so se apaga com o loop dele: o fim do turno principal nao a toca
+    await $.classic.PermissionRequest({ tool_name: 'Edit', tool_input: {}, agent_id: 'a1' } as never)
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' } as never)
+    expect((await alerta())?.text).toBe('permissão pendente: Edit')
+    await $.tool.call({ tool: 'Read', file_path: 'b.md', agentId: 'a1' } as never)
+    expect(await alerta()).toBeUndefined()
+    expect(toasts).toHaveLength(3)
+  })
+
+  test('o session.start de novo (o hot reload) troca os tiques do relogio, sem somar outro por segundo', async ($, on) => {
+    const { relogio, sessao } = mundo($, on)
+    on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'a1' } }) as never)
+    let leituras = 0
+    on('agent.list', () => { leituras++; return { value: [{ id: 'a1', description: 'd', type: 'general-purpose', status: 'running' }] } })
+    await sessao()
+    await sessao()
+    await sessao()
+    await $.tool.call({ tool: 'Agent', name: 'sonnet-vivo', description: 'd', prompt: 'p' } as never)
+    await relogio.advance(segundos(3))
+    expect(leituras).toBe(3)
+  })
+
+  test('o agente aberto depois do fechamento nao entra no cartao da leva fechada', async ($, on) => {
+    const { marco } = mundo($, on)
+    on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'x' } }) as never)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await $.tool.call({ tool: 'Agent', name: 'opus-da-leva', description: 'd', prompt: 'p' } as never)
+    await marco({ marco: 'fechamento' })
+    await $.tool.call({ tool: 'Agent', name: 'opus-depois', description: 'd', prompt: 'p' } as never)
+    const ui = await $.ui.mount(PANE)
+    expect(await ui.find({ type: 'Text', text: /opus-da-leva/ })).toBeDefined()
+    expect(await ui.find({ text: /opus-depois/ })).toBeUndefined()
   })
 
   test('o spinner leva a fase e o ticket da leva ativa antes da reticencia, a mesma contagem da faixa', async ($, on) => {

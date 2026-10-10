@@ -52,28 +52,19 @@ O documento leva o pedido original, o vocabulário canônico do `domain-modeling
 decisões inteira do interrogatório e os fatos do código que as sustentam (caminho e linha).
 Guarde como ele é endereçável (título da nota ou caminho do arquivo): a linha cita isso.
 
-## Pergunte os dois modelos, e entregue a linha
+## Entregue a linha
 
-Só o Claude Code aceita modelo por chamada de sub-agente; nos outros harnesses as duas respostas
-são `da sessão`, e a pergunta não se faz. Nele, uma pergunta só, com duas partes, cada uma
-respondida por **o da sessão** (recomendado) ou outro, que o usuário nomeia:
-
-1. **o modelo do implement** — os agentes de sub-agents e de workflow, um por ticket, e os
-   reparos deles; se a implementação rodar inline, quem executa é a própria sessão e a resposta
-   não se aplica;
-2. **o modelo da revisão** — os dois sub-agentes do `code-review` (Standards e Spec) e o agente
-   das correções.
-
-Então imprima o aviso e a linha para ele colar, e pare: parar é ter entregado a linha. A linha
-sai **pronta do localizador**: rode-o com o documento e as duas respostas, imprima a saída num
-bloco de código exatamente como saiu, sem reescrever nem juntar linhas.
+Os modelos dos agentes não se perguntam aqui: a leva os pergunta na terceira parada, junto com o
+modo do implement, quando os tickets já estão na mesa. Imprima o aviso e a linha para o usuário
+colar, e pare: parar é ter entregado a linha. A linha sai **pronta do localizador**: rode-o com o
+documento, imprima a saída num bloco de código exatamente como saiu, sem reescrever nem juntar
+linhas.
 
 ```bash
-node "<pasta desta skill>/scripts/skills-do-matt.js" --linha "<documento>" "<modelo do implement>" "<modelo da revisão>"
+node "<pasta desta skill>/scripts/skills-do-matt.js" --linha "<documento>"
 ```
 
-`<documento>` é como a nota é endereçável; os dois modelos são as respostas, literalmente
-`da sessão` ou o nome que o usuário deu. Fora do Claude Code a primeira linha sai com
+`<documento>` é como a nota é endereçável. Fora do Claude Code a primeira linha sai com
 `<abertura>`: troque só essa palavra pela abertura do seu harness ("Segurar a sessão" na
 referência dele, que também diz o que o aviso acrescenta quando falta o pré-requisito). A linha
 nomeia as skills como o localizador as acha, cada nome abrindo uma linha ("Autorização" na

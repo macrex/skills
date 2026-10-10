@@ -8,6 +8,9 @@ export type LevaTicket = {
   notas?: string
   inicioEm?: number
   fimEm?: number
+  // no modo inline, o custo da sessao (US$) no primeiro marco ticket e o gasto ate o portao
+  custoInicio?: number
+  custo?: number
 }
 
 // Um item da revisao, das correcoes ou da qualidade (marco item).
@@ -67,6 +70,8 @@ export type LevaAgente = {
   atividade?: number
   // veio da sessao de antes do /clear ou do /resume
   herdado?: boolean
+  // aberto sem leva aberta: so alimenta o alerta, fora do cartao Sub-agentes
+  foraDaLeva?: boolean
 }
 
 // Uma pergunta do grill pelo tema (o header do AskUserQuestion); sem resposta ainda, aguardando.
@@ -110,6 +115,8 @@ export type CodigoArquivo = {
   mais: number
   menos: number
   diff: string
+  // o bloco inteiro do arquivo no diff do git, que o Copiar diff leva
+  patch: string
 }
 
 // A arvore do projeto da aba Arquivos: os caminhos que o git nao ignora, e os criados na sessao;
@@ -152,6 +159,10 @@ declare module 'claude-code' {
       // as pastas abertas da arvore, com / no fim
       pastas: string[]
       filtro: string
+      // as chaves dos alertas ja avisados num toast
+      alertados: string[]
+      // a permissao pendente e o loop que a pediu (sem agentId, o principal)
+      permissao: { ferramenta: string; agentId?: string } | null
     }
   }
 }

@@ -74,8 +74,8 @@ for (const t of TICKETS) {
 return { entregues, parou: null }
 ```
 
-O `<modelo do implement>` da linha entra em `model` de cada `agent()`; o da
-sessão é `model` omitido.
+O modelo do implement escolhido na terceira parada entra em `model` de cada
+`agent()`; o da sessão é `model` omitido.
 
 Cadeia interrompida com o trabalho já verde na árvore? Rode a verificação você mesmo, semeie
 `entregues` com as notas do ticket fechado e relance a partir do próximo.
