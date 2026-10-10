@@ -76,6 +76,7 @@ strong{font-weight:600}
 .btn.ok-l{background:var(--surface);color:var(--rec);border-color:var(--rec)}
 .btn .kbd{color:inherit;border-color:currentColor;opacity:.7;margin:0 0 0 8px}
 .btn.sec{background:var(--surface);border-color:var(--pill-line);font-weight:500}
+a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .erro{color:var(--troca);font-size:13px}
 .caixa{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .nota-rodape{margin:14px 0 0;font-size:12.5px;color:var(--muted)}
@@ -219,7 +220,7 @@ const rotaDa = rota => rota==='preferencias' ? `/api/${rota}` : `${GRILL}/api/${
 const NO_HISTORICO = !GRILL;
 // E: o estado do servidor; S: o que só a página sabe (marcas ainda não enviadas, campos abertos)
 let E = null;
-const S = { resp:{}, adr:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false, abreTexto:false, texto:'', enviada:false };
+const S = { resp:{}, adr:{}, foco:0, abreAjuste:false, ajuste:'', erro:'', enviando:false, caiu:false, abreTexto:false, texto:'', enviada:false, sucesso:false };
 // modo e tema ficam no JSON de preferências do servidor, que valem para todos os grills da máquina
 const VAR = {A:'Panorama', B:'Uma por vez'};
 let V = 'A';
@@ -544,9 +545,19 @@ function telaLeitura(){
      <td class="alts">${(l.alternativas||[]).map(md).join('<br>')||'—'}</td>
      <td>${adr[i]?'<span class="st"><span class="aceito">✓ ADR</span></span>':'<span class="muted">—</span>'}</td></tr>`).join('')}</table></div>${historico(true)}</div>`;
 }
+// logo após o sim aceito: as contagens, o que acontece agora e as saídas; reabrir a URL mostra a leitura
+function telaSucesso(){
+  const n = E.final.tabela.length, a = marcadasNoSim(E.final.tabela, E.ultima).filter(Boolean).length;
+  return `<div class="centro"><div><div class="glifo">✓</div><h1 class="h1">Grill finalizado</h1>
+   <p class="sub">${n} ${n===1?'decisão confirmada':'decisões confirmadas'}, ${a||'nenhuma'} como ADR.<br>O sim voltou ao terminal: o agente grava o entendimento e entrega o prompt da leva.<br>Pode fechar esta aba; o grill fica no Histórico de grills e nesta URL.</p>
+   <div class="envio" style="justify-content:center;margin-top:20px"><a class="btn pri" href="/?t=${TOKEN}">Ir para o histórico</a><button class="btn sec" onclick="S.sucesso=false;render()">Ver o grill</button></div></div></div>`;
+}
 const telaFim = (glifo,t,s) => `<div class="centro"><div><div class="glifo">${glifo}</div><h1 class="h1">${t}</h1><p class="sub">${s}</p></div></div>`;
 
-async function confirmar(){ await api('respostas','POST',{tipo:'sim', adrs:E.final.tabela.map((l,i)=>i).filter(adrMarcada)}); await consultar(true); }
+async function confirmar(){
+  S.sucesso = (await api('respostas','POST',{tipo:'sim', adrs:E.final.tabela.map((l,i)=>i).filter(adrMarcada)})).ok;
+  await consultar(true); render(); // a consulta de cada segundo pode ter visto o concluido antes, e aí esta não desenha
+}
 async function ajustar(){
   const r = await api('respostas','POST',{tipo:'ajuste', texto:S.ajuste});
   if(r.ok){ S.abreAjuste=false; S.ajuste=''; S.erro=''; } else S.erro = r.json && r.json.erro || 'o servidor recusou o ajuste';
@@ -559,7 +570,7 @@ function render(){
   if(!E){ document.getElementById('app').innerHTML = telaFim('…','Conectando…',''); return; }
   const corpo = S.caiu ? telaFim('!','O servidor do grill parou','Volte ao terminal: o grill segue lá. Pode fechar esta aba.')
     : { inicio:telaAguarde, rodada:telaRodada, aguarde:telaAguarde, final:telaFinal,
-    concluido:telaLeitura,
+    concluido:()=>S.sucesso ? telaSucesso() : telaLeitura(),
     cli:()=>(E.canal==='cli' ? telaFim('&gt;_','Grill no terminal','As rodadas respondidas no terminal aparecem aqui conforme o agente as registra.')
       : telaFim('&gt;_','O grill segue no terminal','O agente parou de esperar a tela e faz a próxima rodada no CLI. Pode fechar esta aba.')) + historico(true) }[E.fase]();
   const naRodada = E.fase==='rodada' && !S.caiu;

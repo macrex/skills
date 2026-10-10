@@ -544,7 +544,7 @@ function responder(res, status, obj) {
 
 // ---------- cliente: os subcomandos do agente ----------
 
-// a API de um grill fica debaixo do caminho dele: a mesma regra no painel (hooks/register.js)
+// a API de um grill fica debaixo do caminho dele: a mesma regra no painel (hooks/painel/dominio/grill-tela.ts)
 const rotaDa = (url, rota) => url.replace(/\/?\?t=/, `/api/${rota}?t=`);
 
 function pedir(url, rota, metodo = 'GET', corpo, consulta = '') {

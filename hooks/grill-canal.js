@@ -24,7 +24,7 @@ const { opcoesNosSettings } = require('./vault-rules.js');
 // O que o hook injeta no Claude Code, por modo.
 const INSTRUCAO = {
   perguntar: `Antes da primeira rodada do grill, pergunte ao usuario pelo AskUserQuestion qual canal ele quer: CLI (como de costume) ou tela (uma pagina HTML local). Se ele escolher tela, invoque a skill grill-tela e conduza o grill por ela, sem usar o AskUserQuestion nas rodadas.`,
-  // no tela, o mod do painel (hooks/register.js) leva o AskUserQuestion do grill da /faz a pagina;
+  // no tela, o mod do painel (hooks/register.ts) leva o AskUserQuestion do grill da /faz a pagina;
   // no grilling de fora dela, o mod acrescenta ao resultado da skill que o grill vai pela grill-tela
   tela: `O usuario configurou o grill para a tela: sem perguntar o canal, faca cada rodada pelo AskUserQuestion, como no CLI; o plugin a leva a pagina da grill-tela e devolve a resposta dada nela, com a URL da pagina. Na fronteira vazia, invoque a skill grill-tela so para a tela final, nessa URL; se nenhum resultado trouxe a URL, o usuario voltou ao CLI e o grill termina nele.`,
 };

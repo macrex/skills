@@ -299,7 +299,28 @@ const RODADA = {
   const leitura = vm.runInNewContext(/const marcadasNoSim = .*\r?\n/.exec(pagina.txt)[0] + '({ marcadasNoSim })');
   assert.deepStrictEqual(leitura.marcadasNoSim(TABELA, estado.ultima), [true, false, true], 'as linhas marcadas no sim');
   assert.deepStrictEqual(leitura.marcadasNoSim(TABELA, null), [false, false, false]);
-  assert.match(pagina.txt, /concluido:telaLeitura/, 'o concluido abre a leitura');
+  assert.match(pagina.txt, /concluido:\(\)=>S\.sucesso \? telaSucesso\(\) : telaLeitura\(\)/, 'logo apos o sim, a tela de sucesso; fora dela, a leitura');
+  assert.match(pagina.txt, /const S = \{.*sucesso:false \};/, 'a URL reaberta comeca fora da tela de sucesso: mostra a leitura');
+  // a tela de sucesso: as contagens da final e do sim, e as saidas para o historico e para a leitura
+  const ctxSucesso = { E: estado, TOKEN: 'tk' };
+  const telaSucesso = vm.runInNewContext([/const marcadasNoSim = .*\r?\n/, /function telaSucesso\(\)\{[\s\S]*?\n\}/]
+    .map((re) => re.exec(pagina.txt)[0]).join('') + ' telaSucesso', ctxSucesso);
+  const sucesso = telaSucesso();
+  for (const trecho of ['<div class="glifo">✓</div>', 'Grill finalizado', '3 decisões confirmadas, 2 como ADR.',
+    'O sim voltou ao terminal: o agente grava o entendimento e entrega o prompt da leva.',
+    'Pode fechar esta aba; o grill fica no Histórico de grills e nesta URL.',
+    '<a class="btn pri" href="/?t=tk">Ir para o histórico</a>', '<button class="btn sec" onclick="S.sucesso=false;render()">Ver o grill</button>'])
+    assert.ok(sucesso.includes(trecho), `a tela de sucesso traz ${trecho}`);
+  ctxSucesso.E = { final: { tabela: [TABELA[1]] }, ultima: { tipo: 'sim', adrs: [] } };
+  assert.ok(telaSucesso().includes('1 decisão confirmada, nenhuma como ADR.'), 'singular e zero ADR');
+  ctxSucesso.E = { final: { tabela: [TABELA[0], TABELA[1]] }, ultima: { tipo: 'sim', adrs: [TABELA[0]] } };
+  assert.ok(telaSucesso().includes('2 decisões confirmadas, 1 como ADR.'), 'plural e uma ADR');
+  // o confirmar liga a tela de sucesso so com o sim que o servidor aceita
+  for (const ok of [false, true]) {
+    const ctx = { S: {}, E: { final: { tabela: TABELA } }, adrMarcada: () => false, api: async () => ({ ok }), consultar: async () => {}, render: () => {} };
+    await vm.runInNewContext(/async function confirmar\(\)\{[\s\S]*?\n\}/.exec(pagina.txt)[0] + ' confirmar', ctx)();
+    assert.strictEqual(ctx.S.sucesso, ok, ok ? 'sim aceito: tela de sucesso' : 'sim recusado: sem tela de sucesso');
+  }
   assert.match(pagina.txt, /function telaLeitura\(\)[\s\S]*?historico\(true\)/, 'a leitura traz as rodadas abertas');
   assert.match(pagina.txt, /cli:\(\)=>\(E\.canal==='cli' \? telaFim\([\s\S]*?\)\)\s*\+\s*historico\(true\)/, 'o grill do CLI, voltado ou feito no terminal, mostra as rodadas respondidas');
   assert.doesNotMatch(pagina.txt, /a página fecha sozinha/, 'a pagina nao fecha mais no sim');

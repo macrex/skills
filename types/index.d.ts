@@ -1,4 +1,4 @@
-// O contrato do $.state do painel da leva (hooks/register.js).
+// O contrato do $.state do painel da leva (hooks/register.ts).
 export type LevaTicket = {
   id: string
   titulo: string
@@ -84,6 +84,8 @@ export type GrillPergunta = {
 
 // O grill do movimento 1 do /faz (marcos grill, entendimento e linha).
 export type Grill = {
+  // a chave do grill no $.store, ao lado da raiz do workspace
+  id: string
   pedido: string
   inicio: number
   perguntas: GrillPergunta[]
@@ -96,8 +98,12 @@ export type Grill = {
   fora?: boolean
   // a URL da pagina da grill-tela que o grill consulta, enquanto ela esta aberta
   tela?: string
+  // a pagina voltou ao CLI ou terminou: a consulta dela para
+  telaFim?: boolean
   // no canal tela, o grill que voltou ao CLI: o AskUserQuestion dele nao vai mais a pagina
   canal?: 'cli'
+  // a URL da sessao que o registrar da grill-tela criou para o grill do terminal
+  registro?: string
 }
 
 // A base da aba Diff, tirada no inicio da sessao.

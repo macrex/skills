@@ -4,6 +4,8 @@
 // AskUserQuestion nao e prompt, por isso a /cpv pergunta por ele). Ligado pela opcao
 // so_com_pedido do plugin.
 
+import type { EngineInterface, Hook, On } from 'claude-code'
+
 // a palavra do pedido: commit, commita, commitar, push, publica, publicar, publish
 const PEDIDO = /\b(commit\w*|push\w*|publi(ca|sh)\w*)\b/i
 // as opcoes entre o git (ou o gh) e o subcomando, com ou sem valor, por = ou espaco, e o valor
@@ -25,7 +27,8 @@ let pediu = false
 // a mensagem digitada decide o turno; a de plugin, de notificacao ou de outra sessao abre um
 // turno sem pedido. A que chega dentro de um turno rodando (turnId) entra nele: a digitada so
 // acrescenta o pedido, nunca o tira, e a de outra origem nao mexe
-async function aoPrompt($, e, next) {
+type DoPrompt = Parameters<Hook<'prompt.submit'>>
+async function aoPrompt($: EngineInterface, e: DoPrompt[1], next: DoPrompt[2]) {
   if (DO_USUARIO.includes(e.origin.kind)) {
     const pede = PEDIDO.test(e.text) || CPV.test(e.text)
     pediu = e.turnId == null ? pede : pediu || pede
@@ -34,17 +37,19 @@ async function aoPrompt($, e, next) {
 }
 
 // o /cpv e o pedido: a skill cpv, com ou sem o prefixo do plugin (o matcher a escolhe, porque o
-// register.js ja tem o skill.prompt sem matcher)
-async function aoCpv($, e, next) {
+// hooks/painel/features/nucleo.ts ja tem o skill.prompt sem matcher)
+// generico: serve aos dois matchers, cada um com o evento e o next dele
+async function aoCpv<E, R>($: EngineInterface, e: E, next: (e: E) => Promise<R>) {
   pediu = true
   return next(e)
 }
 
-async function barra($, e, next) {
+// generico: serve ao Bash e ao PowerShell, cada um com o evento e o next dele
+async function barra<E extends { readonly command?: unknown }, R>($: EngineInterface, e: E, next: (e: E) => Promise<R>) {
   return !pediu && GRAVA.test(String(e.command ?? '')) ? { deny: MOTIVO } : next(e)
 }
 
-export function soComPedido(on) {
+export function soComPedido(on: On) {
   on('prompt.submit', aoPrompt)
   on('skill.prompt', { skill: 'cpv' }, aoCpv)
   on('skill.prompt', { skill: 'macrex-skills:cpv' }, aoCpv)

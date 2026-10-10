@@ -1,6 +1,6 @@
 {
   "modules": [
-    "./register.js"
+    "./register.ts"
   ],
   "hooks": {
     "SessionStart": [

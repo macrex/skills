@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["../hooks", "../types"],
+  // os dois testes ficam intactos, e o hooks/painel.test.ts tem erros de tipo de quando o mod era JavaScript
+  "exclude": ["../hooks/painel.test.ts", "../hooks/so-com-pedido.test.ts"]
+}
