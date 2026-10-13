@@ -1052,10 +1052,11 @@ T U D O   Q U I E T O   P O R   A Q U I
  ▐▛███▜▌   
 ▝▜█████▛▘  
   ▘▘ ▝▝    `,
-  "90 resultados": `Skill: {"result":"ok","context":["O grill desta /faz vai a grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123: escreva esta URL ao usuario antes da primeira pergunta, para ele saber onde responder. As rodadas seguem pelo AskUserQuestion, que o plugin leva a essa pagina."]}
+  "90 resultados": `Skill: {"result":"ok","context":["O grill desta /faz vai a grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123: escreva esta URL ao usuario antes da primeira pergunta, para ele saber onde responder. As rodadas seguem pelo AskUserQuestion, que o plugin publica nessa pagina."]}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; grill"}
-AskUserQuestion: {"result":{"questions":[{"header":"Módulos","question":"Como dividir o register.js?","multiSelect":false,"options":[{"label":"Camadas e features (Recommended)","description":"domínio, estado, features"},{"label":"Um arquivo por aba","description":"abas/","preview":"abas/\\n  geral.ts"}]},{"header":"Linguagem","question":"O mod vira TypeScript?","multiSelect":false,"options":[{"label":"Sim, strict","description":""},{"label":"Não, JSDoc","description":""}]}],"answers":{"Como dividir o register.js?":"Camadas e features","O mod vira TypeScript?":"Sim, strict (com noUncheckedIndexedAccess)"}},"context":["A rodada foi respondida na grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123: a tela final do grill vai a esta URL.","O usuário escreveu à parte na grill-tela, antes de responder: e o golden fica onde?"]}
-AskUserQuestion: {"result":{"questions":[{"header":"Golden","question":"Onde fica o golden?","multiSelect":false,"options":[{"label":"Módulo .ts (Recommended)","description":"importado pelo teste"},{"label":"JSON","description":"lido do disco"}]},{"header":"Superfícies","question":"O e2e roda no desktop?","multiSelect":false,"options":[{"label":"Terminal e desktop (Recommended)","description":""},{"label":"Só terminal","description":""}]}],"answers":{"Onde fica o golden?":"Módulo .ts (Recommended)","O e2e roda no desktop?":"Só terminal"}},"context":["A rodada não ficou na grill-tela (o usuário voltou ao terminal pela página): o grill segue no terminal, pelo diálogo."]}
+AskUserQuestion: {"deny":"A rodada 1 do grill foi publicada na grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123, e espera a resposta do usuario la. Nao e erro, e nao pergunte de novo: diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin."}
+AskUserQuestion: {"deny":"A rodada 2 do grill foi publicada na grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123, e espera a resposta do usuario la. Nao e erro, e nao pergunte de novo: diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin."}
+AskUserQuestion: {"result":{"questions":[{"header":"Golden","question":"Onde fica o golden?","multiSelect":false,"options":[{"label":"Módulo .ts (Recommended)","description":"importado pelo teste"},{"label":"JSON","description":"lido do disco"}]},{"header":"Superfícies","question":"O e2e roda no desktop?","multiSelect":false,"options":[{"label":"Terminal e desktop (Recommended)","description":""},{"label":"Só terminal","description":""}]}],"answers":{"Onde fica o golden?":"Módulo .ts (Recommended)","O e2e roda no desktop?":"Só terminal"}}}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; entendimento"}
 Bash: {"result":{"stdout":"rode /macrex-skills:faz leva Painel em módulos até o fim.\\n/mattpocock-skills:to-spec expandiu esse documento in-place; siga.\\n","stderr":""}}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; linha"}
@@ -1113,12 +1114,18 @@ Alerta: sonnet-revisor aguardando`,
   "92 grill-tela": `iniciar --projeto painel --pedido o painel da leva em módulos TypeScript, com um e2e golden q…
 rodada http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
   {"rodada":1,"questoes":[{"id":"Q1","cabecalho":"Módulos","titulo":"Como dividir o register.js?","opcoes":[{"rotulo":"Camadas e features","descricao":"domínio, estado, features","recomendada":true},{"rotulo":"Um arquivo por aba","descricao":"abas/","recomendada":false,"previa":"abas/\\n  geral.ts"}]},{"id":"Q2","cabecalho":"Linguagem","titulo":"O mod vira TypeScript?","opcoes":[{"rotulo":"Sim, strict","descricao":"","recomendada":true},{"rotulo":"Não, JSDoc","descricao":"","recomendada":false}]}]}
-aguardar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 --ate 120
-aguardar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 --ate 120
+aguardar: {"tipo":"texto","texto":"e o golden fica onde?"}
+aguardar: {"tipo":"rodada","rodada":1,"respostas":[{"id":"Q1","marca":"aceito","escolha":"Camadas e features","comentario":null},{"id":"Q2","marca":"outra","escolha":"Sim, strict","comentario":"com noUncheckedIndexedAccess"}]}
+prompt: Rodada 1 do grill respondida na grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123:
+- Como dividir o register.js? Resposta: Camadas e features
+- O mod vira TypeScript? Resposta: Sim, strict (com noUncheckedIndexedAccess)
+O usuário escreveu à parte na grill-tela, antes de responder: e o golden fica onde?
+Siga o grill: a rodada seguinte vai pelo AskUserQuestion, e a tela final do grill, a esta URL.
 rodada http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
   {"rodada":2,"questoes":[{"id":"Q1","cabecalho":"Golden","titulo":"Onde fica o golden?","opcoes":[{"rotulo":"Módulo .ts","descricao":"importado pelo teste","recomendada":true},{"rotulo":"JSON","descricao":"lido do disco","recomendada":false}]},{"id":"Q2","cabecalho":"Superfícies","titulo":"O e2e roda no desktop?","opcoes":[{"rotulo":"Terminal e desktop","descricao":"","recomendada":true},{"rotulo":"Só terminal","descricao":"","recomendada":false}]}]}
-aguardar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 --ate 120
+aguardar: {"tipo":"cli"}
 cli http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123
+prompt: O usuário deixou a grill-tela e voltou ao terminal: refaça a rodada 2 do grill pelo AskUserQuestion, que agora pergunta no terminal.
 registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
   {"tipo":"terminal","questoes":[{"id":"Q1","cabecalho":"Golden","titulo":"Onde fica o golden?","opcoes":[{"rotulo":"Módulo .ts","descricao":"importado pelo teste","recomendada":true},{"rotulo":"JSON","descricao":"lido do disco","recomendada":false}]},{"id":"Q2","cabecalho":"Superfícies","titulo":"O e2e roda no desktop?","opcoes":[{"rotulo":"Terminal e desktop","descricao":"","recomendada":true},{"rotulo":"Só terminal","descricao":"","recomendada":false}]}],"respostas":[{"id":"Q1","marca":"aceito","escolha":"Módulo .ts","comentario":null},{"id":"Q2","marca":"outra","escolha":"Só terminal","comentario":null}]}
 abrir http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123

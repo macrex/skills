@@ -2,6 +2,7 @@
 // segue o atom declarado no mesmo arquivo do read e do update.
 
 import type { EngineInterface, PluginState } from 'claude-code'
+import type { Perguntas } from './dominio/grill-tela.ts'
 
 export type Estado = PluginState['macrex-skills']
 
@@ -19,6 +20,10 @@ export type Contexto = {
   limpo: boolean
   // a /faz invocada, que o grilling seguinte consome
   noFaz: boolean
+  // a rodada do grill que o AskUserQuestion publicou na grill-tela e devolveu sem esperar: o tique a
+  // escuta ate a resposta ir ao agente
+  // ponytail: vive no ctx, e o hot reload a perde; a resposta fica na pagina
+  rodadaNaTela: { url: string; n: number; questions: Perguntas; textos: string[] } | null
 }
 
 export const chave = (cwd: string) => `leva:${cwd}`

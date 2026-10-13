@@ -27,7 +27,7 @@ import { registrarForaDoPane } from './painel/features/fora-do-pane.ts'
 export function register(on: On, options: PluginOptions) {
   // o hooks.json aceita um modulo so: o so-com-pedido entra por aqui, quando a opcao o liga
   if (options?.so_com_pedido) soComPedido(on)
-  const ctx: Contexto = { canalTela: options?.grill_canal === 'tela', tiques: [], herdado: null, limpo: false, noFaz: false }
+  const ctx: Contexto = { canalTela: options?.grill_canal === 'tela', tiques: [], herdado: null, limpo: false, noFaz: false, rodadaNaTela: null }
   registrarSessao(on, ctx) // session.start, session.end, classic.SessionStart
   registrarMarcosEGrill(on, ctx) // tool.call do marco, skill.prompt, tool.call da Skill e do AskUserQuestion
   registrarAgentes(on) // tool.call do Agent e do Workflow

@@ -155,13 +155,11 @@ describe('painel da leva, de ponta a ponta', () => {
     const { toasts, relogio, usar, sessao, clear } = mundo($, on, { [`levas:${RAIZ}`]: [LEVA_ANTERIOR] })
     const { git, rodar } = repo(on)
 
-    // a pagina da grill-tela: o estado dela, os subcomandos rodados e as voltas do aguardar, a
-    // primeira segura ate o teste solta-la
+    // a pagina da grill-tela: o estado dela, os subcomandos rodados e as voltas do aguardar, que o
+    // tique do mod consulta; sem volta, o prazo vence
     let estado: Record<string, any> = { fase: 'inicio', historico: [] }
     const comandos: string[] = []
     const voltas: string[] = []
-    let segura: Promise<void> | null = null
-    let soltar = () => {}
     const tela = async (argv: string[], stdin?: string) => {
       const [sub = '', ...args] = argv
       comandos.push([sub, ...args].join(' ') + (stdin ? `\n  ${stdin}` : ''))
@@ -169,22 +167,24 @@ describe('painel da leva, de ponta a ponta', () => {
       if (sub === 'iniciar' || sub === 'abrir') stdout = `${URL}\n`
       if (sub === 'historico') stdout = `Histórico de grills: ${HISTORICO_DE_GRILLS}\n`
       if (sub === 'rodada') estado = { ...estado, fase: 'rodada', rodada: JSON.parse(stdin ?? '') }
-      if (sub === 'aguardar') {
-        if (segura) await segura
-        segura = null
-        stdout = `${voltas.shift() ?? '{"tipo":"cli"}'}\n`
-        const msg = JSON.parse(stdout.trim().split('\n').pop() ?? '')
-        if (msg.tipo === 'rodada') estado = { fase: 'aguarde', rodada: estado.rodada, historico: [...estado.historico, { rodada: estado.rodada, respostas: msg.respostas }] }
-        if (msg.tipo === 'cli') estado = { ...estado, fase: 'cli' }
-      }
       return { exitCode: 0, stdout }
+    }
+    const aguardar = () => {
+      const texto = voltas.shift() ?? '{"tipo":"pendente"}'
+      const msg = JSON.parse(texto)
+      if (msg.tipo === 'rodada') estado = { fase: 'aguarde', rodada: estado.rodada, historico: [...estado.historico, { rodada: estado.rodada, respostas: msg.respostas }] }
+      if (msg.tipo === 'cli') estado = { ...estado, fase: 'cli' }
+      if (msg.tipo !== 'pendente') comandos.push(`aguardar: ${texto}`)
+      return texto
     }
     on('process.run', async ($, e) => {
       const [programa, , ...resto] = e.argv
       const r = programa === 'git' ? rodar(e.argv) : await tela(resto, e.init?.stdin)
       return { value: { ...r, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
-    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
+    on('http.fetch', ($, e) => ({ value: { status: 200, ok: true, headers: {}, text: e.url.includes('/api/aguardar') ? aguardar() : JSON.stringify(estado) } }))
+    // a resposta da pagina que o mod manda ao agente
+    on('prompt.submit', ($, e) => { comandos.push(`prompt: ${e.text}`); return { text: e.text } })
 
     // o pane aberto ou fechado, para a faixa e o /painel-macrex
     const abertos = new Set<string>()
@@ -290,9 +290,8 @@ describe('painel da leva, de ponta a ponta', () => {
     await apertar('fase:grill')
     await pane('12 grill aba sem perguntas')
 
-    // a primeira rodada vai a pagina e espera: as perguntas aguardam na aba Grill
-    segura = new Promise(ok => { soltar = ok })
-    const rodada1 = chamar({
+    // a primeira rodada vai a pagina e volta na hora: as perguntas aguardam na aba Grill
+    await chamar({
       tool: 'AskUserQuestion',
       tool_use_id: 'tu-rodada-1',
       questions: [
@@ -301,27 +300,26 @@ describe('painel da leva, de ponta a ponta', () => {
         { header: 'Linguagem', question: 'O mod vira TypeScript?', multiSelect: false, options: [{ label: 'Sim, strict', description: '' }, { label: 'Não, JSDoc', description: '' }] },
       ],
     })
-    await relogio.settle()
     await pane('13 grill aba rodada aguardando')
     voltas.push(
       '{"tipo":"texto","texto":"e o golden fica onde?"}',
-      'Rodada 1 respondida na tela:\n\n{"tipo":"rodada","rodada":1,"respostas":[{"id":"Q1","marca":"aceito","escolha":"Camadas e features","comentario":null},{"id":"Q2","marca":"outra","escolha":"Sim, strict","comentario":"com noUncheckedIndexedAccess"}]}',
+      '{"tipo":"rodada","rodada":1,"respostas":[{"id":"Q1","marca":"aceito","escolha":"Camadas e features","comentario":null},{"id":"Q2","marca":"outra","escolha":"Sim, strict","comentario":"com noUncheckedIndexedAccess"}]}',
     )
-    soltar()
-    await rodada1
     await relogio.advance(segundos(6))
 
-    // a segunda rodada volta ao terminal pela pagina: o dialogo nativo responde, e o registrar a grava
-    voltas.push('{"tipo":"cli"}')
-    await chamar({
+    // a segunda rodada volta ao terminal pela pagina: o agente a refaz, o dialogo nativo responde, e o registrar a grava
+    const rodada2 = {
       tool: 'AskUserQuestion',
-      tool_use_id: 'tu-rodada-2',
       questions: [
         { header: 'Golden', question: 'Onde fica o golden?', multiSelect: false, options: [{ label: 'Módulo .ts (Recommended)', description: 'importado pelo teste' }, { label: 'JSON', description: 'lido do disco' }] },
         { header: 'Superfícies', question: 'O e2e roda no desktop?', multiSelect: false, options: [{ label: 'Terminal e desktop (Recommended)', description: '' }, { label: 'Só terminal', description: '' }] },
       ],
-    })
-    await relogio.advance(segundos(8))
+    }
+    await chamar({ ...rodada2, tool_use_id: 'tu-rodada-2' })
+    voltas.push('{"tipo":"cli"}')
+    await relogio.advance(segundos(1))
+    await chamar({ ...rodada2, tool_use_id: 'tu-rodada-2b' })
+    await relogio.advance(segundos(7))
     await pane('14 grill aba respondido')
     await apertar('tela:abrir')
     await apertar('grill:historico')

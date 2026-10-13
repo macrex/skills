@@ -151,12 +151,13 @@ async function registrarNoHistoricoDeGrills($: EngineInterface, corpo: { tipo: '
   if (novo?.registro === url) await salvarGrill($, novo)
 }
 // O AskUserQuestion do grill no canal tela: a rodada vai a pagina da grill-tela, que sobe na
-// primeira, e a resposta dela volta no formato do dialogo, com a URL para a tela final da skill;
-// a consulta da pagina a registra no grill. A pagina que nao sobe, recusa a rodada ou volta ao CLI,
-// e a interrupcao, devolvem { motivo }: o grill segue pelo dialogo nativo ate o fim, e o toast e o
-// contexto dizem por que.
+// primeira, e a chamada volta na hora, recusada com a URL, para o agente dizer ao usuario onde
+// responder e encerrar o turno, sem ficar preso no AskUserQuestion; o tique escuta a pagina
+// (ouvirTela) e a resposta chega ao agente num prompt do plugin. A pagina que nao sobe ou recusa a
+// rodada devolve { motivo }: o grill segue pelo dialogo nativo ate o fim, e o toast e o contexto
+// dizem por que.
 // ponytail: multiSelect vira escolha unica, a pagina nao tem outra
-async function pelaTela($: EngineInterface, e: { questions: Perguntas }, signal: AbortSignal): Promise<{ result: BuiltinToolResults['AskUserQuestion']; context: string[]; motivo?: undefined } | { motivo: `${string} ${string}` }> {
+async function pelaTela($: EngineInterface, e: { questions: Perguntas }, ctx: Contexto): Promise<{ deny: string; motivo?: undefined } | { motivo: `${string} ${string}` }> {
   const grill = await read($, GRILL)
   const projeto = nomeDa(await $.session.root())
   const iniciar = async (...mais: string[]) => URL_DA_TELA.exec((await rodarTela($, ['iniciar', '--projeto', projeto, ...mais])).stdout)?.[0]
@@ -183,50 +184,59 @@ async function pelaTela($: EngineInterface, e: { questions: Perguntas }, signal:
   const daSessao = url ? await estadoDa(url) : null
   const n = 1 + Math.max(0, ...grill!.perguntas.map(p => Number(/^tela:(\d+):/.exec(p.id)?.[1] ?? 0)), ...(daSessao?.historico ?? []).map(h => h.rodada.rodada), daSessao?.rodada?.rodada ?? 0)
   const questoes = questoesDaTela(e.questions)
-  let msg: AvisoDaTela | null = null
-  const textos: string[] = [] // o que o usuario escreveu a parte na pagina, com a rodada aberta
   const publicada = url && (await rodarTela($, ['rodada', url, '-'], { stdin: JSON.stringify({ rodada: n, questoes }) })).exitCode === 0
   if (publicada) {
     await update($, GRILL, g => g && { ...g, tela: url, telaFim: false })
     await sincronizarTela($)
-    // o aviso de onde a rodada esta, antes de esperar: o navegador pode nao ter aberto
+    // a rodada so e publicada com a url (o let nao deixa o if estreitar)
+    ctx.rodadaNaTela = { url: url!, n, questions: e.questions, textos: [] }
+    // o aviso de onde a rodada esta: o navegador pode nao ter aberto
     $.ui.toast(`Grill na tela: ${url}`)
-    // cada volta do aguardar e um $ e nao conta no orcamento do hook; a interrupcao nao espera a volta
-    // o aguardar so roda com a rodada publicada, e ela so com a url (o let nao deixa o if estreitar)
-    const parou = new Promise<null>(ok => (signal.aborted ? ok(null) : signal.addEventListener('abort', () => ok(null), { once: true })))
-    do {
-      const saida = await Promise.race([rodarTela($, ['aguardar', url!, '--ate', '120'], { timeoutMs: 150_000 }), parou])
-      try {
-        msg = saida && JSON.parse(saida.stdout.trim().split('\n').pop() as string)
-      } catch {
-        msg = null
-      }
-      if (msg?.tipo === 'texto') textos.push(msg.texto)
-    } while ((msg?.tipo === 'pendente' || msg?.tipo === 'texto') && !signal.aborted)
+    return {
+      deny:
+        `A rodada ${n} do grill foi publicada na grill-tela, em ${url}, e espera a resposta do usuario la. Nao e erro, e nao pergunte de novo: ` +
+        `diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin.`,
+    }
   }
-  if (msg?.tipo === 'rodada' && msg.rodada === n && !signal.aborted) {
+  return voltarAoTerminal($, url, n, !url ? 'a página da grill-tela não subiu' : 'a página recusou a rodada')
+}
+
+// A rodada publicada que a pagina responde: o tique pergunta a ela com prazo curto (o aguardar da
+// grill-tela devolve uma mensagem por vez), guarda o que o usuario escreveu a parte e manda a
+// resposta ao agente num prompt do plugin, que o Claude Code entrega com a sessao parada. O Voltar
+// ao CLI leva a rodada ao dialogo nativo; a pagina que nao responde segue escutada.
+async function ouvirTela($: EngineInterface, ctx: Contexto) {
+  const aberta = ctx.rodadaNaTela
+  if (!aberta) return
+  let msg: AvisoDaTela | null = null
+  try {
+    const r = await $.http.fetch(`${rotaDa(aberta.url, 'aguardar')}&ate=0.3`)
+    if (r.ok) msg = JSON.parse(r.text)
+  } catch {}
+  // a rodada seguinte publicada durante a consulta ja tomou o lugar desta
+  if (ctx.rodadaNaTela !== aberta) return
+  if (msg?.tipo === 'texto') aberta.textos.push(msg.texto)
+  if (msg?.tipo === 'rodada' && msg.rodada === aberta.n) {
+    ctx.rodadaNaTela = null
     await sincronizarTela($)
-    const answers = Object.fromEntries(
-      e.questions.map((q, i) => {
-        // o if acima estreitou o msg, que o fechamento nao enxerga (e let)
-        const r = (msg as Extract<AvisoDaTela, { tipo: 'rodada' }>).respostas.find(x => x.id === `Q${i + 1}`)
-        const escolha = r?.escolha ?? NAO_RESPOSTA[r?.marca as string] ?? 'sem resposta'
-        return [q.question, r?.comentario ? `${escolha} (${r.comentario})` : escolha]
-      }),
-    )
-    const aParte = textos.map(t => `O usuário escreveu à parte na grill-tela, antes de responder: ${t}`)
-    return { result: { questions: e.questions, answers }, context: [`A rodada foi respondida na grill-tela, em ${url}: a tela final do grill vai a esta URL.`, ...aParte] }
+    const respostas = aberta.questions.map((q, i) => {
+      const r = msg.respostas.find(x => x.id === `Q${i + 1}`)
+      const escolha = r?.escolha ?? NAO_RESPOSTA[r?.marca as string] ?? 'sem resposta'
+      return `- ${q.question} Resposta: ${r?.comentario ? `${escolha} (${r.comentario})` : escolha}`
+    })
+    const aParte = aberta.textos.map(t => `O usuário escreveu à parte na grill-tela, antes de responder: ${t}`)
+    const text = [`Rodada ${aberta.n} do grill respondida na grill-tela, em ${aberta.url}:`, ...respostas, ...aParte, 'Siga o grill: a rodada seguinte vai pelo AskUserQuestion, e a tela final do grill, a esta URL.']
+    await $.prompt.submit({ text: text.join('\n') })
   }
-  // de volta ao CLI: a pagina e avisada, e a rodada que ficou aberta nela sai da aba Grill; a URL fica no cartao
-  const motivo = !url
-    ? 'a página da grill-tela não subiu'
-    : !publicada
-      ? 'a página recusou a rodada'
-      : signal.aborted
-        ? 'a rodada foi interrompida'
-        : msg?.tipo === 'cli'
-          ? 'o usuário voltou ao terminal pela página'
-          : 'a página parou de responder'
+  if (msg?.tipo === 'cli') {
+    ctx.rodadaNaTela = null
+    await voltarAoTerminal($, aberta.url, aberta.n, 'o usuário voltou ao terminal pela página')
+    await $.prompt.submit({ text: `O usuário deixou a grill-tela e voltou ao terminal: refaça a rodada ${aberta.n} do grill pelo AskUserQuestion, que agora pergunta no terminal.` })
+  }
+}
+
+// de volta ao CLI: a pagina e avisada, e a rodada que ficou aberta nela sai da aba Grill; a URL fica no cartao
+async function voltarAoTerminal($: EngineInterface, url: string | undefined, n: number, motivo: `${string} ${string}`) {
   $.ui.toast(`Grill de volta ao terminal: ${motivo}`)
   if (url) await rodarTela($, ['cli', url])
   const novo = await update($, GRILL, g => {
@@ -487,11 +497,13 @@ export function registrarSessao(on: On, ctx: Contexto) {
     for (const t of ctx.tiques) t.cancel()
     ctx.tiques = [
       // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
-      // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente;
+      // grill-tela e consultada a cada volta, para a resposta dada nela aparecer sem esperar o agente, e a
+      // rodada publicada e escutada ate a resposta ir a ele;
       // os alertas novos avisam
       $.clock.every(1000, async () => {
         const noGrill = await emGrill($)
         if (noGrill) await sincronizarTela($)
+        await ouvirTela($, ctx)
         await reconciliar($)
         if ((await alertar($)) || noGrill || (await ativa($))) $.ui.invalidate('ui.render')
       }),
@@ -711,7 +723,7 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       const novo = await update($, GRILL, g => g && { ...g, tela: url })
       if (novo) await salvarGrill($, novo)
       $.ui.toast(`Grill na tela: ${url}`)
-      const aviso = `O grill desta /faz vai a grill-tela, em ${url}: escreva esta URL ao usuario antes da primeira pergunta, para ele saber onde responder. As rodadas seguem pelo AskUserQuestion, que o plugin leva a essa pagina.`
+      const aviso = `O grill desta /faz vai a grill-tela, em ${url}: escreva esta URL ao usuario antes da primeira pergunta, para ele saber onde responder. As rodadas seguem pelo AskUserQuestion, que o plugin publica nessa pagina.`
       return { ...r, context: [...(r.context ?? []), aviso] }
     }
     if (!ctx.canalTela || nome !== 'grilling' || daFaz || r.result === undefined || (await emGrillDaSessao($))) return r
@@ -727,7 +739,7 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
     let voltou = null
     // o emGrill acima garante o grill
     if (ctx.canalTela && (await read($, GRILL))!.canal !== 'cli' && (await read($, GRILL_DA_SESSAO))) {
-      const r = await pelaTela($, e, next.signal)
+      const r = await pelaTela($, e, ctx)
       if (!r.motivo) return r
       voltou = `A rodada não ficou na grill-tela (${r.motivo}): o grill segue no terminal, pelo diálogo.`
     }
