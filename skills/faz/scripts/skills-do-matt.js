@@ -124,29 +124,21 @@ function nomeDaFaz(pasta) {
 }
 
 // A linha da leva pronta, para o agente imprimir como sai: modelo preenchido por um agente fraco
-// troca a abertura e tira o prefixo dos nomes. Cada nome de skill abre uma linha, para a quebra
-// que o terminal faz na linha longa nunca o partir na copia. So o Claude Code tem a abertura aqui;
-// nos outros harnesses ela fica `<abertura>`, para o agente trocar pela da referencia dele. Os
-// modelos dos agentes nao vao na linha: so o Claude Code aceita modelo por sub-agente, e la eles
-// sao perguntados junto com o modo do implement, com os tickets na mesa.
+// troca a abertura e tira o prefixo dos nomes. So a abertura e as tres reservadas, que so o usuario
+// autoriza: o resto da leva (modos, modelos, revisao, correcoes, qualidade, sem commit) esta na
+// leva.md. Cada nome abre uma linha, para a quebra que o terminal faz na linha longa nunca o partir
+// na copia. So o Claude Code tem a abertura aqui; nos outros harnesses ela fica `<abertura>`, para
+// o agente trocar pela da referencia dele, e a condicao de fechamento vai no fim: o verificador do
+// /goal do Pi e do Codex so le o prompt. O Antigravity, sem /goal, a recebe junto: o localizador
+// nao o separa do Codex.
 function linhaDaLeva(harness, faz, nome, documento) {
   const claude = harness === 'claude-code';
-  const abertura = claude ? `rode /${faz} leva ${documento}` : '<abertura>';
   return [
-    `${abertura} até o fim.`,
-    'O documento é o entendimento já fechado comigo e o insumo',
-    'desta leva. Ela está fechada quando:',
-    `/${nome['to-spec']} expandiu esse documento in-place;`,
-    `/${nome['to-tickets']} publicou os tickets;`,
-    `/${nome.implement} rodou no modo que eu escolhi;`,
-    'antes de executá-lo, me proponha os modos que este harness',
-    ...(claude
-      ? ['tem (inline, sub-agents, workflow) e a sua recomendação,', 'e me pergunte junto os modelos dos agentes;']
-      : ['tem (inline, sub-agents, workflow) e a sua recomendação;']),
-    `/${nome['code-review']} revisou em dois eixos;`,
-    'todas as correções foram aplicadas,',
-    'o teste de qualidade passou e você me garantiu que está',
-    'tudo funcionando, sem commitar nada.',
+    claude ? `rode /${faz} leva ${documento}` : '<abertura>',
+    `/${nome['to-spec']}`,
+    `/${nome['to-tickets']}`,
+    `/${nome.implement}`,
+    ...(claude ? [] : ['fechada quando a revisão, as correções e a qualidade passaram, sem commit.']),
   ].join('\n');
 }
 

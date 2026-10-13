@@ -62,7 +62,7 @@ contra o usuário.
 |---|---|---|
 | inline | continuidade: você leu a spec, os tickets e as decisões inteiros, não um resumo deles, e enxerga o conflito entre dois tickets antes de ele acontecer | seu contexto acumula tudo — leitura, saída de teste, tentativa morta — e a atenção dilui: o fim da leva sai pior que o começo |
 | sub-agents | atenção cheia por ticket: cada agente chega limpo e carrega só o que aquele ticket pede; entre um e outro você lê o resultado e corrige o rumo | o repasse é lossy — o próximo só sabe o que as notas contaram — e quem julga se fechou é você, lendo prosa |
-| workflow | o portão é **mecânico**: quem decide se o ticket fechou é um booleano do schema avaliado pelo script, não o agente que escreveu o código; o reparo é estruturado e o registro por ticket fica auditável | rampa fria por ticket, o mesmo repasse lossy, e nenhum humano entre um ticket e o seguinte |
+| workflow | o portão é **mecânico**: quem decide se o ticket fechou é um booleano do schema avaliado pelo script, não o agente que escreveu o código; os tickets sem bloqueio entre si rodam **juntos, cada um na sua worktree**, e a integração verifica a soma; o reparo é estruturado e o registro por ticket fica auditável | rampa fria por ticket, o mesmo repasse lossy, e nenhum humano entre um ticket e o seguinte |
 
 **Os parâmetros, que você lê dos tickets e do repositório:**
 
@@ -70,7 +70,8 @@ contra o usuário.
 |---|---|---|
 | Risco da mudança | o ticket: migração, dinheiro, autenticação, dado que não volta, contrato público | workflow — o portão mecânico é o que impede o "quase verde" passar |
 | Força da verificação | o repositório: existe suíte, tipos, lint que reprovem de verdade? | portão forte → workflow ou sub-agents convertem isso em garantia; portão fraco → inline, porque aí quem pega o erro é o humano olhando |
-| Acoplamento entre tickets | a tabela: quantos tocam os mesmos arquivos e dependem de decisão anterior | alto → inline, que a continuidade evita o conflito que o repasse não conta; baixo → sub-agents ou workflow |
+| Acoplamento entre tickets | a tabela: quantos tocam os mesmos arquivos e dependem de decisão anterior | alto → inline, que a continuidade evita o conflito que o repasse não conta; baixo → workflow, que roda os independentes juntos |
+| Paralelização | a tabela: quantos tickets ficam sem bloqueio entre si, na mesma onda | dois ou mais → workflow, que os roda ao mesmo tempo em worktrees; é a maior vantagem dele, e pesa na recomendação. Sem git ou sem commit, a worktree não nasce e o workflow roda em cadeia; a recomendação diz isso e sugere ao usuário iniciar o git e fazer o primeiro commit (o commit é dele) |
 | Profundidade por ticket | o ticket: pede exploração própria do código, ou a spec já diz onde mexer | fundo → uma janela inteira por ticket; raso → inline |
 | Volume contra contexto | a soma dos tickets contra o que cabe numa sessão | não cabe → sai do inline: a queda de qualidade no fim da leva é certa |
 | Auditoria | o usuário precisa mostrar o que cada ticket fez? | workflow — o registro por ticket já sai estruturado |
@@ -106,7 +107,8 @@ muda quem os executa:
   tree é uma só. O prompt de cada um é o preâmbulo mais as notas dos anteriores, e o portão é
   você lendo o que ele devolve.
 - **workflow** (só no Claude Code): o esqueleto de `workflow-tickets.md`, sem
-  mudanças.
+  mudanças: em ondas, os tickets de cada onda juntos, um por worktree, e a integração na
+  working tree principal sem commit.
 
 ## Quando algo trava
 
@@ -115,6 +117,12 @@ muda quem os executa:
   do código, e retome do próximo (fim de `workflow-tickets.md`) — **uma vez**.
   Vermelho de novo: o implement para ali, os passos seguintes rodam sobre os
   tickets que fecharam, e o relatório diz qual ficou.
+- No workflow com worktrees, a working tree principal só recebe patch verificado: o
+  vermelho depois dos reparos descarta a worktree e para só ele e os que ele bloqueia,
+  e os independentes seguem; o patch que conflita na integração volta uma vez, na onda
+  seguinte, e no segundo conflito para como o vermelho. A integração que acha a principal
+  já vermelha para o workflow inteiro, com `entregues`, `parados` e `pendentes` no
+  retorno: é o caso do item acima.
 - Passo bloqueado por causa externa (túnel, credencial, rede) é relatado com o
   motivo; os seguintes continuam sobre o que está pronto.
 - Verificado é o que você viu na saída. O relatório final separa o que foi

@@ -22,7 +22,8 @@ const SURFACES = ['terminal', 'desktop'] as const
 const RAIZ = 'D:/ws/painel'
 const URL = 'http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123'
 const HISTORICO_DE_GRILLS = 'http://127.0.0.1:47110/?t=abc123'
-const PROMPT = 'rode /macrex-skills:faz leva Painel em módulos até o fim.\n/mattpocock-skills:to-spec expandiu esse documento in-place; siga.'
+// o prompt como o localizador o imprime no Claude Code (skills-do-matt.js, linhaDaLeva)
+const PROMPT = 'rode /macrex-skills:faz leva Painel em módulos\n/mattpocock-skills:to-spec\n/mattpocock-skills:to-tickets\n/mattpocock-skills:implement'
 // o corpo do pane com tamanho fixo: o desenho nao depende do viewport
 const LARGO = { bodyColumns: 80, scroll: { bodyRows: 40 } }
 const ESTREITO = { bodyColumns: 50, scroll: { bodyRows: 40 } }
@@ -342,7 +343,7 @@ describe('painel da leva, de ponta a ponta', () => {
     await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'Painel em módulos' })
     for (const skill of ['mattpocock-skills:to-spec', 'mattpocock-skills:implement']) await chamar({ tool: 'Skill', skill, tool_use_id: `tu-${skill}` })
     usar(1)
-    await marco({ marco: 'inicio', documento: 'Painel em módulos até o fim.', sujos: ['velho.txt'] })
+    await marco({ marco: 'inicio', documento: 'Painel em módulos', sujos: ['velho.txt'] })
     await relogio.advance(segundos(9))
     await pane('20 leva spec geral')
     await faixa('21 faixa leva spec')
@@ -404,7 +405,7 @@ describe('painel da leva, de ponta a ponta', () => {
     usar(2.3)
     await marco({ marco: 'portao', ticket: '03', portao: 'verde', testes: '112/112' })
     // o inicio de novo, com o mesmo documento, e a retomada: devolve o estado da leva sem mexer nela
-    await marco({ marco: 'inicio', documento: 'Painel em módulos até o fim.' })
+    await marco({ marco: 'inicio', documento: 'Painel em módulos' })
 
     // 4. A revisao, as correcoes e a qualidade, item a item; a janela de 5 h em 92% avisa
     await $.session.measure({
@@ -422,10 +423,13 @@ describe('painel da leva, de ponta a ponta', () => {
     await faixa('30 faixa agente aguardando')
     lista = lista.map(i => (i.id === 'a2' ? info('a2', 'completed') : i))
     await relogio.advance(segundos(8))
+    // o custo da sessao anda entre os marcos de cada item, que o mostra antes do tempo
+    usar(2.6)
     await marco({ marco: 'item', item: 'Achados da revisão', portao: 'verde', detalhe: '3 achados' })
     await marco({ marco: 'fase', fase: 'correcoes' })
     await marco({ marco: 'item', item: 'Ajustes' })
     await relogio.advance(segundos(5))
+    usar(2.75)
     await marco({ marco: 'item', item: 'Ajustes', portao: 'vermelho', detalhe: '2 de 3' })
     await marco({ marco: 'item', item: 'Ajustes', portao: 'verde', detalhe: '3 de 3' })
     await marco({ marco: 'fase', fase: 'qualidade' })

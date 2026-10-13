@@ -13,9 +13,9 @@ type Aplicado<T> = T & { erro?: undefined }
 export const novoId = (agora: number) => `${Number(agora).toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 // a skill da fase que esta sessao ainda nao invocou, ou undefined
 export const semSkill = (fase: string, skills: string[]) => (skills.includes(SKILL_DA_FASE[fase] as string) ? undefined : SKILL_DA_FASE[fase])
-// o documento do inicio sem o "até o fim" que fecha a abertura da linha da leva (`leva <documento>
-// até o fim.`): colado nele, o documento nao casa com o do grill, e a leva perde o tempo dele
-const doInicio = (documento: string) => documento.replace(/\s+até o fim\.?\s*$/, '')
+// o documento do inicio ou do prompt sem o "até o fim" que fechava a abertura dos prompts antigos
+// (`leva <documento> até o fim.`): colado nele, o documento nao casa com o do grill, e a leva perde o tempo dele
+export const doInicio = (documento: string) => documento.replace(/\s+até o fim\.?\s*$/, '')
 // um inicio com o mesmo documento sobre a leva aberta e a retomada dela
 export const retoma = (leva: Leva | null, m: Marco) => m.marco === 'inicio' && Boolean(leva) && !leva!.fechada && typeof m.documento === 'string' && leva!.documento === doInicio(m.documento)
 
@@ -92,7 +92,11 @@ export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number 
       // o PORTOES.includes acima garante o portao
       const portao = { estado: m.portao as 'verde' | 'vermelho', reparos: m.reparos, testes: m.testes == null ? undefined : String(m.testes), notas: m.notas, fimEm: agora }
       const custo = (t: LevaTicket) => (usd == null || t.custoInicio == null ? {} : { custo: usd - t.custoInicio })
-      return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, ...portao, ...custo(t) } : t)) }
+      // o mesmo portao de novo (a sessao reenviando o que o agente do workflow ja marcou) guarda o
+      // fim e o custo do primeiro e so acrescenta o que veio
+      const veio = Object.fromEntries(Object.entries(portao).filter(([, v]) => v !== undefined))
+      const aplicado = (t: LevaTicket) => (t.estado === portao.estado && t.fimEm != null ? { ...t, ...veio, fimEm: t.fimEm } : { ...t, ...portao, ...custo(t) })
+      return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? aplicado(t) : t)) }
     }
     case 'item': {
       const f = m.fase ?? leva.fase
@@ -113,6 +117,9 @@ export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number 
         detalhe: m.detalhe ?? velho?.detalhe,
         inicioEm: velho?.inicioEm ?? (m.portao && leva.entradas?.[f]) ?? agora,
         fimEm: m.portao ? agora : undefined,
+        // o custo conta do primeiro marco em curso; o que chega com o portao nao abriu, ate reabrir
+        custoInicio: velho?.custoInicio ?? (m.portao ? undefined : usd),
+        custoFim: m.portao ? usd : undefined,
       }
       return { ...leva, itens: velho ? itens.map(i => (i === velho ? novo : i)) : [...itens, novo] }
     }

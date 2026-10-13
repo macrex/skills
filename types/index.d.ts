@@ -21,6 +21,10 @@ export type LevaItem = {
   detalhe?: string
   inicioEm: number
   fimEm?: number
+  // o custo da sessao (US$) no primeiro marco do item e no marco com o portao. Os dois pontos, e nao
+  // a diferenca como no ticket: o desenho cruza os itens da fase e soma a fase do primeiro ao ultimo
+  custoInicio?: number
+  custoFim?: number
 }
 
 export type Leva = {

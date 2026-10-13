@@ -1473,6 +1473,21 @@ describe('painel da leva', () => {
     expect(await ui.find({ type: 'Text', text: /^doc do comando$/ })).toBeUndefined()
   })
 
+  test('o prompt sem o "até o fim." da abertura fecha o grill com o documento dele, no \\n e no \\r\\n', async ($, on) => {
+    const { marco } = mundo($, on)
+    let stdout = ''
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout, stderr: '' } }) as never)
+    const ui = await $.ui.mount(PANE)
+    for (const [fim, doc] of [['\n', 'doc lf'], ['\r\n', 'doc crlf']]) {
+      await marco({ marco: 'grill', pedido: `grill ${doc}` })
+      const prompt = [`rode /macrex-skills:faz leva ${doc}`, '/mattpocock-skills:to-spec', '/mattpocock-skills:to-tickets', '/mattpocock-skills:implement']
+      stdout = prompt.join(fim) + fim
+      await $.tool.call({ tool: 'Bash', command: `node "D:/ws/skills/faz/scripts/skills-do-matt.js" --linha "${doc}"` } as never)
+      expect(await ui.find({ type: 'Text', text: new RegExp(`^${doc}$`) })).toBeDefined()
+      expect((await ui.find({ type: 'Code' }))?.props.source).toBe(prompt.join('\n'))
+    }
+  })
+
   test('depois do Limpar, os marcos da leva ou do grill que seguem rodando nao recriam o que saiu', async ($, on) => {
     const { marco } = mundo($, on)
     const ui = await $.ui.mount(PANE)
@@ -2263,6 +2278,30 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /^doc · / }))?.text).toMatch(/ · US\$ 1,50 · /)
   })
 
+  test('o portao repetido com o mesmo estado guarda o fim do primeiro: o reenvio da sessao no fim do workflow nao estica o tempo', async ($, on) => {
+    const { marco, relogio } = mundo($, on)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'workflow' })
+    // o agente do workflow marca o proprio ticket, de dentro dele
+    const doAgente = (input: Record<string, unknown>) => $.tool.call({ tool: MARCO, agentId: 'a1', ...input } as never)
+    await doAgente({ marco: 'ticket', ticket: '01' })
+    await relogio.advance(segundos(60))
+    await doAgente({ marco: 'portao', ticket: '01', portao: 'verde' })
+    await relogio.advance(segundos(300))
+    // a sessao reenvia no fim: o fim fica o do agente, e o que veio novo entra
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', testes: '4/4', notas: 'do relatorio' })
+    // o vermelho que vira verde e um fim novo
+    await doAgente({ marco: 'ticket', ticket: '02' })
+    await relogio.advance(segundos(30))
+    await doAgente({ marco: 'portao', ticket: '02', portao: 'vermelho' })
+    await relogio.advance(segundos(30))
+    await marco({ marco: 'portao', ticket: '02', portao: 'verde', reparos: 1 })
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/01 {2}Mod do painel {2,}portão 4\/4 ✓ {2,}1m00s/)
+    expect(await quadro(ui)).toMatch(/02 {2}Ferramenta faz_marco {2,}portão ✓ · 1 reparo {2,}1m00s/)
+  })
+
   test('no inline, o ticket mostra antes do tempo o custo da sessao entre o marco ticket e o portao, nas abas Geral e Tickets; nos modos paralelos, nada', async ($, on) => {
     const { marco, usar, relogio } = mundo($, on)
     usar({ cost: { usd: 1 } })
@@ -2296,6 +2335,46 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /US\$/ })).toBeUndefined()
   })
 
+  test('o item da revisao, das correcoes e da qualidade que rodou sozinho mostra o custo antes do tempo, e o titulo do cartao o total da fase; os que se cruzam, so o total', async ($, on) => {
+    const { marco, usar, relogio } = mundo($, on)
+    usar({ cost: { usd: 1 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    // em qualquer modo: os eixos da revisao rodam juntos, e o custo da sessao mede os dois
+    await marco({ marco: 'fase', fase: 'implement', modo: 'sub-agents' })
+    await marco({ marco: 'fase', fase: 'revisao' })
+    usar({ cost: { usd: 1.1 } })
+    await marco({ marco: 'item', item: 'Standards' })
+    await marco({ marco: 'item', item: 'Spec' })
+    await relogio.advance(segundos(60))
+    usar({ cost: { usd: 1.5 } })
+    await marco({ marco: 'item', item: 'Standards', portao: 'verde', detalhe: '6 achados' })
+    usar({ cost: { usd: 1.9 } })
+    await marco({ marco: 'item', item: 'Spec', portao: 'verde', detalhe: '2 achados' })
+    await marco({ marco: 'fase', fase: 'correcoes' })
+    await marco({ marco: 'item', item: 'Achados da revisão' })
+    await relogio.advance(segundos(30))
+    usar({ cost: { usd: 3.15 } })
+    await marco({ marco: 'item', item: 'Achados da revisão', portao: 'verde', detalhe: '7 aplicados' })
+    await marco({ marco: 'fase', fase: 'qualidade' })
+    // o que chega ja com o portao nao abriu: nao tem de onde contar
+    await marco({ marco: 'item', item: 'Testes', portao: 'verde', detalhe: '111/111' })
+    // o que chegou com o portao e reabriu em curso conta da reabertura
+    await marco({ marco: 'item', item: 'Build', portao: 'vermelho' })
+    await marco({ marco: 'item', item: 'Build' })
+    usar({ cost: { usd: 3.4 } })
+    await marco({ marco: 'item', item: 'Build', portao: 'verde' })
+
+    const ui = await $.ui.mount(PANE)
+    expect(await ui.find({ type: 'Text', text: /^Revisão · US\$ 0,80$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^Standards/ }))?.text).toMatch(/^Standards\s+6 achados ✓\s+1m00s$/)
+    expect((await ui.find({ type: 'Text', text: /^Spec\b/ }))?.text).toMatch(/^Spec\s+2 achados ✓\s+1m00s$/)
+    expect(await ui.find({ type: 'Text', text: /^Correções · US\$ 1,25$/ })).toBeDefined()
+    expect(await quadro(ui)).toMatch(/Achados da revisão {2,}7 aplicados ✓ {2}US\$ 1,25 {2,}30s/)
+    expect(await ui.find({ type: 'Text', text: /^Qualidade · US\$ 0,25$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^Testes/ }))?.text).not.toMatch(/US\$/)
+    expect(await quadro(ui)).toMatch(/Build {2,}✓ {2}US\$ 0,25/)
+  })
+
   test('a retomada numa sessao nova tira o custo do ticket em curso, que nao sai errado nem negativo', async ($, on) => {
     const { marco, usar, sessao } = mundo($, on)
     const medir = (usd: number) => $.session.measure({ context: { window: 200000 }, rateLimits: [], cost: { usd }, changed: ['cost'] } as never)
@@ -2316,6 +2395,34 @@ describe('painel da leva', () => {
     const ui = await $.ui.mount(PANE)
     expect(await quadro(ui)).toMatch(/01 {2}Mod do painel {2,}portão ✓ {2,}\d+s/)
     expect((await ui.find({ type: 'Text', text: /Mod do painel/ }))?.text).not.toMatch(/US\$/)
+  })
+
+  test('a retomada numa sessao nova leva o custo dos itens para a base nova: o fechado guarda o dele, o em curso nao sai negativo', async ($, on) => {
+    const { marco, usar, sessao, relogio } = mundo($, on)
+    const medir = (usd: number) => $.session.measure({ context: { window: 200000 }, rateLimits: [], cost: { usd }, changed: ['cost'] } as never)
+    usar({ cost: { usd: 1 } })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
+    await marco({ marco: 'fase', fase: 'revisao' })
+    usar({ cost: { usd: 1.2 } })
+    await marco({ marco: 'item', item: 'Standards' })
+    usar({ cost: { usd: 1.5 } })
+    await marco({ marco: 'item', item: 'Standards', portao: 'verde' })
+    await relogio.advance(segundos(10))
+    usar({ cost: { usd: 1.6 } })
+    await marco({ marco: 'item', item: 'Spec' })
+    await medir(1.7)
+    // a sessao nova recomeca o custo dela: o Spec abriu a 1,60 da velha e fecha a 0,05 da nova
+    usar({ cost: { usd: 0 } })
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    usar({ cost: { usd: 0.05 } })
+    await marco({ marco: 'item', item: 'Spec', portao: 'verde' })
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).not.toMatch(/US\$ -/)
+    expect(await quadro(ui)).toMatch(/Standards {2,}✓ {2}US\$ 0,30/)
+    expect(await quadro(ui)).toMatch(/Spec {2,}✓ {2}US\$ 0,15/)
+    expect(await ui.find({ type: 'Text', text: /^Revisão · US\$ 0,55$/ })).toBeDefined()
   })
 
   test('a retomada numa sessao nova soma o custo das duas sessoes', async ($, on) => {
@@ -2751,6 +2858,36 @@ const FAIXA = { plugin: 'macrex-skills', component: 'AbovePrompt', surface: 'ter
 const PROPS_DA_FAIXA = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} }
 
 describe('faixa da leva', () => {
+  test('no workflow a faixa conta os tickets que os agentes marcam de dentro dele, os paralelos juntos', async ($, on) => {
+    const { marco } = mundo($, on)
+    on('ui.panes', () => ({ value: [] }))
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return h(Text, {}, 'outro mod')
+    })
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: [...TICKETS, { id: '03', titulo: 'Tres' }, { id: '04', titulo: 'Quatro' }] })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'workflow' })
+    const ui = await $.ui.mount({ ...FAIXA, props: PROPS_DA_FAIXA } as never)
+    const linha = async () => {
+      await ui.redraw(PROPS_DA_FAIXA as never)
+      return (await ui.find({ type: 'Text', text: /^Leva/ }))?.text
+    }
+    const doAgente = (agentId: string, input: Record<string, unknown>) => $.tool.call({ tool: MARCO, agentId, ...input } as never)
+    expect(await linha()).toMatch(/^Leva · implement · ticket 0\/4 · /)
+    await doAgente('a1', { marco: 'ticket', ticket: '01' })
+    expect(await linha()).toMatch(/^Leva · implement · ticket 1\/4 · /)
+    await doAgente('a1', { marco: 'portao', ticket: '01', portao: 'verde' })
+    // a onda seguinte roda dois juntos: a faixa diz os dois
+    await doAgente('a2', { marco: 'ticket', ticket: '02' })
+    await doAgente('a3', { marco: 'ticket', ticket: '03' })
+    expect(await linha()).toMatch(/^Leva · implement · tickets 2 e 3\/4 · /)
+    await doAgente('a2', { marco: 'portao', ticket: '02', portao: 'verde' })
+    expect(await linha()).toMatch(/^Leva · implement · ticket 3\/4 · /)
+    await doAgente('a3', { marco: 'portao', ticket: '03', portao: 'verde' })
+    expect(await linha()).toMatch(/^Leva · implement · ticket 3\/4 · /)
+  })
+
   test('a faixa mostra a leva aberta numa linha com o Abrir painel, estreita da direita para a esquerda e some com survey, sem leva ou fechada', async ($, on) => {
     const { marco, relogio } = mundo($, on)
     const abertos = new Set<string>()

@@ -20,7 +20,7 @@ export function linhasDePortao({ linhaLarga, largura }: Primitivas, agora: numbe
     return linhaLarga(largura, esquerda, [[texto, { color: cor }], ['  '], ...custo, [tempoDe(t).padStart(6), { color: APAGADO }]])
   }
   const ticket = (t: LevaTicket) => linha(t, [[t.id.padEnd(Math.max(4, t.id.length + 2)), { color: APAGADO }], [t.titulo]], `portão ${t.testes ? `${t.testes} ` : ''}`)
-  const item = (i: LevaItem) => linha(i, [[i.titulo]], i.detalhe ? `${i.detalhe} ` : '')
+  const item = (i: LevaItem & Pick<ComPortao, 'custo'>) => linha(i, [[i.titulo]], i.detalhe ? `${i.detalhe} ` : '')
   return { ticket, item }
 }
 

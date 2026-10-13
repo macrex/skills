@@ -3,7 +3,7 @@
 
 import type { Grill, Leva, LevaAgente, LevaHistorico } from '../../../types/index.d.ts'
 import { LARANJA, FASES, FASES_COM_ITENS, CHIP, TEXTO, APAGADO, VERDE, AZUL, AMARELO, ROTULO, DO_AGENTE } from '../dominio/vocabulario.ts'
-import { verdes, dolares, duracao } from '../dominio/formato.ts'
+import { verdes, dolares, duracao, custoDoItem, custoDaFase } from '../dominio/formato.ts'
 import { semSkill } from '../dominio/marcos.ts'
 import { vivo, semSaida, textoSemSaida, idDeParar } from '../dominio/alertas.ts'
 import type { Acoes, Desenho, Primitivas, Parte } from './primitivas.ts'
@@ -112,7 +112,9 @@ export function geralDaLeva(
     leva.tickets.length > 0 && cartao('Tickets', ...leva.tickets.map(ticket)),
     ...Object.entries(FASES_COM_ITENS).map(([f, titulo]) => {
       const itens = (leva.itens ?? []).filter(i => i.fase === f)
-      return itens.length > 0 && cartao(titulo, ...itens.map(item))
+      const total = custoDaFase(itens)
+      const comTotal = total == null ? titulo : `${titulo} · ${dolares(total)}`
+      return itens.length > 0 && cartao(comTotal, ...itens.map(i => item({ ...i, custo: custoDoItem(i, itens) })))
     }),
     visiveis.length > 0 && cartao('Sub-agentes', ...visiveis.map(agente)),
     // o historico so aparece sob a leva fechada: com ela aberta, o espaco e do andamento

@@ -69,7 +69,9 @@ node "<pasta desta skill>/scripts/skills-do-matt.js" --linha "<documento>"
 referência dele, que também diz o que o aviso acrescenta quando falta o pré-requisito). A linha
 nomeia as skills como o localizador as acha, cada nome abrindo uma linha ("Autorização" na
 referência do seu harness): é ela que autoriza as três reservadas, e um nome trocado ou partido
-não autoriza. O pedido original não vai na linha: já está no documento.
+não autoriza. Ela é só a abertura e as três reservadas, mais, fora do Claude Code, a condição de
+fechamento que o `/goal` lê; o resto da leva está em `leva.md`. O pedido original não vai na
+linha: já está no documento.
 
 > Cole numa **sessão nova** (`/clear` ou outra janela), neste mesmo workspace. O entendimento
 > está todo no documento, e a leva é longa: começar com o contexto limpo é o que dá desempenho a

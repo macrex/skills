@@ -199,8 +199,10 @@ O e2e roda no desktop?
 Entendimento
 Painel em módulos
 Prompt  [ Clear ]  [ Executar ]
-rode /macrex-skills:faz leva Painel em módulos até o fim.
-/mattpocock-skills:to-spec expandiu esse documento in-place; siga.`,
+rode /macrex-skills:faz leva Painel em módulos
+/mattpocock-skills:to-spec
+/mattpocock-skills:to-tickets
+/mattpocock-skills:implement`,
   "15 grill aba prompt · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Grill  concluído
@@ -223,8 +225,10 @@ O e2e roda no desktop?
 Entendimento
 Painel em módulos
 Prompt  [ Clear ]  [ Executar ]
-rode /macrex-skills:faz leva Painel em módulos até o fim.
-/mattpocock-skills:to-spec expandiu esse documento in-place; siga.`,
+rode /macrex-skills:faz leva Painel em módulos
+/mattpocock-skills:to-spec
+/mattpocock-skills:to-tickets
+/mattpocock-skills:implement`,
   "16 grill concluido geral · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  concluído
@@ -407,10 +411,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      2s
@@ -432,10 +436,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      2s
@@ -458,10 +462,10 @@ Tickets
 01  E2… portão 109/109 ✓  US$ 0,30     18s
 02  D… portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Co… portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão     3 achados ✓      9s
-Correções
-Ajustes                   3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da … 3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes         3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                   112/112 ✓      3s
 Build                   em curso ◐      2s
@@ -484,10 +488,10 @@ Tickets
 01  E2… portão 109/109 ✓  US$ 0,30     18s
 02  D… portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Co… portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão     3 achados ✓      9s
-Correções
-Ajustes                   3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da … 3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes         3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                   112/112 ✓      3s
 Build                   em curso ◐      2s
@@ -764,8 +768,10 @@ O e2e roda no desktop?
 Entendimento
 Painel em módulos
 Prompt  [ Clear ]  [ Executar ]
-rode /macrex-skills:faz leva Painel em módulos até o fim.
-/mattpocock-skills:to-spec expandiu esse documento in-place; siga.`,
+rode /macrex-skills:faz leva Painel em módulos
+/mattpocock-skills:to-spec
+/mattpocock-skills:to-tickets
+/mattpocock-skills:implement`,
   "47 grill durante a leva · desktop": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Grill  concluído
@@ -788,8 +794,10 @@ O e2e roda no desktop?
 Entendimento
 Painel em módulos
 Prompt  [ Clear ]  [ Executar ]
-rode /macrex-skills:faz leva Painel em módulos até o fim.
-/mattpocock-skills:to-spec expandiu esse documento in-place; siga.`,
+rode /macrex-skills:faz leva Painel em módulos
+/mattpocock-skills:to-spec
+/mattpocock-skills:to-tickets
+/mattpocock-skills:implement`,
   "50 leva fechada · terminal": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
@@ -803,10 +811,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
@@ -832,10 +840,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
@@ -865,10 +873,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
@@ -894,10 +902,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
@@ -989,10 +997,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
@@ -1018,10 +1026,10 @@ Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
-Revisão
-Achados da revisão                                   3 achados ✓      9s
-Correções
-Ajustes                                                 3 de 3 ✓      5s
+Revisão · US$ 0,30
+Achados da revisão                         3 achados ✓  US$ 0,30      9s
+Correções · US$ 0,15
+Ajustes                                       3 de 3 ✓  US$ 0,15      5s
 Qualidade
 Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
@@ -1058,7 +1066,7 @@ AskUserQuestion: {"deny":"A rodada 1 do grill foi publicada na grill-tela, em ht
 AskUserQuestion: {"deny":"A rodada 2 do grill foi publicada na grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123, e espera a resposta do usuario la. Nao e erro, e nao pergunte de novo: diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin."}
 AskUserQuestion: {"result":{"questions":[{"header":"Golden","question":"Onde fica o golden?","multiSelect":false,"options":[{"label":"Módulo .ts (Recommended)","description":"importado pelo teste"},{"label":"JSON","description":"lido do disco"}]},{"header":"Superfícies","question":"O e2e roda no desktop?","multiSelect":false,"options":[{"label":"Terminal e desktop (Recommended)","description":""},{"label":"Só terminal","description":""}]}],"answers":{"Onde fica o golden?":"Módulo .ts (Recommended)","O e2e roda no desktop?":"Só terminal"}}}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; entendimento"}
-Bash: {"result":{"stdout":"rode /macrex-skills:faz leva Painel em módulos até o fim.\\n/mattpocock-skills:to-spec expandiu esse documento in-place; siga.\\n","stderr":""}}
+Bash: {"result":{"stdout":"rode /macrex-skills:faz leva Painel em módulos\\n/mattpocock-skills:to-spec\\n/mattpocock-skills:to-tickets\\n/mattpocock-skills:implement\\n","stderr":""}}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; linha"}
 Skill: {"result":"ok"}
 Skill: {"result":"ok"}
@@ -1132,8 +1140,12 @@ abrir http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123
 historico
 registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
   {"tipo":"sim","documento":"Painel em módulos"}`,
-  "93 sugestoes": `fill: rode /macrex-skills:faz leva Painel em módulos até o fim.
-/mattpocock-skills:to-spec expandiu esse documento in-place; siga.
-rode /macrex-skills:faz leva Painel em módulos até o fim.
-/mattpocock-skills:to-spec expandiu esse documento in-place; siga.`,
+  "93 sugestoes": `fill: rode /macrex-skills:faz leva Painel em módulos
+/mattpocock-skills:to-spec
+/mattpocock-skills:to-tickets
+/mattpocock-skills:implement
+rode /macrex-skills:faz leva Painel em módulos
+/mattpocock-skills:to-spec
+/mattpocock-skills:to-tickets
+/mattpocock-skills:implement`,
 }

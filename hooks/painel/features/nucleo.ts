@@ -9,7 +9,7 @@ import type { Grill, Leva, LevaAgente, LevaHistorico } from '../../../types/inde
 import { FERRAMENTA, MARCOS, MARCOS_DO_GRILL, RONCO, FASES, PORTOES, MODOS, NO_HISTORICO, SKILL_DA_FASE, DA_LISTA, VIVOS, MUDAM, URL_DA_TELA, RETOMAR } from '../dominio/vocabulario.ts'
 import type { Aba, Marco } from '../dominio/vocabulario.ts'
 import { nomeDa, somar, porcento } from '../dominio/formato.ts'
-import { novoId, semSkill, retoma, aplicar, aplicarNoGrill, naTela } from '../dominio/marcos.ts'
+import { novoId, semSkill, retoma, doInicio, aplicar, aplicarNoGrill, naTela } from '../dominio/marcos.ts'
 import { vivo, idDeParar, alertas } from '../dominio/alertas.ts'
 import { arquivosDoDiff } from '../dominio/diff.ts'
 import { semBarra } from '../dominio/arvore.ts'
@@ -268,12 +268,20 @@ async function abrirHistorico($: EngineInterface) {
 // mais recente do workspace, para a janela nova poder executar o prompt da leva. O custo da sessao
 // nova recomeca: o inicio do custo da leva aberta passa a ser o de agora menos o que ela ja custou,
 // antes do primeiro session.measure dela. Os tickets perdem o inicio do custo: o portao do ticket
-// em curso sai sem custo, que a sessao velha nao deixou medido ate o fim.
+// em curso sai sem custo, que a sessao velha nao deixou medido ate o fim. Os itens andam o mesmo que
+// o inicio da leva, para o fechado guardar o custo e a fase somar numa base so; sem o inicio velho
+// da leva, nao ha quanto andar, e eles perdem o custo.
 async function carregar($: EngineInterface, raiz: string, idDoGrill: string | undefined) {
   // o store devolve unknown: cada chave guarda o que o mod gravou nela
   const salva = (await $.store.get(chave(raiz))) as Leva | undefined
   const usd = salva && !salva.fechada ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
-  if (salva) await update($, LEVA, () => (usd == null ? salva : { ...salva, custoInicio: usd - (salva.custo ?? 0), tickets: salva.tickets.map(({ custoInicio, ...t }) => t) }))
+  const rebaseada = (salva: Leva, usd: number): Leva => {
+    const custoInicio = usd - (salva.custo ?? 0)
+    const andar = (c: number | undefined) => (c == null || salva.custoInicio == null ? undefined : c + custoInicio - salva.custoInicio)
+    const itens = salva.itens && { itens: salva.itens.map(i => ({ ...i, custoInicio: andar(i.custoInicio), custoFim: andar(i.custoFim) })) }
+    return { ...salva, custoInicio, tickets: salva.tickets.map(({ custoInicio, ...t }) => t), ...itens }
+  }
+  if (salva) await update($, LEVA, () => (usd == null ? salva : rebaseada(salva, usd)))
   const historico = (await $.store.get(chaveDoHistorico(raiz))) as LevaHistorico[] | undefined
   if (historico) await update($, HISTORICO, () => historico)
   const antigo = (await $.store.get(chaveAntigaDoGrill(raiz))) as Grill | undefined
@@ -631,9 +639,9 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       return { result: `marco registrado; ${e.marco}` }
     }
     const antes = await read($, LEVA)
-    // o custo da sessao, que o inicio e o fechamento guardam, e no inline o ticket e o portao (nos
-    // modos paralelos os tickets correm juntos); erro aqui nunca para a leva
-    const comUsd = ['inicio', 'fechamento'].includes(e.marco) || (['ticket', 'portao'].includes(e.marco) && antes?.modo === 'inline')
+    // o custo da sessao, que o inicio, o item e o fechamento guardam, e no inline o ticket e o
+    // portao (nos modos paralelos os tickets correm juntos); erro aqui nunca para a leva
+    const comUsd = ['inicio', 'item', 'fechamento'].includes(e.marco) || (['ticket', 'portao'].includes(e.marco) && antes?.modo === 'inline')
     const usd = comUsd ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
     const leva = aplicar(antes, e, await $.clock.now(), usd)!
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
@@ -843,8 +851,9 @@ export function registrarFerramentas(on: On, ctx: Contexto) {
       const comLinha = aplicarNoGrill(grill, { marco: 'linha', linha }, agora)
       // o documento vem da abertura do prompt, ja expandido pelo shell (skills-do-matt.js, linhaDaLeva),
       // lida no prompt sem o \r que o PowerShell poe
-      // a recusa nao tem linha: o ?? '' a cobre
-      const documento = /^rode \S+ leva (.+) até o fim\.$/m.exec((comLinha as Grill).linha ?? '')?.[1]
+      // a recusa nao tem linha: o ?? '' a cobre; o doInicio tira o "até o fim." dos prompts antigos
+      const aberto = /^rode \S+ leva (.+)$/m.exec((comLinha as Grill).linha ?? '')?.[1]
+      const documento = aberto && doInicio(aberto)
       const fechado = !comLinha.erro && comLinha.documento == null && documento && aplicarNoGrill(comLinha, { marco: 'entendimento', documento }, agora)
       const novo = fechado && !fechado.erro ? fechado : comLinha
       if (!novo.erro) {

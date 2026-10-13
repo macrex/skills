@@ -23,8 +23,12 @@ Um registro que a leva acrescenta ao estado da leva quando algo muda: a fase, o 
 _Evitar_: evento, checkpoint
 
 **Portão**:
-A verificação que decide se um ticket fechou: verde ou vermelho, com até dois reparos antes de parar a cadeia.
+A verificação que decide se um ticket fechou: verde ou vermelho, com até dois reparos; vermelho depois deles para a cadeia ou, no workflow com worktrees, só o ticket e os que dependem dele.
 _Evitar_: gate, check
+
+**Onda**:
+Os tickets cujos bloqueadores já fecharam, que o workflow roda juntos, cada um na sua worktree, e integra na working tree principal antes da onda seguinte.
+_Evitar_: fronteira, lote
 
 **Painel da leva**:
 O pane do Claude Code que o `/painel-macrex` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.

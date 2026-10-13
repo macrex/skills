@@ -82,8 +82,9 @@ const completo = roda({});
 assert.strictEqual(completo.status, 0, 'com as seis, exit 0');
 assert.deepStrictEqual(completo.faltam, []);
 
-// --linha: o prompt pronto, com a abertura do Claude Code e os nomes do localizador, cada um abrindo
-// uma linha; fora do Claude Code a abertura fica para o agente
+// --linha: o prompt pronto, so a abertura do Claude Code e os nomes das tres reservadas do localizador,
+// cada um sozinho numa linha; fora do Claude Code a abertura fica para o agente, e a condicao de
+// fechamento vai no fim, para o /goal
 skill('.agents', 'skills', 'to-tickets');
 const linha = (env) =>
   spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha', 'Spec do CSV'], {
@@ -94,17 +95,18 @@ const linha = (env) =>
 const noClaude = linha({ CLAUDECODE: '1' });
 assert.strictEqual(noClaude.status, 0, noClaude.stderr);
 const linhas = noClaude.stdout.trimEnd().split('\n');
-assert.match(linhas[0], /^rode \/\S*faz leva Spec do CSV até o fim\.$/);
-assert.strictEqual(linhas.length, 13);
-assert.ok(linhas.includes('/mattpocock-skills:to-spec expandiu esse documento in-place;'), noClaude.stdout);
-for (const s of ['to-tickets', 'implement', 'code-review']) assert.ok(linhas.some((l) => new RegExp(`^/\\S*${s} `).test(l)), s);
-assert.ok(linhas.includes('e me pergunte junto os modelos dos agentes;'), 'no Claude Code os modelos vem com os modos');
-assert.ok(!/no modelo/.test(noClaude.stdout), 'a linha nao cita modelo');
-assert.ok(linhas.every((l) => l.length <= 62 || l === linhas[0]), 'linhas curtas');
-const fora = linha({}).stdout;
-assert.match(fora, /^<abertura> até o fim\.\n/);
-assert.strictEqual(fora.trimEnd().split('\n').length, 12);
-assert.ok(!/modelo/.test(fora), 'fora do Claude Code nada pergunta modelo');
+assert.match(linhas[0], /^rode \/\S*faz leva Spec do CSV$/);
+assert.strictEqual(linhas.length, 4, noClaude.stdout);
+// o nome com o prefixo exato do plugin do Matt; o reservadas abaixo aceita qualquer prefixo
+assert.strictEqual(linhas[1], '/mattpocock-skills:to-spec');
+const reservadas = (l) => ['to-spec', 'to-tickets', 'implement'].forEach((s, i) => assert.match(l[i], new RegExp(`^/\\S*${s}$`), s));
+reservadas(linhas.slice(1));
+assert.ok(!/code-review|modelo|até o fim/.test(noClaude.stdout), 'o resto esta na leva.md');
+const fora = linha({}).stdout.trimEnd().split('\n');
+reservadas(fora.slice(1));
+assert.strictEqual(fora[0], '<abertura>', 'fora do Claude Code a abertura fica para o agente');
+assert.strictEqual(fora[4], 'fechada quando a revisão, as correções e a qualidade passaram, sem commit.', 'a condicao de fechamento vai no fim');
+assert.strictEqual(fora.length, 5, fora.join('\n'));
 assert.strictEqual(spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha'], { cwd, encoding: 'utf8' }).status, 1, 'sem argumentos, exit 1');
 // os modelos que a linha antiga recebia depois do documento sobram sem quebrar nada
 const comSobra = spawnSync(process.execPath, [path.join(__dirname, 'skills-do-matt.js'), '--linha', 'Spec do CSV', 'opus', 'sonnet'], {
