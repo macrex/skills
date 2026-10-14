@@ -1,7 +1,7 @@
 # /faz leva — a leva que a linha dispara
 
 A linha colada autoriza as três skills reservadas ao usuário — `to-spec`, `to-tickets` e
-`implement` —, porque é ele quem as nomeia; o `code-review` você invoca sozinho. Onde o harness
+`implement-spec` —, porque é ele quem as nomeia; o `code-review` você invoca sozinho. Onde o harness
 tem laço (o `/goal` do Pi e do Codex), a condição dele é a leva inteira; se a sessão não o
 confirmou, diga isso ao usuário em uma linha e siga assim mesmo: a linha vale como pedido dele.
 
@@ -13,12 +13,14 @@ relatório dizer que ela rodou. Antes do primeiro passo, nesta ordem:
 2. onde a autorização das reservadas vale só no turno da linha ("Autorização" na
    referência do seu harness), as três em sequência — depois você as cumpre na ordem dos passos,
    com as instruções já carregadas, sem invocá-las de novo;
-3. `git status --porcelain`: o que já estiver sujo não é da leva, e a revisão o exclui;
+3. `git status --porcelain`: o que já estiver sujo não é da leva; a revisão o exclui, e ele fica
+   fora do commit squash;
 4. onde o harness tem painel da leva, os marcos de `references/painel.md`, a começar pelo
    `inicio`.
 
-Nesta sessão para-se **uma vez**, com os tickets na mesa, para o usuário escolher como a
-implementação roda; nada mais é perguntado — o conteúdo já foi confirmado no interrogatório.
+No Claude Code para-se **uma vez**, com os tickets na mesa, para o usuário escolher os modelos;
+nos outros harnesses não se para. Nada mais é perguntado — o conteúdo já foi confirmado no
+interrogatório, e o modo do implement é sempre o mais paralelo do harness.
 
 ## Onde as notas vivem
 
@@ -39,90 +41,116 @@ tracker que `to-spec`, `to-tickets` e `code-review` esperam ter recebido:
 | Passo | Faz | Produz |
 |---|---|---|
 | to-spec | `to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
-| to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada | um ticket por fatia vertical |
-| implement | `implement`, cumprida **no modo que o usuário escolher na terceira parada** (logo abaixo). Ela manda commitar; aqui a leva fica na working tree | código, suíte verde por ticket |
-| code-review | `code-review`. Sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no modelo da revisão escolhido na terceira parada; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
-| correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo modelo da revisão, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo | working tree corrigida, suíte verde |
+| to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada. Instrua o corte: `bloqueadoPor` só quando um ticket usa código que outro cria; arquivo em comum não bloqueia; o contrato compartilhado (tipo, assinatura) vira um ticket pequeno na primeira onda, para os outros partirem juntos depois | um ticket por fatia vertical, em ondas largas |
+| implement | `implement-spec`, cumprida **no modo mais paralelo do harness** (logo abaixo): cada ticket na sua worktree, com commit no branch dele, e a conciliação de cada onda no branch da leva, que é o branch de integração dela. O `code-review`, as correções e o fechamento dela são os passos seguintes desta tabela, e o PR fica de fora: o commit vai só nesses branches, nunca na working tree principal | o branch da leva conciliado, suíte verde por ticket |
+| squash | sem skill: `git merge --squash leva/<slug>` na working tree principal ("Worktrees, conciliação e squash", abaixo) | tudo da leva staged, sem commit |
+| code-review | `code-review`. Com o squash staged e sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no modelo da revisão escolhido na terceira parada; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
+| correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo modelo da revisão, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo. O que elas mudam entra no índice só pelos caminhos da leva (`git add <caminho>`, nunca `git add -A`) | working tree corrigida e staged, suíte verde |
 | qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (no Claude Code a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
-| fechamento | nota de evolução no tracker | o que mudou, o que a revisão pegou, o que não foi verificado |
+| fechamento | só com a qualidade verde, a ordem de "O fechamento", abaixo: versão, segredos, commit squash local, limpeza dos branches, nota de evolução no tracker | um commit local só; na nota, o que mudou, o que a revisão pegou, o que não foi verificado |
 
-## A terceira parada: o modo do implement e os modelos
+## A terceira parada: os modelos
 
-Com a tabela de tickets na mesa, pare. Os modos que existem são os da referência do seu harness
-(o workflow, só no Claude Code);
-harness com só o inline não tem o que perguntar — diga que é o modo e
-siga. **O critério da sua recomendação é a qualidade do que sai da leva, nunca o que custa menos
-a você.** O inline é o mais rápido e o mais barato dos três, e é exatamente o modo em que quem
-escreveu o código é quem declara que ele está verde: recomendá-lo porque sai barato é recomendar
-contra o usuário.
+Com a tabela de tickets na mesa, pare só no Claude Code, o único harness que aceita modelo por
+sub-agente; nos outros, todo agente roda no modelo que o harness configura, e a leva segue sem
+parar. Pergunte, pelo mecanismo do seu harness, os dois modelos, cada um respondido por **o da
+sessão** (recomendado) ou outro, que o usuário nomeia:
 
-**O que cada modo faz pela qualidade, e o que cobra dela:**
+- **o modelo do implement** — os agentes por ticket, os reparos deles e a conciliação;
+- **o modelo da revisão** — os dois sub-agentes do `code-review` (Standards e Spec) e o agente
+  das correções.
 
-| Modo | Sustenta a qualidade por | Cobra dela |
-|---|---|---|
-| inline | continuidade: você leu a spec, os tickets e as decisões inteiros, não um resumo deles, e enxerga o conflito entre dois tickets antes de ele acontecer | seu contexto acumula tudo — leitura, saída de teste, tentativa morta — e a atenção dilui: o fim da leva sai pior que o começo |
-| sub-agents | atenção cheia por ticket: cada agente chega limpo e carrega só o que aquele ticket pede; entre um e outro você lê o resultado e corrige o rumo | o repasse é lossy — o próximo só sabe o que as notas contaram — e quem julga se fechou é você, lendo prosa |
-| workflow | o portão é **mecânico**: quem decide se o ticket fechou é um booleano do schema avaliado pelo script, não o agente que escreveu o código; os tickets sem bloqueio entre si rodam **juntos, cada um na sua worktree**, e a integração verifica a soma; o reparo é estruturado e o registro por ticket fica auditável | rampa fria por ticket, o mesmo repasse lossy, e nenhum humano entre um ticket e o seguinte |
+O modo não se pergunta: diga em uma linha qual é e siga.
 
-**Os parâmetros, que você lê dos tickets e do repositório:**
+## Os modos: sempre o mais paralelo do harness
 
-| Parâmetro | Onde está | Puxa para |
-|---|---|---|
-| Risco da mudança | o ticket: migração, dinheiro, autenticação, dado que não volta, contrato público | workflow — o portão mecânico é o que impede o "quase verde" passar |
-| Força da verificação | o repositório: existe suíte, tipos, lint que reprovem de verdade? | portão forte → workflow ou sub-agents convertem isso em garantia; portão fraco → inline, porque aí quem pega o erro é o humano olhando |
-| Acoplamento entre tickets | a tabela: quantos tocam os mesmos arquivos e dependem de decisão anterior | alto → inline, que a continuidade evita o conflito que o repasse não conta; baixo → workflow, que roda os independentes juntos |
-| Paralelização | a tabela: quantos tickets ficam sem bloqueio entre si, na mesma onda | dois ou mais → workflow, que os roda ao mesmo tempo em worktrees; é a maior vantagem dele, e pesa na recomendação. Sem git ou sem commit, a worktree não nasce e o workflow roda em cadeia; a recomendação diz isso e sugere ao usuário iniciar o git e fazer o primeiro commit (o commit é dele) |
-| Profundidade por ticket | o ticket: pede exploração própria do código, ou a spec já diz onde mexer | fundo → uma janela inteira por ticket; raso → inline |
-| Volume contra contexto | a soma dos tickets contra o que cabe numa sessão | não cabe → sai do inline: a queda de qualidade no fim da leva é certa |
-| Auditoria | o usuário precisa mostrar o que cada ticket fez? | workflow — o registro por ticket já sai estruturado |
-
-Os parâmetros brigam entre si, e é esse o julgamento: risco alto com suíte fraca
-não vira workflow, vira inline com o humano vendo, porque portão que não reprova
-não garante nada. Escolha um modo e diga **em uma linha qual parâmetro decidiu**.
-
-Pergunte, pelo mecanismo do seu harness: os modos que ele tem, o seu marcado, e a linha do
-parâmetro que decidiu. Se o usuário trocar, é decisão dele: nomeie a garantia de que ele está
-abrindo mão, uma linha, e siga sem reabrir.
-
-**Os modelos vão na mesma pergunta**, só no Claude Code, o único harness que aceita modelo por
-sub-agente; nos outros, todo agente roda no modelo que o harness configura e nada se pergunta.
-Cada modelo é respondido por **o da sessão** (recomendado) ou outro, que o usuário nomeia:
-
-- **o modelo da revisão**, sempre — os dois sub-agentes do `code-review` (Standards e Spec) e o
-  agente das correções;
-- **o modelo do implement**, só quando o seu modo marcado é `sub-agents` ou `workflow` — os
-  agentes por ticket e os reparos deles; no inline quem executa é a sessão. Recomendou inline e o
-  usuário trocou para um modo paralelo? Pergunte esse modelo logo em seguida.
+O modo do implement é o mais paralelo que o seu harness oferece ("Modo do implement" na
+referência dele): workflow no Claude Code; sub-agents no Codex com `multi_agent` e no Pi com
+`pi-subagents`; inline onde não há sub-agente. Em todos, cada ticket nasce numa worktree, e só o
+`bloqueadoPor` separa ondas: os tickets de uma onda rodam juntos mesmo mexendo nos mesmos
+arquivos, e a conciliação resolve o encontro deles.
 
 **O que cada modo cumpre igual.** O preâmbulo — o `PREAMBULO` de
 `workflow-tickets.md`, ao lado deste arquivo: TDD nos seams acordados,
-verificação frequente, a suíte inteira no fim, nada de commit —, o portão
+verificação frequente, a suíte inteira no fim, commit só no branch do ticket, nunca na working
+tree principal, e nenhum ticket sobe a `# Versao` do `SKILL.md` nem o `plugin.json` —, o portão
 booleano e as notas que passam de um ticket ao seguinte são os mesmos nos três;
 muda quem os executa:
 
-- **inline**: você, ticket a ticket, na ordem. O portão roda antes de passar ao
-  próximo; dois vermelhos param a leva no mesmo ponto em que parariam a cadeia.
-- **sub-agents**: um sub-agente por ticket ("Sub-agente" na referência do seu harness), no
-  modelo do implement escolhido na terceira parada, disparados **um de cada vez**: a working
-  tree é uma só. O prompt de cada um é o preâmbulo mais as notas dos anteriores, e o portão é
-  você lendo o que ele devolve.
 - **workflow** (só no Claude Code): o esqueleto de `workflow-tickets.md`, sem
-  mudanças: em ondas, os tickets de cada onda juntos, um por worktree, e a integração na
-  working tree principal sem commit.
+  mudanças: em ondas, os tickets de cada onda juntos, um agente por worktree, e a conciliação ao
+  fim de cada onda.
+- **sub-agents**: a onda inteira dispara junta, um sub-agente por ticket ("Sub-agente" na
+  referência do seu harness), no modelo do implement, cada um na sua worktree. O prompt de cada
+  um é o preâmbulo mais as notas dos tickets já conciliados, e o portão é você lendo o que ele
+  devolve. Fechada a onda, um sub-agente no modelo do implement concilia.
+- **inline**: você, um ticket por vez, cada um na sua worktree. O portão roda antes de passar
+  ao próximo, e fechada a onda você mesmo concilia.
+
+## Worktrees, conciliação e squash
+
+- **Branches.** No começo do implement, o branch da leva `leva/<slug>` nasce do `HEAD`
+  (`git branch leva/<slug> HEAD`), com o `<slug>` tirado do título do documento; a working tree
+  principal fica no branch de onde a leva partiu. Cada ticket ganha `leva/<slug>-<n>` a partir da
+  ponta do branch da leva: `git worktree add -b leva/<slug>-<n> <pasta> leva/<slug>`, com a pasta
+  fora da working tree principal (o scratchpad, onde há). Dependência que o `.gitignore` deixa de
+  fora (`node_modules`, venv) e a verificação pede se instala em cada worktree.
+- **Conciliação**, ao fim de cada onda, automática e sem perguntar nada: numa worktree do branch
+  da leva (`git worktree add <pasta> leva/<slug>`), um `git merge --no-ff leva/<slug>-<n>` por
+  ticket verde da onda, os conflitos resolvidos ali, e a verificação inteira depois de cada merge,
+  com até dois reparos commitados no branch da leva. A onda seguinte parte da ponta conciliada;
+  ticket nunca é refeito porque a base mudou.
+- **Squash**, depois do implement, na working tree principal: antes, compare
+  `git diff --name-only HEAD leva/<slug>` com os sujos de antes da leva. Sujo que o squash
+  sobrescreveria interrompe a leva ali, sem squash, e o relatório diz qual é. Sem colisão,
+  `git merge --squash leva/<slug>`: tudo da leva fica staged, sem commit, e a revisão, as
+  correções e a qualidade rodam sobre isso.
+- **Sem git ou sem commit no repositório**, a worktree não nasce: os tickets rodam em cadeia na
+  working tree principal, sem commit, sem conciliação e sem squash, e o fechamento não commita.
+  Diga isso ao usuário e sugira iniciar o git e fazer o primeiro commit (o commit é dele).
+- **Retomada:** a leva interrompida continua da ponta do branch da leva; o que já foi conciliado
+  não se refaz.
+
+## O fechamento
+
+Só com a qualidade verde, nesta ordem, na working tree principal:
+
+1. a versão sobe **uma vez**, aqui, onde o projeto versiona — neste repositório, a `# Versao` do
+   `SKILL.md` de cada skill mexida e a patch ou a minor do `.claude-plugin/plugin.json`,
+   conferidas por `python scripts/validar_repo.py` —, e entra no índice;
+2. o varredor de segredos do `/cpv`: `node skills/cpv/scripts/segredos.js <raiz>` neste
+   repositório; em outro, o `scripts/segredos.js` da skill `cpv` instalada. Só segue com a última
+   linha começando com `LIMPO`;
+3. o commit squash, local: `git commit -m "<mensagem>" -- <caminhos da leva>` (os do
+   `git diff --cached --name-only HEAD`, fora os sujos de antes dela, que o pathspec deixa de
+   fora), com a mensagem no estilo do `git log` do repositório e a autoria do usuário (o
+   `user.name` e o `user.email` do git), sem `Co-Authored-By` nem trailer de assistente. **Nunca
+   push**: enviar à origem é do `/cpv`, que o usuário digita;
+4. a limpeza: `git worktree remove --force` de cada worktree da leva, `git worktree prune` e
+   `git branch -D` do branch da leva e dos `leva/<slug>-<n>`. No Windows a remoção falha com
+   arquivo preso por processo: apague a pasta, rode o `git worktree prune` de novo e apague o
+   branch; worktree ou branch `leva/*` órfão de leva já fechada sai junto;
+5. a nota de evolução no tracker;
+6. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
+   com a leva aberta.
+
+Qualidade vermelha, segredo achado ou validação reprovada: o commit squash não acontece; tudo
+fica staged, o branch da leva fica (o trabalho está commitado nele), a nota segue, e o relatório diz
+por quê.
 
 ## Quando algo trava
 
-- Ticket vermelho depois dos dois reparos **para a cadeia** — os seguintes
-  dependem dele. Rode a verificação você mesmo, conserte o que for do portão ou
-  do código, e retome do próximo (fim de `workflow-tickets.md`) — **uma vez**.
-  Vermelho de novo: o implement para ali, os passos seguintes rodam sobre os
-  tickets que fecharam, e o relatório diz qual ficou.
-- No workflow com worktrees, a working tree principal só recebe patch verificado: o
-  vermelho depois dos reparos descarta a worktree e para só ele e os que ele bloqueia,
-  e os independentes seguem; o patch que conflita na integração volta uma vez, na onda
-  seguinte, e no segundo conflito para como o vermelho. A integração que acha a principal
-  já vermelha para o workflow inteiro, com `entregues`, `parados` e `pendentes` no
-  retorno: é o caso do item acima.
+- Ticket vermelho depois dos dois reparos para **só ele e os que dependem dele**, em qualquer
+  modo: o branch dele não entra na conciliação, e os independentes seguem. O relatório diz qual
+  ficou, e os passos seguintes rodam sobre os tickets que fecharam.
+- Conciliação vermelha depois dos dois reparos desfaz o merge daquele ticket
+  (`git reset --hard` para a ponta de antes dele) e o para, com os que dependem dele; os outros da
+  onda seguem conciliando.
+- A conciliação que acha o branch da leva já vermelho, antes de qualquer merge, para o implement
+  inteiro, com `entregues`, `parados` e `pendentes` no retorno. Rode a verificação você mesmo,
+  conserte o que for do portão ou do código, e retome do próximo (fim de `workflow-tickets.md`) —
+  **uma vez**. Vermelho de novo: o implement para ali, os passos seguintes rodam sobre os tickets
+  conciliados, e o relatório diz qual ficou.
 - Passo bloqueado por causa externa (túnel, credencial, rede) é relatado com o
   motivo; os seguintes continuam sobre o que está pronto.
 - Verificado é o que você viu na saída. O relatório final separa o que foi

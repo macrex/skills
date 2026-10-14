@@ -8,7 +8,8 @@
   mensagem que virou comando: peça ao usuário que cole o nome de novo, sozinho numa linha, e espere.
 - **Perguntar:** `AskUserQuestion`.
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
-- **Modo workflow:** ferramenta `Workflow`; esqueleto em `references/workflow-tickets.md`.
+- **Modo do implement:** workflow, pela ferramenta `Workflow`; esqueleto em
+  `references/workflow-tickets.md`.
 - **Segurar a sessão:** não há laço; a notificação de cada trabalho em background (workflow,
   sub-agente) retoma a sessão sozinha. Abertura: `rode /<faz> leva <documento>`, com `<faz>` o
   nome da linha `faz` do localizador: a skill reservada só é liberada quando o nome chamado bate

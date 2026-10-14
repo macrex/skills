@@ -8,5 +8,6 @@
   lista, e continuam valendo só quando o usuário as nomeia.
 - **Perguntar:** em texto, e encerre o turno.
 - **Sub-agente:** nenhum; tudo roda na sessão.
+- **Modo do implement:** inline, um ticket por vez, cada um na sua worktree; a sessão concilia.
 - **Segurar a sessão:** não há loop. Abertura: `/faz leva <documento>`, e o aviso diz que, se a
   sessão parar antes de a leva fechar, o usuário responde `continue` e ela retoma de onde parou.

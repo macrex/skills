@@ -202,7 +202,7 @@ Prompt  [ Clear ]  [ Executar ]
 rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets
-/mattpocock-skills:implement`,
+/mattpocock-skills:implement-spec`,
   "15 grill aba prompt · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Grill  concluído
@@ -228,7 +228,7 @@ Prompt  [ Clear ]  [ Executar ]
 rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets
-/mattpocock-skills:implement`,
+/mattpocock-skills:implement-spec`,
   "16 grill concluido geral · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  concluído
@@ -771,7 +771,7 @@ Prompt  [ Clear ]  [ Executar ]
 rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets
-/mattpocock-skills:implement`,
+/mattpocock-skills:implement-spec`,
   "47 grill durante a leva · desktop": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Grill  concluído
@@ -797,7 +797,7 @@ Prompt  [ Clear ]  [ Executar ]
 rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets
-/mattpocock-skills:implement`,
+/mattpocock-skills:implement-spec`,
   "50 leva fechada · terminal": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
@@ -1066,7 +1066,7 @@ AskUserQuestion: {"deny":"A rodada 1 do grill foi publicada na grill-tela, em ht
 AskUserQuestion: {"deny":"A rodada 2 do grill foi publicada na grill-tela, em http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123, e espera a resposta do usuario la. Nao e erro, e nao pergunte de novo: diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin."}
 AskUserQuestion: {"result":{"questions":[{"header":"Golden","question":"Onde fica o golden?","multiSelect":false,"options":[{"label":"Módulo .ts (Recommended)","description":"importado pelo teste"},{"label":"JSON","description":"lido do disco"}]},{"header":"Superfícies","question":"O e2e roda no desktop?","multiSelect":false,"options":[{"label":"Terminal e desktop (Recommended)","description":""},{"label":"Só terminal","description":""}]}],"answers":{"Onde fica o golden?":"Módulo .ts (Recommended)","O e2e roda no desktop?":"Só terminal"}}}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; entendimento"}
-Bash: {"result":{"stdout":"rode /macrex-skills:faz leva Painel em módulos\\n/mattpocock-skills:to-spec\\n/mattpocock-skills:to-tickets\\n/mattpocock-skills:implement\\n","stderr":""}}
+Bash: {"result":{"stdout":"rode /macrex-skills:faz leva Painel em módulos\\n/mattpocock-skills:to-spec\\n/mattpocock-skills:to-tickets\\n/mattpocock-skills:implement-spec\\n","stderr":""}}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; linha"}
 Skill: {"result":"ok"}
 Skill: {"result":"ok"}
@@ -1143,9 +1143,9 @@ registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
   "93 sugestoes": `fill: rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets
-/mattpocock-skills:implement
+/mattpocock-skills:implement-spec
 rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets
-/mattpocock-skills:implement`,
+/mattpocock-skills:implement-spec`,
 }

@@ -27,7 +27,7 @@ export function linhasDePortao({ linhaLarga, largura }: Primitivas, agora: numbe
 export function abaTickets(kit: Primitivas, { leva, agora }: { leva: Leva | null; agora: number }) {
   const { Box, Text, tela, cartao, apagado } = kit
   if (!leva) return tela('Nenhuma leva neste workspace', 'verdes', '—', cartao(null, apagado('os tickets aparecem quando o to-tickets publica')))
-  const { ticket } = linhasDePortao(kit, agora)
+  const { ticket, item } = linhasDePortao(kit, agora)
   const comNotas = (t: LevaTicket, i: number) =>
     h(
       Box,
@@ -39,6 +39,11 @@ export function abaTickets(kit: Primitivas, { leva, agora }: { leva: Leva | null
     leva.documento,
     'verdes',
     `${verdes(leva)}/${leva.tickets.length}`,
-    cartao(null, ...(leva.tickets.length > 0 ? leva.tickets.map(comNotas) : [apagado('nenhum ticket publicado ainda')])),
+    cartao(
+      null,
+      ...(leva.tickets.length > 0 ? leva.tickets.map(comNotas) : [apagado('nenhum ticket publicado ainda')]),
+      // a Conciliacao de cada onda, embaixo dos tickets que ela juntou
+      ...(leva.itens ?? []).filter(i => i.fase === 'implement').map(i => h(Box, { marginTop: 1 }, item(i))),
+    ),
   )
 }

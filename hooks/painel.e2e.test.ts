@@ -23,7 +23,7 @@ const RAIZ = 'D:/ws/painel'
 const URL = 'http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123'
 const HISTORICO_DE_GRILLS = 'http://127.0.0.1:47110/?t=abc123'
 // o prompt como o localizador o imprime no Claude Code (skills-do-matt.js, linhaDaLeva)
-const PROMPT = 'rode /macrex-skills:faz leva Painel em módulos\n/mattpocock-skills:to-spec\n/mattpocock-skills:to-tickets\n/mattpocock-skills:implement'
+const PROMPT = 'rode /macrex-skills:faz leva Painel em módulos\n/mattpocock-skills:to-spec\n/mattpocock-skills:to-tickets\n/mattpocock-skills:implement-spec'
 // o corpo do pane com tamanho fixo: o desenho nao depende do viewport
 const LARGO = { bodyColumns: 80, scroll: { bodyRows: 40 } }
 const ESTREITO = { bodyColumns: 50, scroll: { bodyRows: 40 } }
@@ -341,7 +341,7 @@ describe('painel da leva, de ponta a ponta', () => {
 
     // 3. A leva: as skills conferidas, o inicio, os tickets e o implement inline, com custo
     await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'Painel em módulos' })
-    for (const skill of ['mattpocock-skills:to-spec', 'mattpocock-skills:implement']) await chamar({ tool: 'Skill', skill, tool_use_id: `tu-${skill}` })
+    for (const skill of ['mattpocock-skills:to-spec', 'mattpocock-skills:implement-spec']) await chamar({ tool: 'Skill', skill, tool_use_id: `tu-${skill}` })
     usar(1)
     await marco({ marco: 'inicio', documento: 'Painel em módulos', sujos: ['velho.txt'] })
     await relogio.advance(segundos(9))

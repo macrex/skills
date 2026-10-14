@@ -9,6 +9,8 @@
   continua sem a resposta; a resposta do usuário (ou `/goal resume`) retoma.
 - **Sub-agente:** só com a extensão `pi-subagents` (ferramenta `subagent`, no modelo do agente
   configurado). Sem ela, tudo roda na sessão.
+- **Modo do implement:** sub-agents, com a `pi-subagents`: a onda inteira junta, um ticket por
+  worktree, e um sub-agente concilia. Sem ela, inline: um ticket por vez, cada um na sua worktree.
 - **Segurar a sessão:** `/goal <objetivo>` da extensão `@narumitw/pi-goal`
   (`pi install npm:@narumitw/pi-goal`). `/skill:` só expande no começo da mensagem e esta skill
   está fora da lista, então a abertura cita o caminho:

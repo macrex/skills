@@ -3,7 +3,7 @@
 ## Linguagem
 
 **Leva**:
-O trabalho que um `/faz <pedido>` interroga e um `/faz leva <documento>` cumpre, do entendimento até a validação, deixando tudo na working tree para o `/cpv` fechar.
+O trabalho que um `/faz <pedido>` interroga e um `/faz leva <documento>` cumpre, do entendimento até a validação, terminando num commit local só, que o `/cpv` empurra.
 _Evitar_: tarefa, feature, sprint
 
 **Prompt**:
@@ -23,12 +23,20 @@ Um registro que a leva acrescenta ao estado da leva quando algo muda: a fase, o 
 _Evitar_: evento, checkpoint
 
 **Portão**:
-A verificação que decide se um ticket fechou: verde ou vermelho, com até dois reparos; vermelho depois deles para a cadeia ou, no workflow com worktrees, só o ticket e os que dependem dele.
+A verificação que decide se um ticket fechou: verde ou vermelho, com até dois reparos; vermelho depois deles para só o ticket e os que dependem dele.
 _Evitar_: gate, check
 
 **Onda**:
-Os tickets cujos bloqueadores já fecharam, que o workflow roda juntos, cada um na sua worktree, e integra na working tree principal antes da onda seguinte.
+Os tickets cujos bloqueadores já fecharam, que rodam juntos, cada um na sua worktree, e entram no branch da leva pela conciliação antes da onda seguinte. Só o bloqueio entre tickets separa ondas; mexer no mesmo arquivo, não.
 _Evitar_: fronteira, lote
+
+**Branch da leva**:
+O branch local e temporário que acumula o que cada onda conciliou; nunca vai para a origem, e no fechamento vira um commit só no branch de onde a leva partiu.
+_Evitar_: branch de feature, branch de integração
+
+**Conciliação**:
+A fase automática ao fim de cada onda que junta os tickets dela no branch da leva, resolve os conflitos entre eles e verifica a soma.
+_Evitar_: integração, merge (sozinho)
 
 **Painel da leva**:
 O pane do Claude Code que o `/painel-macrex` abre ao lado da conversa, como o do `/diff`, com o grill e a leva do workspace, uma aba por assunto.

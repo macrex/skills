@@ -25,7 +25,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const SKILLS = ['grilling', 'domain-modeling', 'to-spec', 'to-tickets', 'implement', 'code-review'];
+const SKILLS = ['grilling', 'domain-modeling', 'to-spec', 'to-tickets', 'implement-spec', 'code-review'];
 
 // Raizes por harness, na ordem em que ele mesmo resolve colisao (a primeira ganha),
 // com o prefixo que o nome da skill leva quando vem dali. `*` casa um nivel de pasta
@@ -137,7 +137,7 @@ function linhaDaLeva(harness, faz, nome, documento) {
     claude ? `rode /${faz} leva ${documento}` : '<abertura>',
     `/${nome['to-spec']}`,
     `/${nome['to-tickets']}`,
-    `/${nome.implement}`,
+    `/${nome['implement-spec']}`,
     ...(claude ? [] : ['fechada quando a revisão, as correções e a qualidade passaram, sem commit.']),
   ].join('\n');
 }

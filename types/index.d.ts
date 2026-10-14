@@ -13,9 +13,9 @@ export type LevaTicket = {
   custo?: number
 }
 
-// Um item da revisao, das correcoes ou da qualidade (marco item).
+// Um item da implementacao (a Conciliacao), da revisao, das correcoes ou da qualidade (marco item).
 export type LevaItem = {
-  fase: 'revisao' | 'correcoes' | 'qualidade'
+  fase: 'implement' | 'revisao' | 'correcoes' | 'qualidade'
   titulo: string
   estado: 'em-curso' | 'verde' | 'vermelho'
   detalhe?: string
@@ -38,6 +38,8 @@ export type Leva = {
   itens?: LevaItem[]
   sujos?: string[]
   modo?: 'inline' | 'sub-agents' | 'workflow'
+  // o branch da leva (marco fase implement), que as abas Diff e Arquivos seguem enquanto o git o acha
+  branch?: string
   fechada: boolean
   // a hora em que o /cpv rodou depois do fechamento
   cpv?: number
@@ -47,6 +49,8 @@ export type Leva = {
   custo?: number
   // o aviso da janela de 5 h em 90% ja saiu nesta leva
   avisoDaJanela?: boolean
+  // a hora do ultimo marco aplicado; o hooks/so-com-pedido.ts libera o commit da leva por ela
+  marcadaEm?: number
 }
 
 // A ultima medida da sessao (session.measure); a janela de 5 h so vem na assinatura.

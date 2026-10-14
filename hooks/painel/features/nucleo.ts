@@ -348,14 +348,26 @@ async function marcarBase($: EngineInterface, cwd: string) {
   } catch {}
 }
 
-// Refaz a lista da aba Diff: o working tree contra a base, e os nao rastreados novos inteiros.
+// A ponta (o commit) do branch da leva, na fase implement, enquanto a leva tem um e o git o acha em
+// `raiz`; sem ela, as abas Diff e Arquivos leem a working tree, onde o squash pos tudo da leva
+// depois do implement. O refs/heads/ deixa o nome fora das opcoes do git.
+async function pontaDaLeva($: EngineInterface, raiz: string) {
+  const leva = await read($, LEVA)
+  if (leva?.fase !== 'implement' || !leva.branch) return undefined
+  const r = await gitCru($, raiz, ['rev-parse', '--verify', '--quiet', `refs/heads/${leva.branch}`])
+  return (r.exitCode === 0 && r.stdout.trim()) || undefined
+}
+
+// Refaz a lista da aba Diff: o working tree contra a base, e os nao rastreados novos inteiros; com o
+// branch da leva, a base contra a ponta dele.
 async function atualizarCodigo($: EngineInterface) {
   const base = await read($, BASE)
   if (!base) return
   try {
     const { raiz, commit, soltos } = base
-    const rastreados = await git($, raiz, ['diff', '--no-color', '--no-ext-diff', commit])
-    const novos = (await naoRastreados($, raiz)).filter(c => !soltos.includes(c))
+    const ponta = await pontaDaLeva($, raiz)
+    const rastreados = await git($, raiz, ['diff', '--no-color', '--no-ext-diff', commit, ...(ponta ? [ponta] : [])])
+    const novos = ponta ? [] : (await naoRastreados($, raiz)).filter(c => !soltos.includes(c))
     const dosNovos = await Promise.all(novos.map(c => git($, raiz, ['diff', '--no-index', '--no-color', '--', '/dev/null', c], 1)))
     const arquivos = [rastreados, ...dosNovos].flatMap(arquivosDoDiff)
     await update($, CODIGO, () => arquivos)
@@ -365,23 +377,34 @@ async function atualizarCodigo($: EngineInterface) {
 // Le a arvore do projeto: os arquivos da raiz que o git nao ignora, sem os apagados do working
 // tree. So troca quando os caminhos ou as marcas mudaram, entao editar um arquivo so acende a marca
 // dele: o solto que a base da sessao nao tinha e novo, o que mudou desde a base (o diff contra o
-// commit dela) e mudado.
+// commit dela) e mudado. Com o branch da leva, a arvore e a da ponta dele, e o novo e o mudado sao
+// os do diff da base contra ela.
 // ponytail: a marca so com a raiz no topo do repositorio da base; numa subpasta os caminhos nao casam
 async function lerArvore($: EngineInterface) {
   const raiz = await $.session.root()
   try {
     const topo = (await git($, raiz, ['rev-parse', '--show-toplevel'])).trim()
     if (!topo) return update($, ARVORE, () => ({ semGit: true, arquivos: [], novos: [], mudados: [] }))
-    const lista = async (args: string[]) => (await git($, raiz, ['ls-files', ...args, '-z'])).split('\0').filter(Boolean)
+    const base = await read($, BASE)
+    const daBase = base && semBarra(base.raiz) === semBarra(topo) && semBarra(raiz) === semBarra(topo)
+    const trocar = (nova: { arquivos: string[]; novos: string[]; mudados: string[] }) => update($, ARVORE, velha => (JSON.stringify(velha) === JSON.stringify(nova) ? velha : nova))
+    const nomes = async (args: string[]) => (await git($, raiz, args)).split('\0').filter(Boolean)
+    const ponta = daBase ? await pontaDaLeva($, raiz) : undefined
+    if (ponta) {
+      const [arquivos, novos, mudados] = await Promise.all([
+        nomes(['ls-tree', '-r', '--name-only', '-z', ponta]),
+        nomes(['diff', '--name-only', '-z', '--diff-filter=A', base!.commit, ponta]),
+        nomes(['diff', '--name-only', '-z', base!.commit, ponta]),
+      ])
+      return trocar({ arquivos, novos, mudados })
+    }
+    const lista = async (args: string[]) => nomes(['ls-files', ...args, '-z'])
     const [rastreados, soltos, apagados] = await Promise.all([lista(['--cached']), naoRastreados($, raiz), lista(['--deleted'])])
     const sumiram = new Set(apagados)
     const arquivos = [...new Set([...rastreados, ...soltos])].filter(c => !sumiram.has(c)).sort()
-    const base = await read($, BASE)
-    const daBase = base && semBarra(base.raiz) === semBarra(topo) && semBarra(raiz) === semBarra(topo)
     const novos = daBase ? soltos.filter(c => !base!.soltos.includes(c)) : []
-    const mudados = daBase ? (await git($, raiz, ['diff', '--name-only', '-z', base!.commit])).split('\0').filter(Boolean) : []
-    const nova = { arquivos, novos, mudados }
-    await update($, ARVORE, velha => (JSON.stringify(velha) === JSON.stringify(nova) ? velha : nova))
+    const mudados = daBase ? await nomes(['diff', '--name-only', '-z', base!.commit]) : []
+    await trocar({ arquivos, novos, mudados })
   } catch {}
 }
 
@@ -432,9 +455,11 @@ async function reconciliar($: EngineInterface) {
 // base), so no working tree; o novo da sessao (solto que a base nao tinha) sai pelo clean. O
 // codigo de saida decide, entao vai o gitCru, nao o git que engole a falha.
 async function descartar($: EngineInterface, caminho: string) {
+  const base = await read($, BASE)
+  // o Diff que segue o branch da leva mostra os commits dela, nao o working tree: o Descartar nao os toca
+  if (base && (await pontaDaLeva($, base.raiz))) return $.ui.toast('O Descartar não age sobre o branch da leva')
   // o dialogo dispensado rejeita: e o mesmo que manter
   const resposta = await $.ui.ask(`Descartar a mudança em ${caminho}?`, ['Descartar', 'Manter']).catch(() => '')
-  const base = await read($, BASE)
   if (resposta !== 'Descartar' || !base) return
   const novo = (await naoRastreados($, base.raiz)).includes(caminho) && !base.soltos.includes(caminho)
   const args = novo ? ['clean', '-f', '--', caminho] : ['restore', `--source=${base.commit}`, '--worktree', '--', caminho]
@@ -538,12 +563,13 @@ export function registrarSessao(on: On, ctx: Contexto) {
           linha: { type: 'string', maxLength: 4000, description: 'linha: a linha da leva que o /faz imprimiu ao fim do grill, inteira e com as mesmas quebras' },
           fase: { type: 'string', enum: FASES },
           modo: { type: 'string', enum: MODOS, description: 'fase implement: como o implement roda' },
+          branch: { type: 'string', description: 'fase implement: o branch da leva, ex. leva/worktrees' },
           tickets: {
             type: 'array',
             items: { type: 'object', properties: { id: { type: 'string' }, titulo: { type: 'string' } }, required: ['id', 'titulo'] },
           },
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
-          item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, nunca o da fase' },
+          item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, ou a Conciliacao do implement, nunca o da fase' },
           detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
           portao: { type: 'string', enum: PORTOES },
           reparos: { type: 'integer', minimum: 0, maximum: 2 },
@@ -650,7 +676,7 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
     if (e.marco === 'inicio') await tirarGrillDaTela($)
     if (retoma(antes, e)) {
       const tickets = leva.tickets.map(({ id, titulo, estado, notas }) => ({ id, titulo, estado, notas }))
-      const estado = JSON.stringify({ fase: leva.fase, tickets, sujos: leva.sujos ?? [] }, null, 2)
+      const estado = JSON.stringify({ fase: leva.fase, branch: leva.branch, tickets, sujos: leva.sujos ?? [] }, null, 2)
       return { result: `marco registrado; retomada na fase ${leva.fase}\n${estado}` }
     }
     const falta = ['inicio', 'fase'].includes(e.marco) && semSkill(leva.fase, await read($, SKILLS))

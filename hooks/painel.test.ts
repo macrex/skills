@@ -1480,7 +1480,7 @@ describe('painel da leva', () => {
     const ui = await $.ui.mount(PANE)
     for (const [fim, doc] of [['\n', 'doc lf'], ['\r\n', 'doc crlf']]) {
       await marco({ marco: 'grill', pedido: `grill ${doc}` })
-      const prompt = [`rode /macrex-skills:faz leva ${doc}`, '/mattpocock-skills:to-spec', '/mattpocock-skills:to-tickets', '/mattpocock-skills:implement']
+      const prompt = [`rode /macrex-skills:faz leva ${doc}`, '/mattpocock-skills:to-spec', '/mattpocock-skills:to-tickets', '/mattpocock-skills:implement-spec']
       stdout = prompt.join(fim) + fim
       await $.tool.call({ tool: 'Bash', command: `node "D:/ws/skills/faz/scripts/skills-do-matt.js" --linha "${doc}"` } as never)
       expect(await ui.find({ type: 'Text', text: new RegExp(`^${doc}$`) })).toBeDefined()
@@ -1648,11 +1648,27 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /^15\/16 ✗$/ }))?.props.color).toBe('#f7768e')
 
     expect((await marco({ marco: 'item' })).deny).toMatch(/item/)
-    expect((await marco({ marco: 'item', item: 'x', fase: 'implement' })).deny).toMatch(/fase/)
+    expect((await marco({ marco: 'item', item: 'x', fase: 'tickets' })).deny).toMatch(/fase/)
     expect((await marco({ marco: 'item', item: 'x', detalhe: 'y'.repeat(61) })).deny).toMatch(/detalhe/)
     expect((await marco({ marco: 'item', item: 'x', portao: 'amarelo' })).deny).toMatch(/portao/)
     // o item repetindo o titulo do cartao nao diz nada: a ferramenta pede o nome do passo
     expect((await marco({ marco: 'item', item: 'Qualidade', portao: 'verde' })).deny).toMatch(/titulo do cartao/)
+  })
+
+  test('o item Conciliacao da fase implement aparece no cartao Implementacao da aba Geral e embaixo dos tickets na aba Tickets', async ($, on) => {
+    const { marco } = mundo($, on)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement' })
+    expect((await marco({ marco: 'item', item: 'Conciliação 1', portao: 'verde', detalhe: '2/2' })).deny).toBeUndefined()
+    // o item com o nome do cartao e recusado como o das outras fases
+    expect((await marco({ marco: 'item', item: 'Implementação' })).deny).toMatch(/titulo do cartao/)
+
+    const ui = await $.ui.mount(PANE)
+    expect(await ui.find({ type: 'Text', text: /^Implementação$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^Conciliação 1\b/ }))?.text).toMatch(/2\/2 ✓/)
+    await ui.press({ key: 'aba:tickets' })
+    expect(await quadro(ui)).toMatch(/Ferramenta faz_marco[\s\S]*\nConciliação 1\s+2\/2 ✓/)
   })
 
   test('com a leva ativa, o tempo da fase anda sozinho no pane, sem marco novo', async ($, on) => {
@@ -1787,6 +1803,17 @@ describe('painel da leva', () => {
     expect(await ui.find({ type: 'Text', text: /^1m30s$/ })).toBeDefined()
   })
 
+  test('o marco fase implement guarda o branch da leva e a retomada o devolve; o branch fora do implement e recusado', async ($, on) => {
+    const { marco } = mundo($, on)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    expect((await marco({ marco: 'fase', fase: 'revisao', branch: 'leva/x' })).deny).toMatch(/branch vai so com fase implement/)
+    expect((await marco({ marco: 'fase', fase: 'implement', modo: 'workflow', branch: 'leva/x' })).deny).toBeUndefined()
+    // a fase reenviada sem o branch o guarda
+    await marco({ marco: 'fase', fase: 'implement' })
+    const r = await marco({ marco: 'inicio', documento: 'doc' })
+    expect(JSON.parse(String(r.result).split('\n').slice(1).join('\n'))).toMatchObject({ fase: 'implement', branch: 'leva/x' })
+  })
+
   test('a compactacao do loop principal com a leva aberta pede no resumo o estado da leva', async ($, on) => {
     const { marco } = mundo($, on)
     const vistas: Array<{ trigger: string; instructions?: string }> = []
@@ -1848,7 +1875,7 @@ describe('painel da leva', () => {
     await skill('mattpocock-skills:grilling')
     expect((await marco({ marco: 'inicio', documento: 'doc' })).result).toBe('marco registrado; fase spec')
     expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toBe('marco registrado; fase tickets')
-    expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement invocada')
+    expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement-spec invocada')
     expect((await marco({ marco: 'fase', fase: 'revisao' })).result).toBe('marco registrado; fase revisao sem /code-review invocada')
     expect((await marco({ marco: 'fase', fase: 'correcoes' })).result).toBe('marco registrado; fase correcoes')
 
@@ -1862,7 +1889,7 @@ describe('painel da leva', () => {
 
     // skill fora das quatro nao conta: a fase implement segue sem a sua
     await skill('implementar')
-    expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement invocada')
+    expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement-spec invocada')
 
     await skill('mattpocock-skills:code-review')
     expect((await ui.find({ type: 'Text', text: /^code-review\b/ }))?.text).not.toMatch(/!/)
@@ -2538,8 +2565,9 @@ describe('painel da leva', () => {
 
   // O git da arvore do projeto: os rastreados, os soltos (o que o .gitignore nao ignora) e os
   // apagados do working tree, cada um pelo seu ls-files, e os mudados desde a base da sessao (o
-  // diff contra o abc123); o velho.txt ja estava solto no inicio.
-  function repo(on: On, git = { rastreados: ['README.md', 'hooks/register.js', 'hooks/painel.test.ts', 'skills/faz/SKILL.md'], soltos: ['velho.txt'], apagados: [] as string[], mudados: [] as string[], diff: '', novos: {} as Record<string, string>, rodados: [] as string[], falha: false }) {
+  // diff contra o abc123); o velho.txt ja estava solto no inicio. Com a ponta (def456) do branch da
+  // leva, o rev-parse --verify o acha, e a arvore e o diff dele vem do `branch`.
+  function repo(on: On, git = { rastreados: ['README.md', 'hooks/register.js', 'hooks/painel.test.ts', 'skills/faz/SKILL.md'], soltos: ['velho.txt'], apagados: [] as string[], mudados: [] as string[], diff: '', novos: {} as Record<string, string>, rodados: [] as string[], falha: false, ponta: '', branch: { arvore: [] as string[], novos: [] as string[], mudados: [] as string[], diff: '' } }) {
     on('process.run', ($, e) => {
       const a = e.argv.join(' ')
       // o Descartar: o clean e o restore ficam registrados, e falham com a falha ligada
@@ -2553,11 +2581,17 @@ describe('painel da leva', () => {
         : /ls-files --cached/.test(a) ? lista(git.rastreados)
         : /ls-files --others/.test(a) ? lista(git.soltos)
         : /ls-files --deleted/.test(a) ? lista(git.apagados)
+        : /rev-parse --verify --quiet refs\/heads\/leva\/x$/.test(a) ? git.ponta
+        : /ls-tree -r --name-only -z def456$/.test(a) ? lista(git.branch.arvore)
+        : /diff --name-only -z --diff-filter=A abc123 def456$/.test(a) ? lista(git.branch.novos)
+        : /diff --name-only -z abc123 def456$/.test(a) ? lista(git.branch.mudados)
+        : /diff --no-color --no-ext-diff abc123 def456$/.test(a) ? git.branch.diff
         : /diff --name-only -z abc123/.test(a) ? lista(git.mudados)
         : /diff --no-color --no-ext-diff abc123/.test(a) ? git.diff
         : /--no-index/.test(a) ? (git.novos[e.argv.at(-1) ?? ''] ?? '')
         : ''
-      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+      const exitCode = /rev-parse --verify/.test(a) && !git.ponta ? 1 : 0
+      return { value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     for (const tool of ['Write', 'Edit', 'Bash']) on('tool.call', { tool }, () => ({ result: {} }) as never)
     return { git }
@@ -2731,6 +2765,63 @@ describe('painel da leva', () => {
     await ui.press({ key: 'diff:descartar:hooks/novo.js' })
     expect(git.rodados.at(-1)).toBe('git -c core.quotePath=false clean -f -- hooks/novo.js')
     expect(toasts).toContain('Não deu para descartar hooks/novo.js')
+  })
+
+  test('com o branch da leva no git, na fase implement, as abas Diff e Arquivos seguem a ponta dele, sem o Descartar; com o branch sumido ou depois do implement, voltam a working tree', async ($, on) => {
+    const { sessao, marco, toasts } = mundo($, on)
+    const { git } = repo(on)
+    git.mudados = ['README.md']
+    git.diff = ['diff --git a/README.md b/README.md', '--- a/README.md', '+++ b/README.md', '@@ -1,1 +1,1 @@', '-a', '+b', ''].join('\n')
+    git.branch = {
+      arvore: ['README.md', 'hooks/conciliado.js', 'hooks/register.js'],
+      novos: ['hooks/conciliado.js'],
+      mudados: ['hooks/conciliado.js', 'hooks/register.js'],
+      diff: [
+        'diff --git a/hooks/register.js b/hooks/register.js', '--- a/hooks/register.js', '+++ b/hooks/register.js', '@@ -10,1 +10,1 @@', '-const b = 2', '+const b = 3',
+        'diff --git a/hooks/conciliado.js b/hooks/conciliado.js', 'new file mode 100644', '--- /dev/null', '+++ b/hooks/conciliado.js', '@@ -0,0 +1,1 @@', '+x', '',
+      ].join('\n'),
+    }
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'fase', fase: 'implement', branch: 'leva/x' })
+    git.ponta = 'def456\n'
+    const ui = await $.ui.mount(PANE)
+
+    // o Diff e o da base contra a ponta do branch: o README da working tree fica fora
+    await ui.press({ key: 'aba:codigo' })
+    expect(await ui.find({ type: 'Text', text: /^2 arquivos alterados$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: /› hooks\/conciliado\.js/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: /README/ })).toBeUndefined()
+    await ui.press({ key: 'arquivo:0' })
+    await ui.press({ key: 'diff:descartar:hooks/register.js' })
+    expect(git.rodados).toEqual([])
+    expect(toasts).toContain('O Descartar não age sobre o branch da leva')
+
+    // a Arquivos e a arvore do branch, com o novo e o mudado contra a base
+    await ui.press({ key: 'aba:arquivos' })
+    expect(await quadro(ui)).toMatch(/\[ {3}▸ hooks\/ \] {2}•\n {4}README\.md$/)
+    await ui.press({ key: 'no:hooks/' })
+    expect((await ui.findAll({ type: 'Text', text: /^• $/ })).map(p => p.props.color)).toEqual([COR.novo, COR.mudado])
+
+    // o branch apagado depois do squash: as duas voltam a working tree
+    git.ponta = ''
+    await $.tool.call({ tool: 'Write', file_path: 'D:/ws/a/README.md', content: 'x' } as never)
+    expect(await quadro(ui)).toMatch(/velho\.txt/)
+    expect(await ui.find({ text: /conciliado/ })).toBeUndefined()
+    await ui.press({ key: 'aba:codigo' })
+    expect(await ui.find({ type: 'Text', text: /^1 arquivo alterado$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: /› README\.md/ })).toBeDefined()
+
+    // depois do implement o squash pos a leva na working tree: com o branch vivo, as duas seguem nela
+    await ui.press({ key: 'aba:arquivos' })
+    git.ponta = 'def456\n'
+    await marco({ marco: 'fase', fase: 'revisao' })
+    await $.tool.call({ tool: 'Write', file_path: 'D:/ws/a/README.md', content: 'x' } as never)
+    expect(await quadro(ui)).toMatch(/velho\.txt/)
+    expect(await ui.find({ text: /conciliado/ })).toBeUndefined()
+    await ui.press({ key: 'aba:codigo' })
+    expect(await ui.find({ type: 'Text', text: /^1 arquivo alterado$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: /› README\.md/ })).toBeDefined()
   })
 
   test('o Copiar diff de um arquivo CRLF leva o patch cru, com o \\r que o git apply pede; o diff desenhado segue sem ele', async ($, on) => {

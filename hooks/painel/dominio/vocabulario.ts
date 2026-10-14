@@ -28,8 +28,8 @@ export const LARANJA = '#d77757'
 export const FASES = ['spec', 'tickets', 'implement', 'revisao', 'correcoes', 'qualidade', 'fechamento']
 export const PORTOES = ['verde', 'vermelho']
 export const MODOS = ['inline', 'sub-agents', 'workflow']
-// as fases depois do implement, cujo andamento chega item a item, e o titulo do cartao de cada uma
-export const FASES_COM_ITENS: Record<string, string> = { revisao: 'Revisão', correcoes: 'Correções', qualidade: 'Qualidade' }
+// as fases cujo andamento chega item a item (a do implement, so a Conciliacao), e o titulo do cartao de cada uma
+export const FASES_COM_ITENS: Record<string, string> = { implement: 'Implementação', revisao: 'Revisão', correcoes: 'Correções', qualidade: 'Qualidade' }
 export const NO_HISTORICO = 5
 export const FUNDO = '#24283b'
 // a paleta do video do README: cartoes um tom abaixo do fundo, chips um tom acima; as cores do
@@ -42,9 +42,10 @@ export const VERDE = '#9ece6a'
 export const AZUL = '#7aa2f7'
 export const VERMELHO = '#f7768e'
 export const AMARELO = '#e0af68'
-export const SKILL_DA_FASE: Record<string, string> = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement', revisao: 'code-review' }
-// o nome de cada fase no chip, o da skill que a cumpre; o fechamento nao vira chip, vira o aviso do /cpv
-export const ROTULO: Record<string, string> = { ...SKILL_DA_FASE, correcoes: 'correções', qualidade: 'qualidade' }
+export const SKILL_DA_FASE: Record<string, string> = { spec: 'to-spec', tickets: 'to-tickets', implement: 'implement-spec', revisao: 'code-review' }
+// o nome de cada fase no chip, o da skill que a cumpre (o implement, curto, sem o -spec); o
+// fechamento nao vira chip, vira o aviso do /cpv
+export const ROTULO: Record<string, string> = { ...SKILL_DA_FASE, implement: 'implement', correcoes: 'correções', qualidade: 'qualidade' }
 export const FIM_DE_TAREFA: Record<string, LevaAgente['estado']> = { completed: 'concluido', failed: 'falhou', killed: 'parado', stopped: 'parado' }
 export const DO_AGENTE = { rodando: ['rodando', LARANJA], aguardando: ['aguardando', AMARELO], concluido: ['concluído', VERDE], falhou: ['falhou', VERMELHO], parado: ['parado', APAGADO] } as const
 // o status da lista oficial ($.agent.list) no estado do painel; um status fora daqui nao mexe no agente
@@ -78,6 +79,7 @@ export type Marco = {
   linha?: string
   fase?: string
   modo?: Leva['modo']
+  branch?: string
   tickets?: { id: string; titulo: string }[]
   ticket?: string
   item?: string

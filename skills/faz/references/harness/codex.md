@@ -10,6 +10,8 @@
   sem chamar ferramenta — é assim que ele devolve a vez ao usuário.
 - **Sub-agente:** `spawn_agent` e `wait_agent`, com `[features] multi_agent = true` no
   `~/.codex/config.toml`, no modelo das roles do `config.toml`. Sem a feature, inline.
+- **Modo do implement:** sub-agents, com a `multi_agent`: a onda inteira junta, um ticket por
+  worktree, e um sub-agente concilia. Sem ela, inline: um ticket por vez, cada um na sua worktree.
 - **Segurar a sessão:** `/goal` nativo. Abertura:
   `/goal leia <caminho absoluto do SKILL.md desta skill> e cumpra leva <documento>`; se o seu
   Codex pedir o objetivo entre aspas, ponha-as.

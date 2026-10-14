@@ -42,8 +42,14 @@ export function levaNaCompactacao(leva: Leva) {
 // Aplica um marco ao estado na hora `agora`, com o custo da sessao `usd` (no inicio, no
 // fechamento e, no modo inline, no ticket e no portao); devolve o estado novo ou { erro } sem
 // tocar no antigo. O switch nao tem default: o MARCOS.includes ja recusou o marco de fora dele, e o
-// undefined do tipo nunca sai.
+// undefined do tipo nunca sai. O estado aplicado guarda a hora do marco (marcadaEm), que o
+// hooks/so-com-pedido.ts le.
 export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number | undefined): Aplicado<Leva> | Erro | undefined {
+  const novo = aplicarSemHora(leva, m, agora, usd)
+  return novo && !novo.erro ? { ...novo, marcadaEm: agora } : novo
+}
+
+function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number | undefined): Aplicado<Leva> | Erro | undefined {
   if (m.marco === 'inicio') {
     if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'inicio exige documento (titulo da nota ou caminho)' }
     if (m.sujos != null && !(Array.isArray(m.sujos) && m.sujos.every(s => typeof s === 'string'))) {
@@ -69,9 +75,9 @@ export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number 
     case 'fase':
       // o includes nao estreita: a fase de fora do vocabulario, undefined inclusive, sai na recusa
       if (!FASES.includes(m.fase as string)) return { erro: `fase fora do vocabulario: ${m.fase}; use ${FASES.join(', ')}` }
-      if (m.modo == null) return fase(m.fase as string)
-      if (m.fase !== 'implement' || !MODOS.includes(m.modo)) return { erro: `modo vai so com fase implement e e um de ${MODOS.join(', ')}` }
-      return { ...fase(m.fase), modo: m.modo }
+      if (m.branch != null && (m.fase !== 'implement' || typeof m.branch !== 'string' || !m.branch.trim())) return { erro: 'branch vai so com fase implement e e o nome do branch da leva' }
+      if (m.modo != null && (m.fase !== 'implement' || !MODOS.includes(m.modo))) return { erro: `modo vai so com fase implement e e um de ${MODOS.join(', ')}` }
+      return { ...fase(m.fase as string), ...(m.modo != null && { modo: m.modo }), ...(m.branch != null && { branch: m.branch }) }
     case 'tickets':
       if (!Array.isArray(m.tickets) || !m.tickets.every(t => t && t.id != null && typeof t.titulo === 'string')) {
         return { erro: 'tickets exige uma lista de { id, titulo }' }

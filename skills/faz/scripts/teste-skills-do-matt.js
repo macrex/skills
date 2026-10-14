@@ -36,7 +36,7 @@ const claudeGrilling = skill('.claude', 'skills', 'grilling');
 skill('.claude', 'plugins', 'cache', 'oficial', 'mattpocock-skills', '1.0.0', 'skills', 'productivity', 'grilling');
 const pluginToSpec = skill('.claude', 'plugins', 'cache', 'oficial', 'mattpocock-skills', '1.0.0', 'skills', 'engineering', 'to-spec');
 const piCodeReview = skill('.pi', 'agent', 'git', 'github.com', 'mattpocock', 'skills', 'skills', 'engineering', 'code-review');
-const agentsImplement = skill('.agents', 'skills', 'implement');
+const agentsImplement = skill('.agents', 'skills', 'implement-spec');
 const codexGrilling = skill('.codex', 'skills', 'grilling');
 const codexClone = skill('.codex', 'skills', 'mattpocock', 'skills', 'engineering', 'to-tickets');
 const agyToSpec = skill('.gemini', 'config', 'skills', 'to-spec');
@@ -58,15 +58,15 @@ assert.strictEqual(claude.por.grilling.caminho, claudeGrilling, '~/.claude/skill
 assert.strictEqual(claude.por.grilling.nome, 'grilling');
 assert.strictEqual(claude.por['to-spec'].caminho, pluginToSpec);
 assert.strictEqual(claude.por['to-spec'].nome, 'mattpocock-skills:to-spec', 'skill do plugin leva prefixo');
-assert.strictEqual(claude.por.implement.caminho, agentsImplement, '~/.agents/skills tambem vale no Claude Code, depois das raizes dele');
-assert.strictEqual(claude.por.implement.nome, 'implement');
+assert.strictEqual(claude.por['implement-spec'].caminho, agentsImplement, '~/.agents/skills tambem vale no Claude Code, depois das raizes dele');
+assert.strictEqual(claude.por['implement-spec'].nome, 'implement-spec');
 assert.strictEqual(claude.status, 1);
 
 const pi = roda({ PI_SESSION_ID: 'x' });
 assert.strictEqual(pi.harness, 'pi');
 assert.strictEqual(pi.por['code-review'].caminho, piCodeReview, 'pacote do pi install conta');
 assert.strictEqual(pi.por['code-review'].nome, 'code-review', 'no Pi o nome nao leva prefixo');
-assert.strictEqual(pi.por.implement.caminho, agentsImplement);
+assert.strictEqual(pi.por['implement-spec'].caminho, agentsImplement);
 assert.strictEqual(pi.por.grilling.caminho, null, 'Pi nao le ~/.claude/skills');
 assert.deepStrictEqual(pi.faltam, ['grilling', 'domain-modeling', 'to-spec', 'to-tickets']);
 
@@ -99,7 +99,7 @@ assert.match(linhas[0], /^rode \/\S*faz leva Spec do CSV$/);
 assert.strictEqual(linhas.length, 4, noClaude.stdout);
 // o nome com o prefixo exato do plugin do Matt; o reservadas abaixo aceita qualquer prefixo
 assert.strictEqual(linhas[1], '/mattpocock-skills:to-spec');
-const reservadas = (l) => ['to-spec', 'to-tickets', 'implement'].forEach((s, i) => assert.match(l[i], new RegExp(`^/\\S*${s}$`), s));
+const reservadas = (l) => ['to-spec', 'to-tickets', 'implement-spec'].forEach((s, i) => assert.match(l[i], new RegExp(`^/\\S*${s}$`), s));
 reservadas(linhas.slice(1));
 assert.ok(!/code-review|modelo|até o fim/.test(noClaude.stdout), 'o resto esta na leva.md');
 const fora = linha({}).stdout.trimEnd().split('\n');
