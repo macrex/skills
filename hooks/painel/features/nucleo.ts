@@ -151,13 +151,14 @@ async function registrarNoHistoricoDeGrills($: EngineInterface, corpo: { tipo: '
   if (novo?.registro === url) await salvarGrill($, novo)
 }
 // O AskUserQuestion do grill no canal tela: a rodada vai a pagina da grill-tela, que sobe na
-// primeira, e a chamada volta na hora, recusada com a URL, para o agente dizer ao usuario onde
-// responder e encerrar o turno, sem ficar preso no AskUserQuestion; o tique escuta a pagina
+// primeira, e a chamada volta na hora, respondida sem respostas e com a URL no contexto (a recusa o
+// terminal mostra como erro), para o agente dizer ao usuario onde responder e encerrar o turno, sem
+// ficar preso no AskUserQuestion; o tique escuta a pagina
 // (ouvirTela) e a resposta chega ao agente num prompt do plugin. A pagina que nao sobe ou recusa a
 // rodada devolve { motivo }: o grill segue pelo dialogo nativo ate o fim, e o toast e o contexto
 // dizem por que.
 // ponytail: multiSelect vira escolha unica, a pagina nao tem outra
-async function pelaTela($: EngineInterface, e: { questions: Perguntas }, ctx: Contexto): Promise<{ deny: string; motivo?: undefined } | { motivo: `${string} ${string}` }> {
+async function pelaTela($: EngineInterface, e: { questions: Perguntas }, ctx: Contexto): Promise<{ result: BuiltinToolResults['AskUserQuestion']; context: string[]; motivo?: undefined } | { motivo: `${string} ${string}` }> {
   const grill = await read($, GRILL)
   const projeto = nomeDa(await $.session.root())
   const iniciar = async (...mais: string[]) => URL_DA_TELA.exec((await rodarTela($, ['iniciar', '--projeto', projeto, ...mais])).stdout)?.[0]
@@ -193,9 +194,11 @@ async function pelaTela($: EngineInterface, e: { questions: Perguntas }, ctx: Co
     // o aviso de onde a rodada esta: o navegador pode nao ter aberto
     $.ui.toast(`Grill na tela: ${url}`)
     return {
-      deny:
-        `A rodada ${n} do grill foi publicada na grill-tela, em ${url}, e espera a resposta do usuario la. Nao e erro, e nao pergunte de novo: ` +
-        `diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin.`,
+      result: { questions: e.questions, answers: {} },
+      context: [
+        `A rodada ${n} do grill foi publicada na grill-tela, em ${url}, e espera a resposta do usuario la; por isso o AskUserQuestion voltou sem respostas. Nao pergunte de novo: ` +
+          `diga ao usuario que o grill esta na tela, com esta URL, e encerre o turno. A resposta chega na proxima mensagem, enviada pelo plugin.`,
+      ],
     }
   }
   return voltarAoTerminal($, url, n, !url ? 'a página da grill-tela não subiu' : 'a página recusou a rodada')

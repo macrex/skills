@@ -520,9 +520,10 @@ describe('painel da leva', () => {
         ] },
       ],
     })
-    expect(r1.result).toBeUndefined()
-    expect(r1.deny).toContain(URL)
-    expect(r1.deny).toMatch(/encerre o turno/)
+    // a rodada publicada volta como resposta, e nao como recusa, que o terminal mostra como erro
+    expect(r1.deny).toBeUndefined()
+    expect(r1.context?.[0]).toContain(URL)
+    expect(r1.context?.[0]).toMatch(/encerre o turno/)
     expect(toasts).toContain(`Grill na tela: ${URL}`)
 
     // o tique escuta a pagina: o prazo vence, a mensagem a parte fica guardada, e a resposta vai ao
@@ -551,7 +552,7 @@ describe('painel da leva', () => {
     // que o dialogo nativo pergunta, sem a rodada aberta duplicada
     comandos.length = 0
     const r2 = await perguntar([{ header: 'Resto', question: 'Algo mais?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }])
-    expect(r2.deny).toContain(URL)
+    expect(r2.context?.[0]).toContain(URL)
     expect(JSON.parse(comandos[0].stdin ?? '').rodada).toBe(2)
     voltas.push('{"tipo":"cli"}')
     await relogio.advance(segundos(1))
@@ -632,7 +633,7 @@ describe('painel da leva', () => {
     comandos.length = 0
     const r = await perguntar('Três?')
     expect(comandos[0]).toEqual(['rodada', AGORA, '-'])
-    expect(r.deny).toContain(AGORA)
+    expect(r.context?.[0]).toContain(AGORA)
     voltas.push('{"tipo":"rodada","rodada":2,"respostas":[{"id":"Q1","marca":"aceito","escolha":"Sim","comentario":null}]}')
     await relogio.advance(segundos(1))
     expect(nativas).toEqual(['Um?', 'Dois?'])
@@ -806,7 +807,7 @@ describe('painel da leva', () => {
     const ui = await $.ui.mount(PANE)
 
     const r = await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Resto', question: 'Algo mais?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
-    expect(r.deny).toContain(URL)
+    expect(r.context?.[0]).toContain(URL)
     // o usuario aperta o Limpar com a rodada na pagina, e a pagina volta ao CLI
     await ui.press({ key: 'painel:limpar' })
     volta = '{"tipo":"cli"}'
@@ -856,7 +857,7 @@ describe('painel da leva', () => {
     // a primeira sobe a pagina, e o toast e a recusa que volta ao agente levam a URL
     const r1 = await perguntar('Primeira?')
     expect(toasts).toContain(`Grill na tela: ${URL(1)}`)
-    expect(r1.deny).toContain(URL(1))
+    expect(r1.context?.[0]).toContain(URL(1))
 
     // a pagina guardada morreu: o --retomar a traz de volta antes da rodada, que vai a URL nova
     vivas.clear()
@@ -864,7 +865,7 @@ describe('painel da leva', () => {
     comandos.length = 0
     const r2 = await perguntar('Segunda?')
     expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['rodada', URL(2), '-']])
-    expect(r2.deny).toContain(URL(2))
+    expect(r2.context?.[0]).toContain(URL(2))
     expect(toasts).toContain(`Grill na tela: ${URL(2)}`)
 
     // sem retomada, uma pagina nova
