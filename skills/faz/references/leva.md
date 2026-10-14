@@ -18,9 +18,9 @@ relatório dizer que ela rodou. Antes do primeiro passo, nesta ordem:
 4. onde o harness tem painel da leva, os marcos de `references/painel.md`, a começar pelo
    `inicio`.
 
-No Claude Code para-se **uma vez**, com os tickets na mesa, para o usuário escolher os modelos;
-nos outros harnesses não se para. Nada mais é perguntado — o conteúdo já foi confirmado no
-interrogatório, e o modo do implement é escolha sua, pelos critérios de "Os modos", abaixo.
+Para-se **uma vez**, com os tickets na mesa, para o usuário escolher o modo do implement (e, no
+Claude Code, os modelos); harness com só o inline não para. Nada mais é perguntado — o conteúdo
+já foi confirmado no interrogatório.
 
 ## Onde as notas vivem
 
@@ -42,25 +42,29 @@ tracker que `to-spec`, `to-tickets` e `code-review` esperam ter recebido:
 |---|---|---|
 | to-spec | `to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
 | to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada. Instrua o corte: `bloqueadoPor` só quando um ticket usa código que outro cria; arquivo em comum não bloqueia; o contrato compartilhado (tipo, assinatura) vira um ticket pequeno na primeira onda, para os outros partirem juntos depois | um ticket por fatia vertical, em ondas largas |
-| implement | `implement-spec`, cumprida **no modo que você escolheu** (logo abaixo): cada ticket na sua worktree, com commit no branch dele, e a conciliação de cada onda no branch da leva, que é o branch de integração dela. O `code-review`, as correções e o fechamento dela são os passos seguintes desta tabela, e o PR fica de fora: o commit vai só nesses branches, nunca na working tree principal | o branch da leva conciliado, suíte verde por ticket |
+| implement | `implement-spec`, cumprida **no modo que o usuário escolheu na terceira parada** (logo abaixo): cada ticket na sua worktree, com commit no branch dele, e a conciliação de cada onda no branch da leva, que é o branch de integração dela. O `code-review`, as correções e o fechamento dela são os passos seguintes desta tabela, e o PR fica de fora: o commit vai só nesses branches, nunca na working tree principal | o branch da leva conciliado, suíte verde por ticket |
 | squash | sem skill: `git merge --squash leva/<slug>` na working tree principal ("Worktrees, conciliação e squash", abaixo) | tudo da leva staged, sem commit |
 | code-review | `code-review`. Com o squash staged e sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no modelo da revisão escolhido na terceira parada; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
 | correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo modelo da revisão, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo. O que elas mudam entra no índice só pelos caminhos da leva (`git add <caminho>`, nunca `git add -A`) | working tree corrigida e staged, suíte verde |
 | qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (no Claude Code a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
 | fechamento | só com a qualidade verde, a ordem de "O fechamento", abaixo: versão, segredos, commit squash local, limpeza dos branches, nota de evolução no tracker | um commit local só; na nota, o que mudou, o que a revisão pegou, o que não foi verificado |
 
-## A terceira parada: os modelos
+## A terceira parada: o modo do implement e os modelos
 
-Com a tabela de tickets na mesa, pare só no Claude Code, o único harness que aceita modelo por
-sub-agente; nos outros, todo agente roda no modelo que o harness configura, e a leva segue sem
-parar. Pergunte, pelo mecanismo do seu harness, os dois modelos, cada um respondido por **o da
-sessão** (recomendado) ou outro, que o usuário nomeia:
+Com a tabela de tickets na mesa, pare. Pergunte, pelo mecanismo do seu harness, o **modo do
+implement**: os que o harness oferece ("Os modos", abaixo), o que você recomenda pelos critérios
+dali marcado como recomendado, e a razão de cada um na descrição dele. Harness com só o inline
+não tem o que perguntar: diga que o modo é esse e siga.
 
-- **o modelo do implement** — os agentes por ticket, os reparos deles e a conciliação;
+**Os modelos vão na mesma pergunta**, só no Claude Code, o único harness que aceita modelo por
+sub-agente; nos outros, todo agente roda no modelo que o harness configura. Cada um é respondido
+por **o da sessão** (recomendado) ou outro, que o usuário nomeia:
+
+- **o modelo do implement** — os agentes por ticket, os reparos deles e a conciliação; só quando
+  o modo recomendado é sub-agents ou workflow. O usuário escolheu um desses no lugar do inline?
+  Pergunte esse modelo logo em seguida;
 - **o modelo da revisão** — os dois sub-agentes do `code-review` (Standards e Spec) e o agente
   das correções.
-
-O modo não se pergunta: diga em uma linha qual é e por quê, e siga.
 
 ## Os modos: o paralelismo que compensa
 
@@ -70,7 +74,7 @@ sub-agents e inline no Claude Code; sub-agents no Codex com `multi_agent` e no P
 separa ondas: os tickets de uma onda podem rodar juntos mesmo mexendo nos mesmos arquivos, e a
 conciliação resolve o encontro deles.
 
-Paralelismo não é o padrão: escolha o modo pela tabela de tickets, pesando o ganho de tempo contra
+Paralelismo não é o padrão: recomende o modo pela tabela de tickets, pesando o ganho de tempo contra
 o que ele custa.
 
 - **Quanto paraleliza de fato.** Ondas de um ticket só, ou uma cadeia em que cada ticket espera o
@@ -90,7 +94,7 @@ o que ele custa.
   ajustar o prompt do seguinte antes da próxima onda; o workflow só devolve no fim. Spec com
   pontos em aberto pede sub-agents ou inline.
 
-Em dúvida entre dois, fique com o menos paralelo.
+Em dúvida entre dois, recomende o menos paralelo.
 
 **Escolhido sub-agents ou workflow, paralelize o máximo.** O paralelismo não é imposto, mas,
 escolhido, ele só se paga com ondas largas, e o objetivo passa a ser o menor tempo até o fim:

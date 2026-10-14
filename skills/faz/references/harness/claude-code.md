@@ -10,7 +10,8 @@
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
 - **Modo do implement:** workflow, pela ferramenta `Workflow`, com o esqueleto em
   `references/workflow-tickets.md`; sub-agents, pelo `Agent`, a onda inteira junta, um ticket por
-  worktree, e um sub-agente concilia; ou inline. A escolha segue os critérios de `leva.md`.
+  worktree, e um sub-agente concilia; ou inline. O usuário escolhe na terceira parada, com a sua recomendação pelos critérios de
+  `leva.md`.
 - **Segurar a sessão:** não há laço; a notificação de cada trabalho em background (workflow,
   sub-agente) retoma a sessão sozinha. Abertura: `rode /<faz> leva <documento>`, com `<faz>` o
   nome da linha `faz` do localizador: a skill reservada só é liberada quando o nome chamado bate

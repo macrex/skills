@@ -1,6 +1,6 @@
 # Esqueleto do Workflow de implementação
 
-Vale quando o implement do `/faz` roda em **workflow** (só no Claude Code, quando compensa: `leva.md`); o `PREAMBULO`
+Vale quando o implement do `/faz` roda em **workflow** (só no Claude Code, escolhido na terceira parada: `leva.md`); o `PREAMBULO`
 abaixo é o dos três modos. O `/faz` já invocou a `implement-spec`; os agentes por ticket não a
 invocam de novo — o preâmbulo carrega o que ela pede, e o portão é quem cobra.
 

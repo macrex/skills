@@ -54,8 +54,8 @@ Guarde como ele é endereçável (título da nota ou caminho do arquivo): a linh
 
 ## Entregue a linha
 
-Os modelos dos agentes não se perguntam aqui: a leva os pergunta na terceira parada, o do
-implement e o da revisão, quando os tickets já estão na mesa. Imprima o aviso e a linha para o usuário
+O modo do implement e os modelos dos agentes não se perguntam aqui: a leva os pergunta na
+terceira parada, quando os tickets já estão na mesa. Imprima o aviso e a linha para o usuário
 colar, e pare: parar é ter entregado a linha. A linha sai **pronta do localizador**: rode-o com o
 documento, imprima a saída num bloco de código exatamente como saiu, sem reescrever nem juntar
 linhas.

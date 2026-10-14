@@ -5,7 +5,7 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `inicio`, logo depois das três reservadas, com o `documento` da linha (o que vem depois de `leva` na abertura, sem o `até o fim` dos prompts antigos) e os `sujos` (os caminhos
   do `git status --porcelain` de antes da leva); a leva já entra na fase `spec`.
 - `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
-  `qualidade`), a de `implement` com o `modo` (o que você escolheu, `leva.md`) e o
+  `qualidade`), a de `implement` com o `modo` (o que o usuário escolheu na terceira parada, `leva.md`) e o
   `branch` da leva (`leva/<slug>`), que o estado da leva guarda para a retomada.
 - `tickets` com a lista `{ id, titulo }` assim que o `to-tickets` publicar e de novo, inteira e com
   os novos no fim, quando a leva ganhar tickets (os que já andaram guardam o portão e o tempo; nunca
