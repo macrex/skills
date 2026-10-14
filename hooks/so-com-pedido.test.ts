@@ -97,7 +97,8 @@ describe('so com pedido', () => {
   })
 
   // A leva aberta pela ferramenta do painel, o git dublado (o branch e o git dir de cada -C) e o
-  // SQUASH_MSG pelo fs.exists
+  // SQUASH_MSG pelo fs.exists, que casa pelo fim: fora do Windows o D:/... nao e absoluto e chega
+  // resolvido contra o cwd
   function naLeva($: Engine, on: On, repos: Record<string, { branch: string; squash?: boolean }>) {
     mock.store(on, {})
     const relogio = mock.clock(on)
@@ -110,7 +111,7 @@ describe('so com pedido', () => {
       const stdout = !repo ? '' : e.argv.includes('--show-current') ? `${repo.branch}\n` : `${e.argv[2]}/.git\n`
       return { value: { exitCode: repo ? 0 : 128, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
-    on('fs.exists', ($, e) => ({ value: Object.entries(repos).some(([dir, r]) => r.squash && e.path.replace(/\\/g, '/') === `${dir}/.git/SQUASH_MSG`) }))
+    on('fs.exists', ($, e) => ({ value: Object.entries(repos).some(([dir, r]) => r.squash && e.path.replace(/\\/g, '/').endsWith(`${dir}/.git/SQUASH_MSG`)) }))
     on('ui.toast', () => ({ value: undefined }))
     const marco = (input: Record<string, unknown>) => $.tool.call({ tool: 'mcp__macrex-skills__faz_marco', ...input } as never)
     return { relogio, gits, marco, abre: () => marco({ marco: 'inicio', documento: 'doc' }) }
