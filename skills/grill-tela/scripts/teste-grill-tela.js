@@ -32,14 +32,16 @@
 //  16. o historico de grills traz o pedido do --pedido (ou o da primeira questao), os estados
 //      rodada, lendo, final, concluido, cli e abandonado (o aguardar pendurado segura o ativo), do
 //      mais novo ao mais velho; o subcomando historico imprime a raiz, que desenha o historico, e
-//      o desenho separa os ativos e filtra pelo projeto e pela busca;
+//      o desenho separa os ativos e filtra pelo projeto e pela busca; o Copiar da coluna Prompt
+//      so aparece no grill com a linha da leva e a copia inteira, sem abrir o grill;
 //  17. o iniciar troca o servidor vivo de outra versao quando nenhum grill esta ativo; com grill
 //      ativo, segue com o velho e avisa;
 //  18. o registrar grava o grill do terminal no disco, sem servidor: cria a sessao de canal cli,
 //      anexa as rodadas numeradas depois da ultima respondida e o sim com o documento, recusa o
 //      corpo fora do contrato, a URL ilegivel e a sessao fora do CLI com o servidor no ar (com ele
 //      caido, leva a sessao ao terminal); o servidor rele o grill do CLI que cresceu, o historico o
-//      lista como No terminal, a leitura mostra a pergunta e o --retomar sem --id o pula.
+//      lista como No terminal, a leitura mostra a pergunta e o --retomar sem --id o pula; a linha
+//      da leva vai a sessao em qualquer fase, sem mexer nela, e o historico a traz.
 //
 //   node skills/grill-tela/scripts/teste-grill-tela.js
 
@@ -560,6 +562,27 @@ const RODADA = {
   assert.strictEqual(sep.todos.length, 4);
   assert.deepStrictEqual(hist.separar(GS, 'a', '').todos.map((g) => g.pedido), ['Busca rápida', 'velho']);
   assert.deepStrictEqual(hist.separar(GS, '', 'BUSCA').todos.map((g) => g.pedido), ['Busca rápida']);
+  // a coluna Prompt: o Copiar so no grill com a linha da leva, sem abrir o grill no clique
+  const tabelaHist = vm.runInNewContext(/function tabelaHist\(todos\)\{[\s\S]*?\n\}/.exec(raiz.txt)[0] + ' tabelaHist',
+    { HS: { copia: null }, esc: (s) => String(s), pilula: (p) => p, linkDe: (g) => g.caminho, quando: () => '', ESTADO: () => '' });
+  const umGrill = { caminho: '/g/a/20261014-100000', projeto: 'a', pedido: 'p', estado: 'concluido', inicio: 0, ultimo: 0, respondidas: 1, decisoes: 1, adrs: 0 };
+  assert.match(tabelaHist([{ ...umGrill, linha: 'rode x' }]), /<th>Prompt<\/th>[\s\S]*onclick="event\.stopPropagation\(\);copiar\("\/g\/a\/20261014-100000"\)">Copiar</);
+  assert.doesNotMatch(tabelaHist([{ ...umGrill, linha: null }]), /copiar\(/, 'sem a linha, sem o Copiar');
+  // o Copiar leva a linha inteira, com as quebras, e avisa por 2 s; sem a area de transferencia, avisa que nao copiou
+  const copiados = [];
+  let semAviso = null;
+  const ctxCopia = { H: [{ ...umGrill, linha: 'rode x\n/y' }], HS: { copia: null }, navigator: { clipboard: { writeText: async (t) => { copiados.push(t); } } },
+    renderHistorico: () => {}, setTimeout: (f) => { semAviso = f; } };
+  const copiar = vm.runInNewContext(/async function copiar\(caminho\)\{[\s\S]*?\n\}/.exec(raiz.txt)[0] + ' copiar', ctxCopia);
+  await copiar(umGrill.caminho);
+  assert.deepStrictEqual([copiados, ctxCopia.HS.copia.caminho, ctxCopia.HS.copia.ok], [['rode x\n/y'], umGrill.caminho, true]);
+  assert.match(vm.runInNewContext(/function tabelaHist\(todos\)\{[\s\S]*?\n\}/.exec(raiz.txt)[0] + ' tabelaHist',
+    { HS: ctxCopia.HS, esc: (s) => String(s), pilula: (p) => p, linkDe: (g) => g.caminho, quando: () => '', ESTADO: () => '' })(ctxCopia.H), />Copiado ✓</);
+  semAviso();
+  assert.strictEqual(ctxCopia.HS.copia, null, 'o aviso some');
+  ctxCopia.navigator = {};
+  await copiar(umGrill.caminho);
+  assert.strictEqual(ctxCopia.HS.copia.ok, false, 'sem a area de transferencia');
 
   // 17. o servidor de outra versao: sem grill ativo, o iniciar o troca; com grill ativo, ele fica
   const base2 = fs.mkdtempSync(path.join(os.tmpdir(), 'grill-tela-versao-'));
@@ -618,7 +641,7 @@ const RODADA = {
   const t0 = tamanho();
   for (const ruim of ['{', { tipo: 'terminal', questoes: [{ ...questao('Q1'), opcoes: [] }], respostas: [] },
     { ...doTerminal('Q1'), respostas: [{ id: 'Q9', marca: 'aceito', escolha: 'A', comentario: null }] },
-    { ...doTerminal('Q1'), respostas: [{ id: 'Q1', marca: 'talvez', escolha: 'A', comentario: null }] }, { tipo: 'outro' }]) {
+    { ...doTerminal('Q1'), respostas: [{ id: 'Q1', marca: 'talvez', escolha: 'A', comentario: null }] }, { tipo: 'outro' }, { tipo: 'linha', linha: ' ' }]) {
     r = roda('registrar', urlT, arquivo('ruim.json', ruim));
     assert.strictEqual(r.status, 1, JSON.stringify(ruim));
     assert.match(r.stderr, /registrar recusado/);
@@ -629,6 +652,19 @@ const RODADA = {
   assert.deepStrictEqual(eventosDe(urlT).pop(), { ...eventosDe(urlT).pop(), tipo: 'sim', documento: 'Nota X' });
   assert.strictEqual(roda('registrar', urlT, arquivo('sim.json', { tipo: 'sim', documento: 'Nota X' })).status, 1, 'o segundo sim');
   assert.strictEqual((await doH(urlT)).estado, 'concluido');
+  // a linha da leva vai a sessao em qualquer fase, sem mexer nela: a do terminal concluida e a que o
+  // sim da pagina concluiu, que o servidor segura; o historico a traz, e sem ela vem null
+  const LINHA = 'rode /macrex-skills:faz leva Nota X\n/mattpocock-skills:to-spec';
+  assert.strictEqual((await pedir(api(urlH, 'estado'))).json.fase, 'concluido');
+  for (const u of [urlT, urlH]) {
+    r = roda('registrar', u, arquivo('linha.json', { tipo: 'linha', linha: LINHA }));
+    assert.strictEqual(r.status, 0, r.stderr);
+    h = await doH(u);
+    assert.deepStrictEqual([h.estado, h.linha], ['concluido', LINHA]);
+  }
+  assert.strictEqual((await pedir(api(urlH, 'estado'))).json.fase, 'concluido', 'o grill na memoria segue concluido');
+  assert.strictEqual((await doH(url2)).linha, null, 'o grill sem a linha');
+  assert.strictEqual(roda('registrar', '--projeto', 'term', arquivo('linha.json', { tipo: 'linha', linha: LINHA })).status, 1, 'a linha sem a sessao do grill');
   // a sessao da tela com a rodada aberta recusa; a que voltou ao CLI recebe depois do cli, numerando em sequencia
   const urlR = iniciar();
   assert.strictEqual(roda('rodada', urlR, arquivo('rodada.json', RODADA)).status, 0);

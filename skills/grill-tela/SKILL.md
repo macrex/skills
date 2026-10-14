@@ -5,7 +5,7 @@ description: Canal tela do grilling do Matt Pocock — o mesmo grill, respondido
 
 # grill-tela — o grill do Matt numa tela HTML local
 
-# Versao: 2.13
+# Versao: 2.14
 
 Esta skill só troca o canal do `grilling`, cujas regras continuam valendo: em vez de perguntar no
 terminal, você publica cada rodada numa página local e espera o usuário responder lá. O
@@ -99,7 +99,7 @@ seguinte. Saiu com código 1 (não há o que retomar)? Voltar ao CLI.
 
 `G historico` sobe o servidor se preciso, abre o navegador e imprime a URL do histórico de grills
 (a raiz do servidor): os ativos no topo e todos os grills da máquina, com o projeto e o status de
-cada um. Passe-a ao usuário que pedir o histórico. `G abrir <url>` reabre um grill ou o
+cada um, e o Copiar do prompt da leva no grill que virou leva. Passe-a ao usuário que pedir o histórico. `G abrir <url>` reabre um grill ou o
 histórico, subindo o servidor se ele caiu.
 
 O grill feito no terminal entra no histórico por `G registrar`, que grava direto no disco, sem
@@ -108,8 +108,10 @@ leva ao terminal, e imprime a URL do grill:
 `G registrar --projeto <nome> [--pedido <texto>] <arquivo.json | ->` cria a sessão,
 `G registrar <url> <arquivo.json | ->` anexa a ela. O corpo é `{"tipo":"terminal","questoes":[…],"respostas":[…]}`
 (as questões no contrato da rodada; as respostas `{id, marca, escolha, comentario}`, a marca em
-`aceito`, `outra`, `delegado`, `esclarecer` ou `adiado`) ou `{"tipo":"sim","documento":"…"}`. No
-Claude Code o plugin o roda sozinho a cada rodada do grill da `/faz` no terminal; você não o roda.
+`aceito`, `outra`, `delegado`, `esclarecer` ou `adiado`) ou `{"tipo":"sim","documento":"…"}`.
+`{"tipo":"linha","linha":"…"}`, só com a `<url>`, grava a linha da leva que o grill virou em
+qualquer fase, para o Copiar do histórico. No Claude Code o plugin o roda sozinho a cada rodada do
+grill da `/faz` no terminal e na linha da leva; você não o roda.
 
 ## Voltar ao CLI
 

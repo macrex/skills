@@ -87,5 +87,5 @@ Um grill na tela sem o sim e sem a volta ao CLI, com algo acontecendo nele nas �
 _Evitar_: grill em curso, grill aberto
 
 **Histórico de grills**:
-A tela inicial da grill-tela: os grills ativos num bloco no topo e, abaixo, todos os grills já feitos na máquina, na tela ou no terminal (os do terminal entram pelo plugin), com o projeto e o status de cada um.
+A tela inicial da grill-tela: os grills ativos num bloco no topo e, abaixo, todos os grills já feitos na máquina, na tela ou no terminal (os do terminal entram pelo plugin), com o projeto, o status e, no que virou leva, o prompt dela para copiar.
 _Evitar_: lista de sessões, histórico (sozinho, que também é o de levas)

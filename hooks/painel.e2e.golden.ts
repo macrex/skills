@@ -1139,7 +1139,9 @@ registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
 abrir http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123
 historico
 registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
-  {"tipo":"sim","documento":"Painel em módulos"}`,
+  {"tipo":"sim","documento":"Painel em módulos"}
+registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
+  {"tipo":"linha","linha":"rode /macrex-skills:faz leva Painel em módulos\\n/mattpocock-skills:to-spec\\n/mattpocock-skills:to-tickets\\n/mattpocock-skills:implement-spec"}`,
   "93 sugestoes": `fill: rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets

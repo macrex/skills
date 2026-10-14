@@ -728,7 +728,7 @@ describe('painel da leva', () => {
     expect(publicadas).toEqual([4])
   })
 
-  test('o grill que o prompt do localizador fecha grava o sim no historico; sem nenhuma rodada, nada', async ($, on) => {
+  test('o grill que o prompt do localizador fecha grava o sim e a linha no historico; sem nenhuma rodada, nada', async ($, on) => {
     const { marco } = mundo($, on)
     const comandos: { args: string[]; corpo?: any }[] = []
     on('process.run', ($, e) => {
@@ -747,18 +747,23 @@ describe('painel da leva', () => {
     await $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'T', question: 'Onde?', multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
     comandos.length = 0
     await localizador()
-    expect(comandos).toEqual([{ args: ['registrar', 'http://127.0.0.1:47110/g/a/20261009-160000?t=abc123', '-'], corpo: { tipo: 'sim', documento: 'doc' } }])
+    expect(comandos).toEqual([
+      { args: ['registrar', 'http://127.0.0.1:47110/g/a/20261009-160000?t=abc123', '-'], corpo: { tipo: 'sim', documento: 'doc' } },
+      { args: ['registrar', 'http://127.0.0.1:47110/g/a/20261009-160000?t=abc123', '-'], corpo: { tipo: 'linha', linha: 'rode /macrex-skills:faz leva doc até o fim.\nO documento é o entendimento' } },
+    ])
   })
 
-  test('no canal tela, o sim do grill que a pagina conduz e dela: o entendimento nao roda o registrar', { options: { grill_canal: 'tela' } }, async ($, on) => {
+  test('no canal tela, o sim do grill que a pagina conduz e dela: o entendimento nao roda o registrar, e a linha da leva vai a sessao da pagina', { options: { grill_canal: 'tela' } }, async ($, on) => {
     const { marco } = mundo($, on)
     const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
     let estado: Record<string, any> = { fase: 'inicio', historico: [] }
     on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }))
     const comandos: string[] = []
+    const registrados: unknown[] = []
     on('process.run', ($, e) => {
       const sub = e.argv[2]
       comandos.push(sub)
+      if (sub === 'registrar') registrados.push([e.argv[3], JSON.parse(e.init?.stdin ?? '')])
       const stdout = sub === 'iniciar' ? `${URL}\n` : sub === 'aguardar' ? '{"tipo":"rodada","rodada":1,"respostas":[{"id":"Q1","marca":"aceito","escolha":"Sim","comentario":null}]}\n' : 'ok\n'
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
@@ -770,6 +775,9 @@ describe('painel da leva', () => {
     comandos.length = 0
     await marco({ marco: 'entendimento', documento: 'doc' })
     expect(comandos).toEqual([])
+    // a linha da leva e o que o Copiar do historico de grills leva
+    await marco({ marco: 'linha', linha: 'rode /macrex-skills:faz leva doc' })
+    expect(registrados).toEqual([[URL, { tipo: 'linha', linha: 'rode /macrex-skills:faz leva doc' }]])
   })
 
   test('no canal tela, a pagina que nao sobe deixa o grill no dialogo nativo; fora do grill, nada vai a pagina', { options: { grill_canal: 'tela' } }, async ($, on) => {

@@ -602,7 +602,7 @@ function atualiza(i){ // resumo, marca, linha, opções e lateral, sem render(),
 
 // ---------- histórico de grills (a raiz) ----------
 let H = null;                       // os grills da máquina, do mais novo ao mais velho
-const HS = { projeto:'', busca:'' }; // o chip de projeto e a busca
+const HS = { projeto:'', busca:'', copia:null }; // o chip de projeto, a busca e o Copiar que acabou de copiar
 const ATIVOS = ['rodada','lendo','final'];
 const separar = (gs, projeto, busca) => ({ ativos: gs.filter(g=>ATIVOS.includes(g.estado)), todos: gs.filter(g=>(!projeto||g.projeto===projeto) && (!busca||g.pedido.toLowerCase().includes(busca.toLowerCase()))) });
 const ESTADO = g => ({ rodada:`Rodada ${g.rodada} aguardando você`, lendo: g.rodada ? `Agente lendo a rodada ${g.rodada}` : 'Agente preparando a primeira rodada',
@@ -619,11 +619,20 @@ function cartaoAtivo(g){
 }
 function tabelaHist(todos){
   if(!todos.length) return '<p class="sub">Nenhum grill com este filtro.</p>';
-  return `<div class="caixa" style="overflow-x:auto"><table class="tab-hist"><tr><th>Data</th><th>Projeto</th><th>Pedido</th><th>Status</th><th class="estreita">Rodadas</th><th class="estreita">Decisões</th><th class="estreita">Duração</th></tr>
+  return `<div class="caixa" style="overflow-x:auto"><table class="tab-hist"><tr><th>Data</th><th>Projeto</th><th>Pedido</th><th>Status</th><th>Prompt</th><th class="estreita">Rodadas</th><th class="estreita">Decisões</th><th class="estreita">Duração</th></tr>
     ${todos.map(g=>`<tr data-href="${esc(linkDe(g))}" onclick="location.href=this.dataset.href"><td class="mono muted nw">${quando(g.inicio)}</td><td class="nw">${pilula(g.projeto)}</td>
       <td><a href="${esc(linkDe(g))}" style="color:inherit;text-decoration:none">${esc(g.pedido||'(sem nome)')}</a></td><td class="est-${g.estado}">${ESTADO(g)}</td>
+      <td class="nw">${g.linha?`<button class="chip" title="${esc(g.linha)}" aria-label="Copiar o prompt da leva" onclick="event.stopPropagation();copiar(${esc(JSON.stringify(g.caminho))})">${HS.copia?.caminho===g.caminho?(HS.copia.ok?'Copiado ✓':'Não copiou'):'Copiar'}</button>`:'<span class="muted">—</span>'}</td>
       <td class="estreita mono">${g.respondidas}</td><td class="estreita mono">${g.decisoes}${g.adrs?` · ${g.adrs} ADR`:''}</td>
       <td class="estreita mono muted">${Math.max(1,Math.round((g.ultimo-g.inicio)/60000))} min</td></tr>`).join('')}</table></div>`;
+}
+// o Copiar leva o prompt da leva inteiro, com as quebras: cada nome de skill segue numa linha so dele.
+// O aviso fica no HS por 2 s, porque a consulta de cada 3 s redesenha a tabela
+async function copiar(caminho){
+  let ok = true;
+  try{ await navigator.clipboard.writeText(H.find(g=>g.caminho===caminho).linha); }catch(e){ ok = false; }
+  HS.copia = { caminho, ok }; renderHistorico();
+  setTimeout(()=>{ if(HS.copia?.caminho===caminho){ HS.copia=null; renderHistorico(); } }, 2000);
 }
 // o esqueleto sai uma vez, e a consulta so troca as partes: a busca nao perde o foco
 function renderHistorico(){

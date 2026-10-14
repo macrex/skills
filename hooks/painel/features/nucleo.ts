@@ -138,11 +138,12 @@ const rodarTela = ($: EngineInterface, args: string[], init?: ProcessRunInit) =>
 // O grill do terminal no historico de grills: a rodada respondida no dialogo, ou o sim com o
 // documento, vai a sessao do grill na tela ou a do terminal, que a primeira rodada cria. A grill-tela
 // so grava em sessao no terminal, e a falha nunca para o grill. O sim do grill que a pagina conduz
-// (fora do canal cli) e da pagina, e nao vai.
-async function registrarNoHistoricoDeGrills($: EngineInterface, corpo: { tipo: 'sim'; documento?: string } | { tipo: 'terminal'; questoes: QuestaoDaTela[]; respostas: RespostaDaTela[] }) {
+// (fora do canal cli) e da pagina, e nao vai. A linha da leva vai a sessao que o grill ja tem, em
+// qualquer canal: e o prompt que o Copiar do historico de grills leva.
+async function registrarNoHistoricoDeGrills($: EngineInterface, corpo: { tipo: 'sim'; documento?: string } | { tipo: 'linha'; linha: string } | { tipo: 'terminal'; questoes: QuestaoDaTela[]; respostas: RespostaDaTela[] }) {
   const grill = await read($, GRILL)
   const alvo = grill?.tela ?? grill?.registro
-  if (!grill || (corpo.tipo === 'sim' && (!alvo || (grill.tela && grill.canal !== 'cli')))) return
+  if (!grill || (corpo.tipo !== 'terminal' && !alvo) || (corpo.tipo === 'sim' && grill.tela && grill.canal !== 'cli')) return
   const args = alvo ? ['registrar', alvo, '-'] : ['registrar', '--projeto', nomeDa(await $.session.root()), '--pedido', grill.pedido, '-']
   const r = await rodarTela($, args, { stdin: JSON.stringify(corpo) })
   const url = !alvo && r.exitCode === 0 && URL_DA_TELA.exec(r.stdout)?.[0]
@@ -674,6 +675,8 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       await update($, GRILL, () => grill)
       if (e.marco === 'grill') await update($, GRILL_DA_SESSAO, () => true)
       if (e.marco === 'entendimento') await registrarNoHistoricoDeGrills($, { tipo: 'sim', documento: grill.documento })
+      // a linha que o localizador ja trouxe nao vai de novo
+      if (e.marco === 'linha' && grill.linha !== atual?.linha) await registrarNoHistoricoDeGrills($, { tipo: 'linha', linha: grill.linha! })
       return { result: `marco registrado; ${e.marco}` }
     }
     const antes = await read($, LEVA)
@@ -899,6 +902,7 @@ export function registrarFerramentas(on: On, ctx: Contexto) {
         await salvarGrill($, novo)
         await update($, GRILL, () => novo)
         if (novo === fechado) await registrarNoHistoricoDeGrills($, { tipo: 'sim', documento: novo.documento })
+        if (novo.linha !== grill.linha) await registrarNoHistoricoDeGrills($, { tipo: 'linha', linha: novo.linha! })
         // o fim do grill: o painel vai a aba Grill com o cartao Prompt no topo, o Executar a vista. A
         // key so existe depois que o pane redesenha a aba, e a recusa de antes disso tenta de novo; o
         // pane fechado recusa todas, e a aba fica Grill para quando ele abrir
