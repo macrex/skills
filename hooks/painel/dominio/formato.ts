@@ -22,6 +22,30 @@ export function ticketDaLeva(leva: Leva) {
 export const somar = (a: Partial<Tokens> = {}, b: Partial<Tokens>) => Object.fromEntries(TOKENS.map(k => [k, (a[k] ?? 0) + (b[k] ?? 0)])) as Tokens
 // o custo medido da leva: o da sessao agora menos o do inicio; sem custo na sessao, nada
 export const comCusto = (leva: Leva, usd: number | undefined): Leva => (usd == null || leva.custoInicio == null ? leva : { ...leva, custo: usd - leva.custoInicio })
+// US$ por milhao de tokens de entrada, saida e leitura do cache, do mais especifico ao mais geral (o
+// claude-opus-5-5 antes do claude-opus-5); a escrita do cache e 1,25 vez a entrada
+// ponytail: a escrita conta toda como a de 5 min (a de 1 h e 2 vezes) e a tabela e a de 2026-10;
+// modelo novo ou preco mudado entra aqui
+const PRECOS: [string, number, number, number][] = [
+  ['claude-fable-5-1', 10, 50, 0.25],
+  ['claude-mythos-5-1', 10, 50, 0.25],
+  ['claude-fable-5', 10, 50, 1],
+  ['claude-mythos-5', 10, 50, 1],
+  ['claude-opus-5-5', 4, 20, 0.2],
+  ['claude-opus-5', 5, 25, 0.5],
+  ['claude-opus-4', 5, 25, 0.5],
+  ['claude-sonnet-5', 2, 10, 0.2],
+  ['claude-sonnet-4', 3, 15, 0.3],
+  ['claude-haiku-5-5', 0.1, 0.5, 0.01],
+  ['claude-haiku-4', 1, 5, 0.1],
+]
+// o custo de um turno pelos tokens e o modelo; o modelo fora da tabela nao tem custo
+export function custoDosTokens(u: Tokens & { model: string }) {
+  const preco = PRECOS.find(([id]) => u.model.includes(id))
+  if (!preco) return undefined
+  const [, entrada, saida, lido] = preco
+  return (u.input_tokens * entrada + u.cache_creation_input_tokens * entrada * 1.25 + u.output_tokens * saida + u.cache_read_input_tokens * lido) / 1e6
+}
 export const dolares = (usd: number) => `US$ ${usd.toFixed(2).replace('.', ',')}`
 // o custo do item da revisao, das correcoes ou da qualidade entre o marco que o abriu e o do
 // portao; o que se cruzou com outro da fase fica sem: o custo da sessao mede os dois juntos

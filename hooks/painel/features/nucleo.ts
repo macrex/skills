@@ -8,7 +8,7 @@ import type { AgentInfo, BuiltinToolResults, EngineInterface, On, ProcessRunInit
 import type { Grill, Leva, LevaAgente, LevaHistorico } from '../../../types/index.d.ts'
 import { FERRAMENTA, MARCOS, MARCOS_DO_GRILL, RONCO, FASES, PORTOES, MODOS, NO_HISTORICO, SKILL_DA_FASE, DA_LISTA, VIVOS, MUDAM, URL_DA_TELA, RETOMAR } from '../dominio/vocabulario.ts'
 import type { Aba, Marco } from '../dominio/vocabulario.ts'
-import { nomeDa, somar, porcento } from '../dominio/formato.ts'
+import { nomeDa, somar, porcento, custoDosTokens } from '../dominio/formato.ts'
 import { novoId, semSkill, retoma, doInicio, aplicar, aplicarNoGrill, naTela } from '../dominio/marcos.ts'
 import { vivo, idDeParar, alertas } from '../dominio/alertas.ts'
 import { arquivosDoDiff } from '../dominio/diff.ts'
@@ -500,6 +500,15 @@ async function semPermissao($: EngineInterface, agentId: string | undefined) {
   await update($, PERMISSAO, () => null)
   await alertar($)
 }
+// O turno do sub-agente que marcou tickets da leva aberta soma o custo dele, pelos tokens e o preco
+// do modelo, a cada um deles; o do laco principal o custo da sessao ja mede (no inline).
+async function custarTickets($: EngineInterface, agentId: string, uso: Parameters<typeof custoDosTokens>[0]) {
+  const usd = custoDosTokens(uso)
+  const dele = (l: Leva | null) => usd != null && l != null && !l.fechada && l.tickets.some(t => t.agentes?.includes(agentId))
+  if (!dele(await read($, LEVA))) return
+  const leva = await update($, LEVA, l => (dele(l) ? { ...l!, tickets: l!.tickets.map(t => (t.agentes?.includes(agentId) ? { ...t, custo: (t.custo ?? 0) + usd! } : t)) } : l))
+  if (leva) await $.store.set(chave(await $.session.root()), leva)
+}
 // Avisa num toast os alertas novos e redesenha a faixa quando a lista muda; diz se ha algum.
 async function alertar($: EngineInterface) {
   const lista = await alertasDe($)
@@ -672,7 +681,7 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
     // portao (nos modos paralelos os tickets correm juntos); erro aqui nunca para a leva
     const comUsd = ['inicio', 'item', 'fechamento'].includes(e.marco) || (['ticket', 'portao'].includes(e.marco) && antes?.modo === 'inline')
     const usd = comUsd ? await $.session.usage().then(u => u.cost?.usd, () => undefined) : undefined
-    const leva = aplicar(antes, e, await $.clock.now(), usd)!
+    const leva = aplicar(antes, e, await $.clock.now(), usd, chamada.agentId)!
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
     // a leva comeca (ou retoma): o grill sai da aba Geral
@@ -816,13 +825,14 @@ export function registrarPermissaoETurno(on: On) {
     return next(e)
   })
 
-  // o fim de cada turno: soma os tokens do loop para a aba Uso, fecha o sub-agente em background e
-  // apaga a permissao pendente
+  // o fim de cada turno: soma os tokens do loop para a aba Uso e o custo do sub-agente aos tickets
+  // dele, fecha o sub-agente em background e apaga a permissao pendente
   on('turn.complete', async ($, e, next) => {
     await semPermissao($, e.agentId)
     if (e.usage) {
       const loop = e.agentId ?? 'sessao'
       await update($, USO, uso => ({ ...uso, [loop]: { ...somar(uso[loop], e.usage!), modelo: e.usage!.model ?? uso[loop]?.modelo ?? '' } }))
+      if (e.agentId) await custarTickets($, e.agentId, e.usage)
     }
     if (e.agentId) {
       const fim = await $.clock.now()

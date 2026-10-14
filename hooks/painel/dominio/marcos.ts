@@ -40,16 +40,19 @@ export function levaNaCompactacao(leva: Leva) {
 }
 
 // Aplica um marco ao estado na hora `agora`, com o custo da sessao `usd` (no inicio, no
-// fechamento e, no modo inline, no ticket e no portao); devolve o estado novo ou { erro } sem
-// tocar no antigo. O switch nao tem default: o MARCOS.includes ja recusou o marco de fora dele, e o
-// undefined do tipo nunca sai. O estado aplicado guarda a hora do marco (marcadaEm), que o
-// hooks/so-com-pedido.ts le.
-export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number | undefined): Aplicado<Leva> | Erro | undefined {
-  const novo = aplicarSemHora(leva, m, agora, usd)
+// fechamento e, no modo inline, no ticket e no portao), e o `agentId` do sub-agente que marcou o
+// proprio ticket; devolve o estado novo ou { erro } sem tocar no antigo. O switch nao tem default:
+// o MARCOS.includes ja recusou o marco de fora dele, e o undefined do tipo nunca sai. O estado
+// aplicado guarda a hora do marco (marcadaEm), que o hooks/so-com-pedido.ts le.
+export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number | undefined, agentId?: string): Aplicado<Leva> | Erro | undefined {
+  const novo = aplicarSemHora(leva, m, agora, usd, agentId)
   return novo && !novo.erro ? { ...novo, marcadaEm: agora } : novo
 }
 
-function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number | undefined): Aplicado<Leva> | Erro | undefined {
+// o agente que marca o ticket entra nos dele: os turnos dele somam o custo do ticket (turn.complete)
+const comAgente = (t: LevaTicket, agentId: string | undefined) => (agentId && !t.agentes?.includes(agentId) ? { ...t, agentes: [...(t.agentes ?? []), agentId] } : t)
+
+function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number | undefined, agentId: string | undefined): Aplicado<Leva> | Erro | undefined {
   if (m.marco === 'inicio') {
     if (typeof m.documento !== 'string' || !m.documento.trim()) return { erro: 'inicio exige documento (titulo da nota ou caminho)' }
     if (m.sujos != null && !(Array.isArray(m.sujos) && m.sujos.every(s => typeof s === 'string'))) {
@@ -88,7 +91,7 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
       return {
         ...leva,
         // o custo do ticket conta do primeiro inicio, como o tempo, e so no inline
-        tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? { ...t, estado: 'em-curso', inicioEm: t.inicioEm ?? agora, custoInicio: t.custoInicio ?? usd } : t)),
+        tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? comAgente({ ...t, estado: 'em-curso', inicioEm: t.inicioEm ?? agora, custoInicio: t.custoInicio ?? usd }, agentId) : t)),
       }
     case 'portao': {
       if (!PORTOES.includes(m.portao as string)) return { erro: `portao deve ser verde ou vermelho, veio ${m.portao}` }
@@ -102,7 +105,7 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
       // fim e o custo do primeiro e so acrescenta o que veio
       const veio = Object.fromEntries(Object.entries(portao).filter(([, v]) => v !== undefined))
       const aplicado = (t: LevaTicket) => (t.estado === portao.estado && t.fimEm != null ? { ...t, ...veio, fimEm: t.fimEm } : { ...t, ...portao, ...custo(t) })
-      return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? aplicado(t) : t)) }
+      return { ...leva, tickets: leva.tickets.map(t => (t.id === String(m.ticket) ? comAgente(aplicado(t), agentId) : t)) }
     }
     case 'item': {
       const f = m.fase ?? leva.fase

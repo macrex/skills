@@ -20,7 +20,7 @@ relatório dizer que ela rodou. Antes do primeiro passo, nesta ordem:
 
 No Claude Code para-se **uma vez**, com os tickets na mesa, para o usuário escolher os modelos;
 nos outros harnesses não se para. Nada mais é perguntado — o conteúdo já foi confirmado no
-interrogatório, e o modo do implement é sempre o mais paralelo do harness.
+interrogatório, e o modo do implement é escolha sua, pelos critérios de "Os modos", abaixo.
 
 ## Onde as notas vivem
 
@@ -42,7 +42,7 @@ tracker que `to-spec`, `to-tickets` e `code-review` esperam ter recebido:
 |---|---|---|
 | to-spec | `to-spec <documento>`, expandindo o documento in-place; os seams vão na spec, mostrados, não perguntados | a spec com histórias, decisões de implementação e de teste, seams |
 | to-tickets | `to-tickets <spec>`; a tabela é mostrada, não perguntada. Instrua o corte: `bloqueadoPor` só quando um ticket usa código que outro cria; arquivo em comum não bloqueia; o contrato compartilhado (tipo, assinatura) vira um ticket pequeno na primeira onda, para os outros partirem juntos depois | um ticket por fatia vertical, em ondas largas |
-| implement | `implement-spec`, cumprida **no modo mais paralelo do harness** (logo abaixo): cada ticket na sua worktree, com commit no branch dele, e a conciliação de cada onda no branch da leva, que é o branch de integração dela. O `code-review`, as correções e o fechamento dela são os passos seguintes desta tabela, e o PR fica de fora: o commit vai só nesses branches, nunca na working tree principal | o branch da leva conciliado, suíte verde por ticket |
+| implement | `implement-spec`, cumprida **no modo que você escolheu** (logo abaixo): cada ticket na sua worktree, com commit no branch dele, e a conciliação de cada onda no branch da leva, que é o branch de integração dela. O `code-review`, as correções e o fechamento dela são os passos seguintes desta tabela, e o PR fica de fora: o commit vai só nesses branches, nunca na working tree principal | o branch da leva conciliado, suíte verde por ticket |
 | squash | sem skill: `git merge --squash leva/<slug>` na working tree principal ("Worktrees, conciliação e squash", abaixo) | tudo da leva staged, sem commit |
 | code-review | `code-review`. Com o squash staged e sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no modelo da revisão escolhido na terceira parada; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
 | correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo modelo da revisão, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo. O que elas mudam entra no índice só pelos caminhos da leva (`git add <caminho>`, nunca `git add -A`) | working tree corrigida e staged, suíte verde |
@@ -60,15 +60,48 @@ sessão** (recomendado) ou outro, que o usuário nomeia:
 - **o modelo da revisão** — os dois sub-agentes do `code-review` (Standards e Spec) e o agente
   das correções.
 
-O modo não se pergunta: diga em uma linha qual é e siga.
+O modo não se pergunta: diga em uma linha qual é e por quê, e siga.
 
-## Os modos: sempre o mais paralelo do harness
+## Os modos: o paralelismo que compensa
 
-O modo do implement é o mais paralelo que o seu harness oferece ("Modo do implement" na
-referência dele): workflow no Claude Code; sub-agents no Codex com `multi_agent` e no Pi com
-`pi-subagents`; inline onde não há sub-agente. Em todos, cada ticket nasce numa worktree, e só o
-`bloqueadoPor` separa ondas: os tickets de uma onda rodam juntos mesmo mexendo nos mesmos
-arquivos, e a conciliação resolve o encontro deles.
+Os modos que o seu harness oferece estão em "Modo do implement", na referência dele: workflow,
+sub-agents e inline no Claude Code; sub-agents no Codex com `multi_agent` e no Pi com
+`pi-subagents`; inline em todos. Em todos, cada ticket nasce numa worktree e só o `bloqueadoPor`
+separa ondas: os tickets de uma onda podem rodar juntos mesmo mexendo nos mesmos arquivos, e a
+conciliação resolve o encontro deles.
+
+Paralelismo não é o padrão: escolha o modo pela tabela de tickets, pesando o ganho de tempo contra
+o que ele custa.
+
+- **Quanto paraleliza de fato.** Ondas de um ticket só, ou uma cadeia em que cada ticket espera o
+  anterior, não ganham nada com agentes: inline. Dois ou três tickets por onda já pagam
+  sub-agentes. O workflow compensa com muitas ondas largas, em que a orquestração determinística e
+  a sessão livre durante a execução valem mais do que ler cada retorno.
+- **O que ele custa.** Cada agente lê de novo o código que toca, e os tokens se multiplicam pelos
+  agentes; cada onda paralela traz a sua conciliação; e os sub-agentes dividem a janela de 5 h com
+  a sessão. Tickets pequenos (um arquivo, minutos de trabalho) custam mais em agentes do que em
+  série.
+- **O que ele pode quebrar.** Tickets da mesma onda que reescrevem o mesmo trecho (o mesmo tipo
+  central, a mesma função, o mesmo arquivo de configuração) chegam à conciliação em conflito, e
+  resolvê-lo pode custar mais do que rodá-los em série. Nesse caso, só esse par vai em ondas
+  seguidas, e o resto da onda segue junto; se isso vale para a maior parte dos tickets, rode a
+  leva inline, mesmo que o harness permita mais.
+- **O que você precisa ver no caminho.** Sub-agents deixa você ler o retorno de cada ticket e
+  ajustar o prompt do seguinte antes da próxima onda; o workflow só devolve no fim. Spec com
+  pontos em aberto pede sub-agents ou inline.
+
+Em dúvida entre dois, fique com o menos paralelo.
+
+**Escolhido sub-agents ou workflow, paralelize o máximo.** O paralelismo não é imposto, mas,
+escolhido, ele só se paga com ondas largas, e o objetivo passa a ser o menor tempo até o fim:
+
+- só o `bloqueadoPor` real separa ondas, o de um ticket que usa código que outro cria; bloqueio
+  por precaução ou por arquivo em comum sai, e a conciliação resolve o encontro;
+- a onda inteira dispara de uma vez, nunca um agente esperando outro da mesma onda;
+- o contrato que prenderia vários tickets (um tipo, uma assinatura) vira um ticket pequeno na
+  primeira onda, para os outros partirem juntos na seguinte;
+- ticket grande que segura a onda seguinte sozinho se divide, onde a spec permite, em partes que
+  rodam juntas.
 
 **O que cada modo cumpre igual.** O preâmbulo — o `PREAMBULO` de
 `workflow-tickets.md`, ao lado deste arquivo: TDD nos seams acordados,
@@ -82,7 +115,8 @@ muda quem os executa:
   fim de cada onda.
 - **sub-agents**: a onda inteira dispara junta, um sub-agente por ticket ("Sub-agente" na
   referência do seu harness), no modelo do implement, cada um na sua worktree. O prompt de cada
-  um é o preâmbulo mais as notas dos tickets já conciliados, e o portão é você lendo o que ele
+  um é o preâmbulo mais as notas dos tickets já conciliados e, onde há painel, as linhas dos
+  marcos do próprio ticket (`marcos` de `workflow-tickets.md`), e o portão é você lendo o que ele
   devolve. Fechada a onda, um sub-agente no modelo do implement concilia.
 - **inline**: você, um ticket por vez, cada um na sua worktree. O portão roda antes de passar
   ao próximo, e fechada a onda você mesmo concilia.

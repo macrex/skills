@@ -5,16 +5,17 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `inicio`, logo depois das três reservadas, com o `documento` da linha (o que vem depois de `leva` na abertura, sem o `até o fim` dos prompts antigos) e os `sujos` (os caminhos
   do `git status --porcelain` de antes da leva); a leva já entra na fase `spec`.
 - `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
-  `qualidade`), a de `implement` com o `modo` (o mais paralelo do harness, `leva.md`) e o
+  `qualidade`), a de `implement` com o `modo` (o que você escolheu, `leva.md`) e o
   `branch` da leva (`leva/<slug>`), que o estado da leva guarda para a retomada.
 - `tickets` com a lista `{ id, titulo }` assim que o `to-tickets` publicar e de novo, inteira e com
   os novos no fim, quando a leva ganhar tickets (os que já andaram guardam o portão e o tempo; nunca
   reenvie o `portao` deles); `ticket` com o `id`
   dele ao começar cada um; `portao` com o `ticket`, `verde` ou `vermelho`, os `reparos` (0 a 2) e
   os `testes` (ex. `3/4`, até 20 caracteres) quando o executor os informou, e as `notas` do que
-  ele entregou (até 500 caracteres). No modo workflow quem marca `ticket` e `portao` são os
-  agentes de cada ticket, de dentro do workflow (o esqueleto de `workflow-tickets.md` os manda),
-  porque só eles veem a hora real do começo e do fim. Quando a notificação do fim chegar, a sessão
+  ele entregou (até 500 caracteres). Nos modos workflow e sub-agents quem marca `ticket` e
+  `portao` são os agentes de cada ticket (as linhas de `marcos`, em `workflow-tickets.md`, vão no
+  prompt deles), porque só eles veem a hora real do começo e do fim, e o painel soma ao ticket o
+  custo dos turnos do agente que o marcou. Quando a notificação do fim chegar, a sessão
   só acerta o que diverge do retorno: `portao` vermelho para os `parados` e os `pendentes`, e
   `ticket` e `portao` para o fechado que nenhum agente marcou. O verde já marcado não se reenvia.
 - `item` na conciliação de cada onda, na fase implement: `Conciliação <n>`, com o `<n>` da onda,

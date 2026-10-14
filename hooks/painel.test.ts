@@ -2363,6 +2363,35 @@ describe('painel da leva', () => {
     expect(await ui.find({ text: /US\$/ })).toBeUndefined()
   })
 
+  test('no workflow, o ticket mostra o custo dos turnos do agente que o marcou, pelos tokens e o preco do modelo; o laco principal e o modelo sem preco ficam fora', async ($, on) => {
+    const { marco, relogio } = mundo($, on)
+    on('turn.complete', () => ({ text: '' }))
+    const turno = (model: string, entrada: number, saida: number, lido: number, criado: number, agentId?: string) =>
+      $.turn.complete({
+        answer: '', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer', ...(agentId ? { agentId } : {}),
+        usage: { model, input_tokens: entrada, output_tokens: saida, cache_read_input_tokens: lido, cache_creation_input_tokens: criado },
+      } as never)
+    const doAgente = (agentId: string, input: Record<string, unknown>) => $.tool.call({ tool: MARCO, agentId, ...input } as never)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'tickets', tickets: TICKETS })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'workflow' })
+    await doAgente('a1', { marco: 'ticket', ticket: '01' })
+    await doAgente('a2', { marco: 'ticket', ticket: '02' })
+    await relogio.advance(segundos(60))
+    await doAgente('a1', { marco: 'portao', ticket: '01', portao: 'verde' })
+    await doAgente('a2', { marco: 'portao', ticket: '02', portao: 'verde' })
+    // Opus 5.5: 0,1M de entrada a US$ 4, 10k de saida a US$ 20 e 1M lido do cache a US$ 0,20
+    await turno('claude-opus-5-5', 100_000, 10_000, 1_000_000, 0, 'a1')
+    // Sonnet 5.5: 20k de saida a US$ 10, 0,5M lido a US$ 0,20 e 40k escritos no cache a 1,25 x US$ 2
+    await turno('claude-sonnet-5-5', 0, 20_000, 500_000, 40_000, 'a2')
+    // o laco principal e o agente de modelo sem preco nao entram no custo do ticket
+    await turno('claude-opus-5-5', 1_000_000, 0, 0, 0)
+    await turno('modelo-sem-preco', 1_000_000, 0, 0, 0, 'a1')
+    const ui = await $.ui.mount(PANE)
+    expect(await quadro(ui)).toMatch(/01 {2}Mod do painel {2,}portão ✓ {2}US\$ 0,80 {2,}1m00s/)
+    expect(await quadro(ui)).toMatch(/02 {2}Ferramenta faz_marco {2,}portão ✓ {2}US\$ 0,40 {2,}1m00s/)
+  })
+
   test('o item da revisao, das correcoes e da qualidade que rodou sozinho mostra o custo antes do tempo, e o titulo do cartao o total da fase; os que se cruzam, so o total', async ($, on) => {
     const { marco, usar, relogio } = mundo($, on)
     usar({ cost: { usd: 1 } })
