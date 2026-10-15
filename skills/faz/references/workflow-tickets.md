@@ -10,11 +10,11 @@ arquivo rodam juntos. Com `WORKTREES`, cada ticket da onda roda na sua worktree 
 'worktree'`), num branch próprio, `leva/<slug>-<n>`, criado da ponta do branch da leva, e commita
 ali, nunca na working tree principal. Os dois reparos rodam na mesma worktree; vermelho depois
 deles, param ele e os que ele bloqueia. Depois de cada onda, um agente de **conciliação**, no
-modelo do implement, verifica o branch da leva numa worktree dele e faz `git merge --no-ff` de
-cada branch de ticket verde, um a um, resolvendo os conflitos sem perguntar e rodando a
-verificação inteira depois de cada merge, com até dois reparos: vermelho depois deles, ele desfaz
-aquele merge (`git reset --hard` para a ponta de antes) e param o ticket e os que dependem dele,
-enquanto os independentes seguem. Ticket nunca é refeito porque a base mudou. Assim o branch da
+modelo do implement, faz numa worktree do branch da leva `git merge --no-ff` de cada branch de
+ticket verde, um a um, resolvendo os conflitos sem perguntar e rodando a verificação rápida depois
+de cada merge e a inteira uma vez, depois do último, com até dois reparos: vermelho depois deles,
+ele desfaz o merge culpado (`git reset --hard` para a ponta de antes dele) e param o ticket e os
+que dependem dele, enquanto os independentes seguem. Ticket nunca é refeito porque a base mudou. Assim o branch da
 leva nunca fica vermelho, e a onda seguinte parte da ponta dele. A worktree e o branch de cada
 ticket somem na conciliação da onda; a worktree do branch da leva e o próprio branch, só pela
 sessão, depois do squash. Sem `WORKTREES`, cada onda roda em cadeia direto na working tree
@@ -24,7 +24,8 @@ não deixa os seguintes partirem limpos.
 Cinco coisas você preenche antes de rodar, e todas saem do projeto, não daqui: onde os tickets
 estão (o tracker que o `/faz` já escolheu), o `bloqueadoPor` de cada um (a coluna dos bloqueios
 da tabela do `to-tickets`), **os comandos de verificação do projeto** (a suíte, e o que mais o
-repositório oferece — tipos, lint, build), a `RAIZ` com o `BRANCH` da leva e a pasta `LEVA_WT`
+repositório oferece — tipos, lint, build — e, entre eles, os de segundos, que a conciliação roda
+depois de cada merge), a `RAIZ` com o `BRANCH` da leva e a pasta `LEVA_WT`
 da worktree dele (no scratchpad da sessão; a conciliação a cria se não existe), e uma dica por
 ticket que economize exploração ao agente. O `BRANCH` é `leva/<slug>`, que a sessão cria do
 `HEAD` no começo do implement (`git -C <raiz> branch leva/<slug>`) e reaproveita na retomada.
@@ -49,6 +50,10 @@ const TICKETS = [
 // Os comandos reais do projeto, um por linha. Se o repositorio nao tem um
 // verificador alem do teste, esta lista tem uma linha so.
 const VERIFICACAO = ['<comando de teste>', '<comando de tipos/lint/build>']
+// o que a conciliacao roda depois de cada merge: os comandos de segundos (a suite unitaria, os
+// tipos); a VERIFICACAO, com o e2e e o que mais demora, roda uma vez, depois do ultimo merge da
+// onda. Verificacao toda de segundos: repita a VERIFICACAO
+const VERIFICACAO_RAPIDA = ['<comando de teste>']
 
 // a working tree principal, o branch da leva (a sessao o cria do HEAD), a worktree dele, e false
 // sem git ou sem commit: a worktree nasce do HEAD
@@ -138,9 +143,11 @@ function conciliar(onda, prontos, feitos) {
     `Voce concilia a onda ${onda} no branch da leva, ${BRANCH}, sem perguntar nada a ninguem. Commit so no branch da leva, ${SO_LOCAL}`,
     `Painel da leva: carregue mcp__macrex-skills__faz_marco pelo ToolSearch e, como primeira acao, chame-a com { marco: 'item', item: 'Conciliação ${onda}' }; como ultima, de novo com o mesmo item, portao 'verde' ou 'vermelho' (a ultima verificacao do branch da leva) e detalhe '<conciliados>/${prontos.length}'. Ferramenta ausente ou recusada: siga sem ela.`,
     `Trabalhe em ${LEVA_WT}, a worktree do branch da leva; se ela nao existe, crie-a com \`git -C "${RAIZ}" worktree add "${LEVA_WT}" ${BRANCH}\` e instale nela a dependencia que o .gitignore deixa de fora e a verificacao pede. Os comandos sao do bash: rode todo git com -C "${LEVA_WT}" e a verificacao de dentro dela.`,
-    `Primeiro rode: ${VERIFICACAO.join(' && ')}. Vermelha antes de qualquer merge: nao faca nenhum, va direto a remocao e devolva o resultado dessa verificacao.`,
-    `Verde: para cada branch abaixo, nesta ordem, anote a ponta (\`git -C "${LEVA_WT}" rev-parse HEAD\`), faca \`git -C "${LEVA_WT}" merge --no-ff <branch>\`, resolva os conflitos voce mesmo, juntando a intencao dos dois lados, conclua o merge e rode a verificacao inteira.`,
-    `Vermelha: ate dois reparos, cada um commitado no branch da leva. Vermelha depois deles: desfaca aquele merge com \`git -C "${LEVA_WT}" reset --hard <a ponta anotada>\`, ponha o ticket em recusados e siga para o seguinte.`,
+    'A ponta atual do branch da leva ja passou pela verificacao inteira (na conciliacao anterior, ou no portao de cada ticket, que a roda sobre ela): nao a verifique antes dos merges.',
+    `Para cada branch abaixo, nesta ordem, anote a ponta (\`git -C "${LEVA_WT}" rev-parse HEAD\`), faca \`git -C "${LEVA_WT}" -c rerere.enabled=true merge --no-ff <branch>\`, resolva os conflitos voce mesmo, juntando a intencao dos dois lados, conclua o merge e rode a verificacao rapida: ${VERIFICACAO_RAPIDA.join(' && ')}.`,
+    `Rapida vermelha: ate dois reparos, cada um commitado no branch da leva. Vermelha depois deles: desfaca aquele merge com \`git -C "${LEVA_WT}" reset --hard <a ponta anotada>\`, ponha o ticket em recusados e siga para o seguinte.`,
+    `Depois do ultimo merge, rode a verificacao inteira, uma vez: ${VERIFICACAO.join(' && ')}. Vermelha: ache o merge que trouxe a falha pelo que ela toca; sem causa evidente, \`git -C "${LEVA_WT}" bisect start --first-parent HEAD <a primeira ponta anotada>\` com a inteira como teste. Ate dois reparos, cada um commitado; vermelha depois deles, desfaca o merge culpado (reset --hard para a ponta de antes dele), refaca os que vinham depois com a rapida (o rerere repete os conflitos ja resolvidos), ponha o culpado em recusados e rode a inteira de novo. Falha que nao toca nenhum ticket da onda: rode a inteira na primeira ponta anotada; vermelha la, o vermelho e de antes da onda: desfaca todos os merges (reset --hard para ela), nenhum conciliado, va direto a remocao e devolva o resultado dessa verificacao.`,
+    'Uma verificacao vale para a arvore em que rodou: commitar o que acabou de passar nao pede outra, e o reparo se commita antes de ser verificado. Falha intermitente se repete so ate a verificacao fechar; as rodadas que confirmam um reparo contam como a verificacao dele.',
     prontos.map((f) => `- ticket ${f.t.n}: ${ramo(f.t)}`).join('\n') || '(nenhum)',
     `Por fim remova estas worktrees com \`git -C "${RAIZ}" worktree remove --force <caminho>\`, o branch worktree-<pasta> que o harness criou com cada uma, se existe, e os branches dos tickets da onda com \`git -C "${RAIZ}" branch -D\`; o que nao sair (arquivo preso no Windows) vai em notes. Nunca remova ${LEVA_WT} nem ${BRANCH}.`,
     feitos.flatMap((f) => f.worktrees).join('\n') || '(nenhuma worktree)',

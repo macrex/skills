@@ -121,7 +121,15 @@ muda quem os executa:
   referência do seu harness), no modelo do implement, cada um na sua worktree. O prompt de cada
   um é o preâmbulo mais as notas dos tickets já conciliados e, onde há painel, as linhas dos
   marcos do próprio ticket (`marcos` de `workflow-tickets.md`), e o portão é você lendo o que ele
-  devolve. Fechada a onda, um sub-agente no modelo do implement concilia.
+  devolve. A conciliação não espera a onda fechar, onde o harness manda mensagem a um sub-agente
+  ("Mensagem a um sub-agente" na referência dele): o primeiro ticket verde abre o sub-agente que
+  concilia, no modelo do implement, com o prompt de `conciliar` só com ele e a linha "outros
+  tickets da onda chegam por mensagem: depois do merge e da rápida de cada um, devolva o que fez e
+  espere; a inteira e a remoção, só quando a mensagem disser que a onda fechou". Cada verde
+  seguinte vai a ele por mensagem, na ordem em que chega; a última, depois que o último ticket da
+  onda voltou, diz que ela fechou e traz as worktrees e os branches a remover. Assim só a rápida
+  roda enquanto os outros tickets trabalham, e a inteira, com a máquina livre. Sem mensagem a
+  sub-agente, fechada a onda, um sub-agente no modelo do implement concilia.
 - **inline**: você, um ticket por vez, cada um na sua worktree. O portão roda antes de passar
   ao próximo, e fechada a onda você mesmo concilia.
 
@@ -135,9 +143,12 @@ muda quem os executa:
   fora (`node_modules`, venv) e a verificação pede se instala em cada worktree.
 - **Conciliação**, ao fim de cada onda, automática e sem perguntar nada: numa worktree do branch
   da leva (`git worktree add <pasta> leva/<slug>`), um `git merge --no-ff leva/<slug>-<n>` por
-  ticket verde da onda, os conflitos resolvidos ali, e a verificação inteira depois de cada merge,
-  com até dois reparos commitados no branch da leva. A onda seguinte parte da ponta conciliada;
-  ticket nunca é refeito porque a base mudou.
+  ticket verde da onda, os conflitos resolvidos ali, a verificação rápida (os comandos de
+  segundos) depois de cada merge e a inteira uma vez, depois do último, com até dois reparos
+  commitados no branch da leva. A ponta de antes da onda não se reverifica: a conciliação
+  anterior, ou o portão de cada ticket, já rodou a inteira sobre ela; nem a árvore que acabou de
+  passar, só porque ganhou um commit. A onda seguinte parte da ponta conciliada; ticket nunca é
+  refeito porque a base mudou.
 - **Squash**, depois do implement, na working tree principal: antes, compare
   `git diff --name-only HEAD leva/<slug>` com os sujos de antes da leva. Sujo que o squash
   sobrescreveria interrompe a leva ali, sem squash, e o relatório diz qual é. Sem colisão,
@@ -181,10 +192,11 @@ por quê.
 - Ticket vermelho depois dos dois reparos para **só ele e os que dependem dele**, em qualquer
   modo: o branch dele não entra na conciliação, e os independentes seguem. O relatório diz qual
   ficou, e os passos seguintes rodam sobre os tickets que fecharam.
-- Conciliação vermelha depois dos dois reparos desfaz o merge daquele ticket
-  (`git reset --hard` para a ponta de antes dele) e o para, com os que dependem dele; os outros da
-  onda seguem conciliando.
-- A conciliação que acha o branch da leva já vermelho, antes de qualquer merge, para o implement
+- Conciliação vermelha depois dos dois reparos desfaz o merge do ticket culpado — o da rápida
+  vermelha ou, na inteira do fim, o que a falha toca ou o `git bisect` aponta — (`git reset --hard`
+  para a ponta de antes dele) e o para, com os que dependem dele; os outros da onda seguem
+  conciliando.
+- A conciliação cuja falha já está na ponta de antes da onda desfaz todos os merges e para o implement
   inteiro, com `entregues`, `parados` e `pendentes` no retorno. Rode a verificação você mesmo,
   conserte o que for do portão ou do código, e retome do próximo (fim de `workflow-tickets.md`) —
   **uma vez**. Vermelho de novo: o implement para ali, os passos seguintes rodam sobre os tickets

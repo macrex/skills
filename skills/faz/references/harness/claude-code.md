@@ -8,6 +8,8 @@
   mensagem que virou comando: peça ao usuário que cole o nome de novo, sozinho numa linha, e espere.
 - **Perguntar:** `AskUserQuestion`.
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
+- **Mensagem a um sub-agente:** `SendMessage`, com o `name` dele; o que já devolveu retoma com o
+  contexto.
 - **Modo do implement:** workflow, pela ferramenta `Workflow`, com o esqueleto em
   `references/workflow-tickets.md`; sub-agents, pelo `Agent`, a onda inteira junta, um ticket por
   worktree, e um sub-agente concilia; ou inline. O usuário escolhe na terceira parada, com a sua recomendação pelos critérios de
