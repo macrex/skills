@@ -294,91 +294,91 @@ outro mod`,
   "23 leva implement agentes sem saida · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  2m34s
+Leva · Painel em módulos  [ Limpar ]  10m34s
 Fases
 [ grill ]  18s ✓  to-spec          9s ✓  to-tickets !     6s ✓
-implement     2m19s ◐  code-review         —  correções           —
+implement    10m19s ◐  code-review         —  correções           —
 qualidade           —
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro                                      em curso ◐   2m01s
+02  Domínio puro                                      em curso ◐  10m01s
 03  Composition root                                    pendente        
 Sub-agentes
-sonnet-testes                                 sonnet  rodando      2m01s
-[ Parar ]  sem saída há 2 min
-workflow tickets                                      rodando      2m01s
+sonnet-testes                                 sonnet  rodando     10m01s
+[ Parar ]  sem saída há 10 min
+workflow tickets                                      rodando     10m01s
 [ Parar ]
-haiku-time                                     haiku  rodando      2m01s
-[ Parar ]  sem saída há 2 min
+haiku-time                                     haiku  rodando     10m01s
+[ Parar ]  sem saída há 10 min
 opus-implement-01                    claude-opus-5-5  concluído    1m35s`,
   "23 leva implement agentes sem saida · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  2m34s
+Leva · Painel em módulos  [ Limpar ]  10m34s
 Fases
 [ grill ]  18s ✓  to-spec          9s ✓  to-tickets !     6s ✓
-implement     2m19s ◐  code-review         —  correções           —
+implement    10m19s ◐  code-review         —  correções           —
 qualidade           —
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro                                      em curso ◐   2m01s
+02  Domínio puro                                      em curso ◐  10m01s
 03  Composition root                                    pendente        
 Sub-agentes
-sonnet-testes                                 sonnet  rodando      2m01s
-[ Parar ]  sem saída há 2 min
-workflow tickets                                      rodando      2m01s
+sonnet-testes                                 sonnet  rodando     10m01s
+[ Parar ]  sem saída há 10 min
+workflow tickets                                      rodando     10m01s
 [ Parar ]
-haiku-time                                     haiku  rodando      2m01s
-[ Parar ]  sem saída há 2 min
+haiku-time                                     haiku  rodando     10m01s
+[ Parar ]  sem saída há 10 min
 opus-implement-01                    claude-opus-5-5  concluído    1m35s`,
-  "24 faixa alerta sem saida · terminal": `Leva · implement · ticket 2/3 · 2m34s  [ Abrir painel ]
-sonnet-testes sem saída há 2 min · haiku-time sem saída há 2 min
+  "24 faixa alerta sem saida · terminal": `Leva · implement · ticket 2/3 · 10m34s  [ Abrir painel ]
+sonnet-testes sem saída há 10 min · haiku-time sem saída há 10 min
 outro mod`,
-  "24 faixa alerta sem saida · desktop": `Leva · implement · ticket 2/3 · 2m34s  [ Abrir painel ]
-sonnet-testes sem saída há 2 min · haiku-time sem saída há 2 min
+  "24 faixa alerta sem saida · desktop": `Leva · implement · ticket 2/3 · 10m34s  [ Abrir painel ]
+sonnet-testes sem saída há 10 min · haiku-time sem saída há 10 min
 outro mod`,
   "25 leva portao vermelho · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  2m37s
+Leva · Painel em módulos  [ Limpar ]  10m37s
 Fases
 [ grill ]  18s ✓  to-spec          9s ✓  to-tickets !     6s ✓
-implement     2m22s ◐  code-review         —  correções           —
+implement    10m22s ◐  code-review         —  correções           —
 qualidade           —
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro                          portão 3/4 ✗  US$ 0,30   2m02s
+02  Domínio puro                          portão 3/4 ✗  US$ 0,30  10m02s
 03  Composition root                                    pendente        
 Sub-agentes
-sonnet-testes                                 sonnet  rodando      2m04s
+sonnet-testes                                 sonnet  rodando     10m04s
 [ Parar ]
-workflow tickets                                      rodando      2m04s
+workflow tickets                                      rodando     10m04s
 [ Parar ]
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-haiku-time                                     haiku  concluído    2m01s`,
+haiku-time                                     haiku  concluído   10m01s`,
   "25 leva portao vermelho · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  2m37s
+Leva · Painel em módulos  [ Limpar ]  10m37s
 Fases
 [ grill ]  18s ✓  to-spec          9s ✓  to-tickets !     6s ✓
-implement     2m22s ◐  code-review         —  correções           —
+implement    10m22s ◐  code-review         —  correções           —
 qualidade           —
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro                          portão 3/4 ✗  US$ 0,30   2m02s
+02  Domínio puro                          portão 3/4 ✗  US$ 0,30  10m02s
 03  Composition root                                    pendente        
 Sub-agentes
-sonnet-testes                                 sonnet  rodando      2m04s
+sonnet-testes                                 sonnet  rodando     10m04s
 [ Parar ]
-workflow tickets                                      rodando      2m04s
+workflow tickets                                      rodando     10m04s
 [ Parar ]
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-haiku-time                                     haiku  concluído    2m01s`,
-  "26 faixa portao vermelho · terminal": `Leva · implement · ticket 2/3 · 2m37s  [ Abrir painel ]
+haiku-time                                     haiku  concluído   10m01s`,
+  "26 faixa portao vermelho · terminal": `Leva · implement · ticket 2/3 · 10m37s  [ Abrir painel ]
 ticket 02 com portão vermelho
 outro mod`,
-  "26 faixa portao vermelho · desktop": `Leva · implement · ticket 2/3 · 2m37s  [ Abrir painel ]
+  "26 faixa portao vermelho · desktop": `Leva · implement · ticket 2/3 · 10m37s  [ Abrir painel ]
 ticket 02 com portão vermelho
 outro mod`,
   "27 faixa portao vermelho no turno · terminal": `ticket 02 com portão vermelho
@@ -387,29 +387,29 @@ outro mod`,
 outro mod`,
   "28 spinner implement · terminal": `Sauteing · implement · ticket 2/3…`,
   "28 spinner implement · desktop": `Sauteing · implement · ticket 2/3…`,
-  "29 faixa permissao pendente · terminal": `Leva · implement · ticket 2/3 · 2m41s  [ Abrir painel ]
+  "29 faixa permissao pendente · terminal": `Leva · implement · ticket 2/3 · 10m41s  [ Abrir painel ]
 permissão pendente: Bash
 outro mod`,
-  "29 faixa permissao pendente · desktop": `Leva · implement · ticket 2/3 · 2m41s  [ Abrir painel ]
+  "29 faixa permissao pendente · desktop": `Leva · implement · ticket 2/3 · 10m41s  [ Abrir painel ]
 permissão pendente: Bash
 outro mod`,
-  "30 faixa agente aguardando · terminal": `Leva · code-review · ticket 3/3 · 2m52s  [ Abrir painel ]
+  "30 faixa agente aguardando · terminal": `Leva · code-review · ticket 3/3 · 10m52s  [ Abrir painel ]
 sonnet-revisor aguardando
 outro mod`,
-  "30 faixa agente aguardando · desktop": `Leva · code-review · ticket 3/3 · 2m52s  [ Abrir painel ]
+  "30 faixa agente aguardando · desktop": `Leva · code-review · ticket 3/3 · 10m52s  [ Abrir painel ]
 sonnet-revisor aguardando
 outro mod`,
   "31 leva qualidade geral · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 Fases
 [ grill ]  18s ✓  to-spec          9s ✓  to-tickets !     6s ✓
-implement     2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement    10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ◐
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -420,21 +420,21 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      2s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s`,
   "31 leva qualidade geral · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 Fases
 [ grill ]  18s ✓  to-spec          9s ✓  to-tickets !     6s ✓
-implement     2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement    10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ◐
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -445,22 +445,22 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      2s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s`,
   "32 leva qualidade geral estreito · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 Fases
 [ grill ]  18s ✓  to-spec       9s ✓
-to-tickets !  6s ✓  implement  2m36s ✓
+to-tickets !  6s ✓  implement 10m36s ✓
 code-review ! 9s ✓  correções     5s ✓
 qualidade     5s ◐
 Tickets
 01  E2… portão 109/109 ✓  US$ 0,30     18s
-02  D… portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  D… portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Co… portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da … 3 achados ✓  US$ 0,30      9s
@@ -471,22 +471,22 @@ Testes                   112/112 ✓      3s
 Build                   em curso ◐      2s
 Sub-agentes
 opus-… claude-opus-5-5  concluído    1m35s
-son… claude-sonnet-5-5  concluído    2m08s
-workflow tickets        concluído    2m08s
-haiku-time       haiku  concluído    2m01s
+son… claude-sonnet-5-5  concluído   10m08s
+workflow tickets        concluído   10m08s
+haiku-time       haiku  concluído   10m01s
 sonnet-revisor  sonnet  concluído       1s`,
   "32 leva qualidade geral estreito · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 Fases
 [ grill ]  18s ✓  to-spec       9s ✓
-to-tickets !  6s ✓  implement  2m36s ✓
+to-tickets !  6s ✓  implement 10m36s ✓
 code-review ! 9s ✓  correções     5s ✓
 qualidade     5s ◐
 Tickets
 01  E2… portão 109/109 ✓  US$ 0,30     18s
-02  D… portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  D… portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Co… portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da … 3 achados ✓  US$ 0,30      9s
@@ -497,9 +497,9 @@ Testes                   112/112 ✓      3s
 Build                   em curso ◐      2s
 Sub-agentes
 opus-… claude-opus-5-5  concluído    1m35s
-son… claude-sonnet-5-5  concluído    2m08s
-workflow tickets        concluído    2m08s
-haiku-time       haiku  concluído    2m01s
+son… claude-sonnet-5-5  concluído   10m08s
+workflow tickets        concluído   10m08s
+haiku-time       haiku  concluído   10m01s
 sonnet-revisor  sonnet  concluído       1s`,
   "33 tickets · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━━━
@@ -507,7 +507,7 @@ Tickets  verdes
 Painel em módulos  3/3
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 O e2e percorre a leva inteira e compara cada quadro com o golden.
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 Marcos, diff e árvore sem $.
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 sem notas ainda`,
@@ -517,7 +517,7 @@ Tickets  verdes
 Painel em módulos  3/3
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
 O e2e percorre a leva inteira e compara cada quadro com o golden.
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 Marcos, diff e árvore sem $.
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 sem notas ainda`,
@@ -560,13 +560,13 @@ sujos: velho.txt
 03 Composition root: verde
 auto -> {}
 precompute -> {"skip":"leva aberta: o resumo leva o estado dela"}`,
-  "36 faixa com o pane aberto · terminal": `Leva · qualidade · ticket 3/3 · 3m10s
+  "36 faixa com o pane aberto · terminal": `Leva · qualidade · ticket 3/3 · 11m10s
 outro mod`,
-  "36 faixa com o pane aberto · desktop": `Leva · qualidade · ticket 3/3 · 3m10s
+  "36 faixa com o pane aberto · desktop": `Leva · qualidade · ticket 3/3 · 11m10s
 outro mod`,
-  "37 faixa com o pane fechado · terminal": `Leva · qualidade · ticket 3/3 · 3m10s  [ Abrir painel ]
+  "37 faixa com o pane fechado · terminal": `Leva · qualidade · ticket 3/3 · 11m10s  [ Abrir painel ]
 outro mod`,
-  "37 faixa com o pane fechado · desktop": `Leva · qualidade · ticket 3/3 · 3m10s  [ Abrir painel ]
+  "37 faixa com o pane fechado · desktop": `Leva · qualidade · ticket 3/3 · 11m10s  [ Abrir painel ]
 outro mod`,
   "38 linha do marco · terminal": `◆ marco portao · ticket 01 · verde`,
   "38 linha do marco · desktop": `◆ marco portao · ticket 01 · verde`,
@@ -801,15 +801,15 @@ rode /macrex-skills:faz leva Painel em módulos
   "50 leva fechada · terminal": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 leva fechada, falta o /cpv
 Fases
 [ grill ]  18s ✓  to-spec !        9s ✓  to-tickets !     6s ✓
-implement !   2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement !  10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ✓
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -820,25 +820,25 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s
 Histórico
-Painel em módulos · total 3m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
+Painel em módulos · total 11m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
 Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos 2 · claude-opus-5-5 · claude-haiku-5-5`,
   "50 leva fechada · desktop": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 leva fechada, falta o /cpv
 Fases
 [ grill ]  18s ✓  to-spec !        9s ✓  to-tickets !     6s ✓
-implement !   2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement !  10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ✓
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -849,12 +849,12 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s
 Histórico
-Painel em módulos · total 3m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
+Painel em módulos · total 11m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
 Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos 2 · claude-opus-5-5 · claude-haiku-5-5`,
   "51 faixa leva fechada · terminal": `outro mod`,
   "51 faixa leva fechada · desktop": `outro mod`,
@@ -863,15 +863,15 @@ Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos
   "53 leva fechada cpv rodou · terminal": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 leva fechada, /cpv rodou
 Fases
 [ grill ]  18s ✓  to-spec !        9s ✓  to-tickets !     6s ✓
-implement !   2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement !  10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ✓
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -882,25 +882,25 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s
 Histórico
-Painel em módulos · total 3m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
+Painel em módulos · total 11m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
 Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos 2 · claude-opus-5-5 · claude-haiku-5-5`,
   "53 leva fechada cpv rodou · desktop": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 leva fechada, /cpv rodou
 Fases
 [ grill ]  18s ✓  to-spec !        9s ✓  to-tickets !     6s ✓
-implement !   2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement !  10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ✓
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -911,12 +911,12 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s
 Histórico
-Painel em módulos · total 3m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
+Painel em módulos · total 11m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
 Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos 2 · claude-opus-5-5 · claude-haiku-5-5`,
   "54 uso leva fechada · terminal": `[ Geral ]  [ Diff (3) ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━
@@ -987,15 +987,15 @@ nenhum arquivo alterado nesta sessão`,
   "72 geral depois do clear · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 leva fechada, /cpv rodou
 Fases
 [ grill ]  18s ✓  to-spec !        9s ✓  to-tickets !     6s ✓
-implement !   2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement !  10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ✓
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -1006,25 +1006,25 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s
 Histórico
-Painel em módulos · total 3m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
+Painel em módulos · total 11m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
 Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos 2 · claude-opus-5-5 · claude-haiku-5-5`,
   "72 geral depois do clear · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 Geral  total
-Leva · Painel em módulos  [ Limpar ]  3m10s
+Leva · Painel em módulos  [ Limpar ]  11m10s
 leva fechada, /cpv rodou
 Fases
 [ grill ]  18s ✓  to-spec !        9s ✓  to-tickets !     6s ✓
-implement !   2m36s ✓  code-review !    9s ✓  correções        5s ✓
+implement !  10m36s ✓  code-review !    9s ✓  correções        5s ✓
 qualidade        5s ✓
 Tickets
 01  E2e golden                        portão 109/109 ✓  US$ 0,30     18s
-02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50   2m08s
+02  Domínio puro               portão 4/4 ✓ · 1 reparo  US$ 0,50  10m08s
 03  Composition root                  portão 112/112 ✓  US$ 0,10     10s
 Revisão · US$ 0,30
 Achados da revisão                         3 achados ✓  US$ 0,30      9s
@@ -1035,28 +1035,28 @@ Testes                                                 112/112 ✓      3s
 Build                                                 em curso ◐      3s
 Sub-agentes
 opus-implement-01                    claude-opus-5-5  concluído    1m35s
-sonnet-testes                      claude-sonnet-5-5  concluído    2m08s
-workflow tickets                                      concluído    2m08s
-haiku-time                                     haiku  concluído    2m01s
+sonnet-testes                      claude-sonnet-5-5  concluído   10m08s
+workflow tickets                                      concluído   10m08s
+haiku-time                                     haiku  concluído   10m01s
 sonnet-revisor                                sonnet  concluído       1s
 Histórico
-Painel em módulos · total 3m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
+Painel em módulos · total 11m10s · US$ 2,00 · inline · 3/3 verdes · reparos 1 · claude-opus-5-5 · claude-sonnet-5-5 · haiku · sonnet
 Leva anterior · total 30m00s · US$ 0,80 · sub-agents · 1/2 verdes · reparos 2 · claude-opus-5-5 · claude-haiku-5-5`,
   "80 limpo · terminal": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 T U D O   Q U I E T O   P O R   A Q U I
+          Z
            
-         z 
-        z  
+           
  ▐▛███▜▌   
 ▝▜█████▛▘  
   ▘▘ ▝▝    `,
   "80 limpo · desktop": `[ Geral ]  [ Diff ]  [ Grill ]  [ Tickets ]  [ Uso ]  [ Arquivos ]
 ━━━━━
 T U D O   Q U I E T O   P O R   A Q U I
+          Z
            
-         z 
-        z  
+           
  ▐▛███▜▌   
 ▝▜█████▛▘  
   ▘▘ ▝▝    `,
@@ -1113,8 +1113,8 @@ Grill na tela: http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123
 Grill de volta ao terminal: o usuário voltou ao terminal pela página
 Histórico de grills: http://127.0.0.1:47110/?t=abc123
 Leva registrada: /painel-macrex mostra o andamento
-Alerta: sonnet-testes sem saída há 2 min
-Alerta: haiku-time sem saída há 2 min
+Alerta: sonnet-testes sem saída há 10 min
+Alerta: haiku-time sem saída há 10 min
 Alerta: ticket 02 com portão vermelho
 Alerta: permissão pendente: Bash
 Janela de 5 h em 92%: os sub-agentes dividem o limite com esta sessão
@@ -1141,7 +1141,9 @@ historico
 registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
   {"tipo":"sim","documento":"Painel em módulos"}
 registrar http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123 -
-  {"tipo":"linha","linha":"rode /macrex-skills:faz leva Painel em módulos\\n/mattpocock-skills:to-spec\\n/mattpocock-skills:to-tickets\\n/mattpocock-skills:implement-spec"}`,
+  {"tipo":"linha","linha":"rode /macrex-skills:faz leva Painel em módulos\\n/mattpocock-skills:to-spec\\n/mattpocock-skills:to-tickets\\n/mattpocock-skills:implement-spec"}
+prompt: O painel da leva avisa: sonnet-testes sem saída há 10 min. Pergunte a ele pelo SendMessage, com o name dele, o motivo da demora, por que não dá resposta há tanto tempo, e se precisa de ajuda; conforme a resposta, lance outro sub-agente para auxiliá-lo.
+prompt: O painel da leva avisa: haiku-time sem saída há 10 min. Pergunte a ele pelo SendMessage, com o name dele, o motivo da demora, por que não dá resposta há tanto tempo, e se precisa de ajuda; conforme a resposta, lance outro sub-agente para auxiliá-lo.`,
   "93 sugestoes": `fill: rode /macrex-skills:faz leva Painel em módulos
 /mattpocock-skills:to-spec
 /mattpocock-skills:to-tickets

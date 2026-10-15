@@ -524,6 +524,17 @@ async function alertar($: EngineInterface) {
     return mudou ? chaves : antes
   })
   for (const a of novos) $.ui.toast(`Alerta: ${a.texto}`)
+  // o sub-agente da leva quieto ha mais de SEM_SAIDA: o laco da leva pergunta a ele o motivo, uma vez
+  // por silencio, e decide se manda ajuda
+  const quietos = novos.filter(a => a.chave.startsWith('semsaida:'))
+  if (quietos.length > 0 && (await ativa($))) {
+    for (const a of quietos)
+      await $.prompt.submit({
+        text:
+          `O painel da leva avisa: ${a.texto}. Pergunte a ele pelo SendMessage, com o name dele, o motivo da demora, por que não dá resposta há tanto tempo, e se precisa de ajuda; ` +
+          `conforme a resposta, lance outro sub-agente para auxiliá-lo.`,
+      })
+  }
   if (mudou) $.ui.invalidate('ui.render')
   return lista.length > 0
 }

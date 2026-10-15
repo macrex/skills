@@ -367,7 +367,7 @@ describe('painel da leva, de ponta a ponta', () => {
     await chamar({ tool: 'Agent', tool_use_id: 'tu-a1', name: 'sonnet-testes', description: 'testes', prompt: 'p', model: 'sonnet' })
     await chamar({ tool: 'Workflow', tool_use_id: 'tu-w1', script: 'x' })
     await chamar({ tool: 'Agent', tool_use_id: 'tu-t1', name: 'haiku-time', description: 'time', prompt: 'p', model: 'haiku' })
-    await relogio.advance(segundos(121))
+    await relogio.advance(segundos(601))
     await pane('23 leva implement agentes sem saida')
     await faixa('24 faixa alerta sem saida')
     await chamar({ tool: 'Read', tool_use_id: 'tu-read', file_path: `${RAIZ}/hooks/register.js`, agentId: 'a1' })

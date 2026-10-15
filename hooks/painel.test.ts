@@ -2112,12 +2112,14 @@ describe('painel da leva', () => {
     expect(await quadro(ui)).not.toMatch(/\[ Parar \]/)
   })
 
-  test('o agente rodando mostra ha quanto tempo nao tem saida, passados 2 min da ultima ferramenta dele', async ($, on) => {
+  test('o agente rodando mostra ha quanto tempo nao tem saida, passados 10 min da ultima ferramenta dele, e a leva pergunta a ele o motivo uma vez', { timeoutMs: 30000 }, async ($, on) => {
     const { relogio, marco, sessao } = mundo($, on)
     on('tool.call', { tool: 'Agent' }, () => ({ result: { status: 'async_launched', agentId: 'a1' } }) as never)
     on('tool.call', { tool: 'Read' }, () => ({ result: {} }) as never)
     on('tool.call', { tool: 'Workflow' }, () => ({ result: { status: 'async_launched', taskId: 'w1', workflowName: 'tickets' } }) as never)
     on('agent.list', () => ({ value: [{ id: 'a1', description: 'd', type: 'general-purpose', status: 'running' }] }))
+    const prompts: string[] = []
+    on('prompt.submit', ($, e) => { prompts.push(e.text); return { text: e.text } })
     await sessao()
     await marco({ marco: 'inicio', documento: 'doc' })
     await $.tool.call({ tool: 'Agent', name: 'sonnet-lento', description: 'd', prompt: 'p' } as never)
@@ -2127,11 +2129,16 @@ describe('painel da leva', () => {
     await relogio.advance(segundos(100))
     // a ferramenta chamada dentro do sub-agente traz o agentId dele
     await $.tool.call({ tool: 'Read', file_path: 'a.md', agentId: 'a1' } as never)
-    await relogio.advance(segundos(110))
+    await relogio.advance(segundos(590))
     expect(await ui.find({ text: /sem saída/ })).toBeUndefined()
+    expect(prompts).toEqual([])
     await relogio.advance(segundos(70))
-    expect(await ui.find({ type: 'Text', text: /^sem saída há 3 min$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^sem saída há 11 min$/ })).toBeDefined()
     expect((await quadro(ui)).match(/sem saída/g)).toHaveLength(1)
+    // a pergunta vai ao laco da leva uma vez por silencio, com o name para o SendMessage
+    await relogio.advance(segundos(60))
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toMatch(/^O painel da leva avisa: sonnet-lento sem saída há 10 min\. Pergunte a ele pelo SendMessage/)
   })
 
   test('o Parar de um agente rodando confirma e encerra pela TaskStop; recusado, o agente segue', async ($, on) => {
@@ -3134,7 +3141,7 @@ describe('faixa da leva', () => {
     expect(await quadro(ui)).toMatch(/^Leva · implement · ticket 1\/2 · 0s {2}\[ Abrir painel \]\nticket 01 com portão vermelho/)
   })
 
-  test('sem leva, o agente aguardando e o sem saida acendem o alerta na faixa e num toast, e somem com a causa; a Geral segue quieta', async ($, on) => {
+  test('sem leva, o agente aguardando e o sem saida acendem o alerta na faixa e num toast, e somem com a causa; a Geral segue quieta', { timeoutMs: 30000 }, async ($, on) => {
     const { relogio, sessao, toasts } = mundo($, on)
     on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}))
     on('ui.panes', () => ({ value: [] }))
@@ -3167,13 +3174,13 @@ describe('faixa da leva', () => {
     await relogio.advance(segundos(1))
     expect(await alerta()).toBeUndefined()
 
-    // o que chama ferramenta segue quieto do alerta; o outro passa de 2 min sem saida
+    // o que chama ferramenta segue quieto do alerta; o outro passa de 10 min sem saida
     await relogio.advance(segundos(60))
     await $.tool.call({ tool: 'Read', file_path: 'a.md', agentId: 'a1' } as never)
-    await relogio.advance(segundos(61))
-    expect((await alerta())?.text).toBe('sonnet-lento sem saída há 2 min')
+    await relogio.advance(segundos(541))
+    expect((await alerta())?.text).toBe('sonnet-lento sem saída há 10 min')
     await relogio.advance(segundos(5))
-    expect(alertas()).toEqual(['Alerta: sonnet-espera aguardando', 'Alerta: sonnet-lento sem saída há 2 min'])
+    expect(alertas()).toEqual(['Alerta: sonnet-espera aguardando', 'Alerta: sonnet-lento sem saída há 10 min'])
     // a proxima ferramenta dele apaga o alerta
     await $.tool.call({ tool: 'Read', file_path: 'b.md', agentId: 'a2' } as never)
     await relogio.advance(segundos(1))

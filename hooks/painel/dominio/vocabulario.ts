@@ -52,7 +52,7 @@ export const DO_AGENTE = { rodando: ['rodando', LARANJA], aguardando: ['aguardan
 export const DA_LISTA: Record<string, LevaAgente['estado']> = { pending: 'rodando', running: 'rodando', waiting: 'aguardando', idle: 'aguardando', completed: 'concluido', failed: 'falhou', killed: 'parado' }
 export const VIVOS = ['rodando', 'aguardando']
 // o agente rodando sem ferramenta ha mais que isto mostra ha quanto tempo esta sem saida
-export const SEM_SAIDA = 2 * 60 * 1000
+export const SEM_SAIDA = 10 * 60 * 1000
 export const ABAS = { painel: 'Geral', codigo: 'Diff', grill: 'Grill', tickets: 'Tickets', uso: 'Uso', arquivos: 'Arquivos' }
 export type Aba = keyof typeof ABAS
 export const TOKENS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'] as const
