@@ -127,15 +127,18 @@ async function follow ($: Engine) {
 
 /**
  * Claude Code's temp folder for this session, where a pasted image is stored as
- * `images/<N>.<ext>`: `<CLAUDE_CODE_TMPDIR or /tmp>/claude-<uid>/<project path, dashed>/<session id>`.
+ * `images/<N>.<ext>`: `<CLAUDE_CODE_TMPDIR or the system's temp>/claude-<uid>/<project path, dashed>/<session id>`.
  */
 async function sessionFolder ($: Engine) {
   if (folder) return folder
   const id = await $.session.id()
-  const base = ((await $.env.get('CLAUDE_CODE_TMPDIR')) || '/tmp').replace(/\/+$/, '')
-  // Windows has no uid: Claude Code names its folder `claude-0` there.
-  uid ??= (await platformOf($)) === 'windows' ? '0' : (await $.process.run(['id', '-u'])).stdout.trim()
-  const root = `${base}/claude-${uid}`
+  const isWindows = (await platformOf($)) === 'windows'
+  // The system's temp is TEMP on Windows, where /tmp is no folder.
+  const temp = (isWindows && ((await $.env.get('TEMP')) || (await $.env.get('TMP')))) || '/tmp'
+  const base = ((await $.env.get('CLAUDE_CODE_TMPDIR')) || temp).replace(/[\\/]+$/, '')
+  // Windows has no uid: Claude Code names its folder `claude` there.
+  uid ??= isWindows ? '' : (await $.process.run(['id', '-u'])).stdout.trim()
+  const root = `${base}/claude${uid && `-${uid}`}`
   const names = new Set([await $.session.root(), await $.session.cwd()].map(path => path.replace(/[^a-zA-Z0-9]/g, '-')))
   for (const name of names) {
     if (await $.fs.exists(`${root}/${name}/${id}/images`)) return (folder = `${root}/${name}/${id}`)
