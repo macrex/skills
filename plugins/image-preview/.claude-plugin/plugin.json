@@ -1,0 +1,28 @@
+{
+  "name": "image-preview",
+  "version": "0.1.0",
+  "description": "Hover a pasted [Image #N] to see the picture: above the prompt while you write, and on the prompts you sent.",
+  "author": {
+    "name": "Miguel Ángel Durán (midudev)",
+    "url": "https://github.com/midudev"
+  },
+  "homepage": "https://github.com/midudev/better-claude",
+  "repository": "https://github.com/midudev/better-claude",
+  "license": "MIT",
+  "keywords": [
+    "images",
+    "paste",
+    "preview",
+    "hover",
+    "mod"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "window": {
+      "type": "boolean",
+      "title": "Pré-visualização numa janela",
+      "description": "Onde o terminal não desenha a imagem sozinho, mostra-a numa janela pequena junto ao ponteiro, fora do terminal, em qualidade cheia (macOS, Windows e Linux com X11 e o tkinter do Python). Desligada, o terminal a desenha em células.",
+      "default": true
+    }
+  }
+}

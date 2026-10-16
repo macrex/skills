@@ -73,6 +73,9 @@ sem Obsidian, pule o que fala de vault.
   vale a versão anterior.
 - No Windows o plugin chama `python3`: se só existe `python`, ponha um `python3` no PATH.
 - Skills antigas em `~/.claude/skills` ganham do plugin: remova-as.
+- Opcional: `/plugin install image-preview@macrex` mostra a imagem de um `[Image #N]` colado ao passar
+  o ponteiro sobre ele. É a cópia do mod Image Preview do
+  [better-claude](https://github.com/midudev/better-claude), de midudev; pede o `"tui": "fullscreen"`.
 
 ### Pi
 

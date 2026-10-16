@@ -17,6 +17,17 @@
       "category": "productivity",
       "source": ".",
       "homepage": "https://github.com/macrex/skills"
+    },
+    {
+      "name": "image-preview",
+      "description": "Passe o ponteiro num [Image #N] colado e a imagem abre junto a ele, numa janela pequena ou desenhada no terminal; o clique a abre no visualizador do sistema. Cópia do mod do better-claude, de midudev.",
+      "author": {
+        "name": "Miguel Ángel Durán (midudev)",
+        "url": "https://github.com/midudev"
+      },
+      "category": "productivity",
+      "source": "./plugins/image-preview",
+      "homepage": "https://github.com/midudev/better-claude"
     }
   ]
 }

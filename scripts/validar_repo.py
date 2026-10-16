@@ -4,7 +4,7 @@
   python scripts/validar_repo.py
 
 Checa os manifestos (.claude-plugin/plugin.json e marketplace.json, hooks/hooks.json),
-que todo caminho citado neles existe, e o frontmatter de cada skills/*/SKILL.md e
+que todo caminho citado neles existe, que cada plugin do marketplace tem o nome do plugin.json da sua source, e o frontmatter de cada skills/*/SKILL.md e
 do agent: `name` igual ao nome da pasta, `description` presente e dentro do limite,
 campos conhecidos. Depois o contrato por harness: cada arquivo de
 skills/faz/references/harness/ tem as mesmas linhas, uma secao de instalacao no
@@ -24,8 +24,8 @@ CAMPOS_SKILL = {"name", "description", "argument-hint", "disable-model-invocatio
                 "allowed-tools", "user-invocable", "model", "context", "agent", "hooks", "when_to_use"}
 CAMPOS_AGENT = {"name", "description", "tools", "model", "skills", "color", "permissionMode", "hooks"}
 MAX_DESCRICAO = 1024
-# Mexer so nisto nao muda o plugin instalado, e nao pede versao nova.
-SO_DO_REPO = (".github/", "scripts/", "assets/", "README.md", "GLOSSARY.md", ".claude/", "LICENSE", ".gitignore", "tsconfig.json")
+# Mexer so nisto nao muda o macrex-skills instalado, e nao pede versao nova (plugins/ sao os outros plugins do marketplace).
+SO_DO_REPO = (".github/", "plugins/", "scripts/", "assets/", "README.md", "GLOSSARY.md", ".claude/", "LICENSE", ".gitignore", "tsconfig.json")
 # As linhas que toda referencia de harness da /faz tem: e o que o /faz le de cada harness.
 LINHAS_HARNESS = ("Skills do Matt", "Invocar uma skill", "Perguntar", "Sub-agente",
                   "Segurar a sessão")
@@ -191,10 +191,14 @@ def main():
         if not mercado.get("plugins"):
             falha("marketplace.json: sem plugins")
         for p in mercado.get("plugins", []):
-            if plugin and p.get("name") != plugin.get("name"):
-                falha(f"marketplace.json: plugin '{p.get('name')}' difere de plugin.json '{plugin.get('name')}'")
-            if p.get("source") != "." and not os.path.isdir(os.path.join(RAIZ, str(p.get("source")))):
-                falha(f"marketplace.json: source '{p.get('source')}' nao existe")
+            fonte = str(p.get("source"))
+            if fonte != "." and not os.path.isdir(os.path.join(RAIZ, fonte)):
+                falha(f"marketplace.json: source '{fonte}' nao existe")
+                continue
+            rel = ".claude-plugin/plugin.json" if fonte == "." else f"{fonte}/.claude-plugin/plugin.json"
+            manifesto = plugin if fonte == "." else carregar_json(rel)
+            if manifesto and p.get("name") != manifesto.get("name"):
+                falha(f"marketplace.json: plugin '{p.get('name')}' difere de {rel} '{manifesto.get('name')}'")
     if hooks:
         for rel in hooks.get("modules", []):
             if not os.path.exists(os.path.join(RAIZ, "hooks", rel)):
