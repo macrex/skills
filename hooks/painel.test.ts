@@ -575,6 +575,53 @@ describe('painel da leva', () => {
     expect(nativas).toEqual(['Algo mais?', 'Fechamos?'])
   })
 
+  test('no canal tela, o AskUserQuestion com uma rodada ainda sem resposta na pagina nao publica outra: manda esperar e refazer as perguntas depois', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { marco, sessao, relogio } = mundo($, on)
+    const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
+    const publicadas: number[] = []
+    const voltas: string[] = []
+    let estado: Record<string, any> = { fase: 'inicio', historico: [] }
+    on('http.fetch', ($, e) => {
+      if (!e.url.includes('/api/aguardar')) return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } }
+      const msg = JSON.parse(voltas.shift() ?? '{"tipo":"pendente"}')
+      if (msg.tipo === 'rodada') estado = { fase: 'aguarde', historico: [...estado.historico, { rodada: estado.rodada, respostas: msg.respostas }] }
+      return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(msg) } }
+    })
+    on('process.run', ($, e) => {
+      if (e.argv[0] === 'git') return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+      const sub = e.argv[2]
+      if (sub === 'rodada') {
+        estado = { ...estado, fase: 'rodada', rodada: JSON.parse(e.init?.stdin ?? '') }
+        publicadas.push(estado.rodada.rodada)
+      }
+      return { value: { exitCode: 0, stdout: sub === 'iniciar' ? `${URL}\n` : 'ok\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const prompts: string[] = []
+    on('prompt.submit', ($, e) => { prompts.push(e.text); return { text: e.text } })
+    on('tool.call', { tool: 'AskUserQuestion' }, () => { throw new Error('o dialogo nativo nao abre no canal tela') })
+    const perguntar = (question: string) =>
+      $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'T', question, multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    await sessao()
+    await marco({ marco: 'grill', pedido: 'grill pelo canal tela' })
+
+    // a fronteira grande em chamadas seguidas: so a primeira vai a pagina
+    await perguntar('Um?')
+    const r2 = await perguntar('Dois?')
+    const r3 = await perguntar('Três?')
+    expect(publicadas).toEqual([1])
+    expect(r2.deny).toBeUndefined()
+    expect(r2.context?.[0]).toMatch(/rodada 1 .*sem resposta/)
+    expect(r2.context?.[0]).toMatch(/encerre o turno/i)
+    expect(r3.context?.[0]).toMatch(/rodada 1 .*sem resposta/)
+
+    // respondida a rodada 1, a seguinte vai a pagina
+    voltas.push('{"tipo":"rodada","rodada":1,"respostas":[{"id":"Q1","marca":"aceito","escolha":"Sim","comentario":null}]}')
+    await relogio.advance(segundos(1))
+    expect(prompts).toHaveLength(1)
+    await perguntar('Dois?')
+    expect(publicadas).toEqual([1, 2])
+  })
+
   test('no canal tela, o --retomar do grill que voltou ao CLI o devolve a pagina, na URL de agora; o de outro grill nao', { options: { grill_canal: 'tela' } }, async ($, on) => {
     const { marco, sessao, relogio } = mundo($, on)
     const URL = 'http://127.0.0.1:4321/g/a/20261009-142524?t=abc123'
@@ -826,17 +873,24 @@ describe('painel da leva', () => {
 
   test('no canal tela, a rodada avisa a URL ao publicar; a pagina guardada que morreu e retomada ou refeita, e sem pagina a rodada volta ao terminal com o motivo', { options: { grill_canal: 'tela' } }, async ($, on) => {
     // o caso da sessao de 2026-10-09: a rodada publicada numa pagina que o usuario nunca viu, sem a URL no terminal
-    const { marco, toasts } = mundo($, on)
+    const { marco, toasts, relogio, sessao } = mundo($, on)
     const URL = (n: number) => `http://127.0.0.1:400${n}/g/a/2026100${n}-000000?t=abc${n}`
     const vivas = new Set<string>()
     const subidas: Record<string, string[]> = { novo: [URL(1)], retomar: [] }
     const comandos: string[][] = []
     let estado: Record<string, any> = { fase: 'inicio', historico: [] }
     on('http.fetch', ($, e) => {
+      // a rodada aberta e respondida na primeira consulta do tique
+      if (e.url.includes('/api/aguardar') && estado.fase === 'rodada') {
+        const rodada = estado.rodada.rodada
+        estado = { fase: 'aguarde', historico: [...estado.historico, { rodada: estado.rodada, respostas: [] }] }
+        return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ tipo: 'rodada', rodada, respostas: [] }) } }
+      }
       const viva = [...vivas].some(u => e.url === u.replace('?t=', '/api/estado?t='))
       return { value: viva ? { status: 200, ok: true, headers: {}, text: JSON.stringify(estado) } : { status: 502, ok: false, headers: {}, text: '' } }
     })
     on('process.run', ($, e) => {
+      if (e.argv[0] === 'git') return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
       const [, , sub, ...args] = e.argv
       comandos.push([sub, ...args])
       let stdout = ''
@@ -860,12 +914,14 @@ describe('painel da leva', () => {
     })
     const perguntar = (question: string) =>
       $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question, multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+    await sessao()
     await marco({ marco: 'grill', pedido: 'grill sem silencio' })
 
     // a primeira sobe a pagina, e o toast e a recusa que volta ao agente levam a URL
     const r1 = await perguntar('Primeira?')
     expect(toasts).toContain(`Grill na tela: ${URL(1)}`)
     expect(r1.context?.[0]).toContain(URL(1))
+    await relogio.advance(segundos(1))
 
     // a pagina guardada morreu: o --retomar a traz de volta antes da rodada, que vai a URL nova
     vivas.clear()
@@ -875,12 +931,14 @@ describe('painel da leva', () => {
     expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['rodada', URL(2), '-']])
     expect(r2.context?.[0]).toContain(URL(2))
     expect(toasts).toContain(`Grill na tela: ${URL(2)}`)
+    await relogio.advance(segundos(1))
 
     // sem retomada, uma pagina nova
     vivas.clear()
     subidas.novo.push(URL(3))
     comandos.length = 0
     await perguntar('Terceira?')
+    await relogio.advance(segundos(1))
     expect(comandos.map(c => c.slice(0, 4))).toEqual([['iniciar', '--projeto', 'a', '--retomar'], ['iniciar', '--projeto', 'a', '--pedido'], ['rodada', URL(3), '-']])
     expect(nativas).toEqual([])
 

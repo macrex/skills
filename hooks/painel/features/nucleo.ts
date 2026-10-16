@@ -161,6 +161,18 @@ async function registrarNoHistoricoDeGrills($: EngineInterface, corpo: { tipo: '
 // ponytail: multiSelect vira escolha unica, a pagina nao tem outra
 async function pelaTela($: EngineInterface, e: { questions: Perguntas }, ctx: Contexto): Promise<{ result: BuiltinToolResults['AskUserQuestion']; context: string[]; motivo?: undefined } | { motivo: `${string} ${string}` }> {
   const grill = await read($, GRILL)
+  // a pagina mostra uma rodada por vez: a seguinte, publicada antes da resposta, apagaria a aberta,
+  // e o agente esperaria por ela para sempre (a fronteira grande vem em AskUserQuestion seguidos)
+  const aberta = ctx.rodadaNaTela
+  if (aberta && aberta.url === grill!.tela) {
+    return {
+      result: { questions: e.questions, answers: {} },
+      context: [
+        `A rodada ${aberta.n} do grill segue sem resposta na grill-tela, em ${aberta.url}, e estas perguntas nao foram publicadas: a pagina mostra uma rodada por vez. ` +
+          `Encerre o turno; quando a resposta da rodada ${aberta.n} chegar, faca estas perguntas de novo pelo AskUserQuestion.`,
+      ],
+    }
+  }
   const projeto = nomeDa(await $.session.root())
   const iniciar = async (...mais: string[]) => URL_DA_TELA.exec((await rodarTela($, ['iniciar', '--projeto', projeto, ...mais])).stdout)?.[0]
   // o pelaTela so roda com o grill aberto (emGrill)
