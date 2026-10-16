@@ -35,8 +35,24 @@ dentro delas. As perguntas do `AskUserQuestion` entram no painel pelo `header`, 
 (nunca `Q1`). No mesmo painel, depois: `entendimento` com o `documento`, quando ele estiver
 gravado. A linha da leva o painel pega sozinho do localizador.
 
-Fronteira vazia, consolide o entendimento numa tabela e peça o **sim do usuário** — a única
-confirmação de conteúdo da leva inteira.
+## A rodada da execução
+
+Fronteira de conteúdo vazia, a última rodada do grill, pelo mesmo canal das outras, decide como a
+leva vai rodar, para ela não parar depois. Antes, faça a **previsão dos tickets** pela tabela de
+decisões e pelos fatos do código: quantas fatias verticais, em quantas ondas, quais se acoplam
+(reescrevem o mesmo trecho ou dependem de uma decisão que outra toma) e quão fundo cada uma vai.
+Ela não precisa acertar: é a base da sugestão, e a leva segue o que ficar decidido. Pergunte,
+cada um com a previsão resumida no contexto:
+
+- o **modo do implement**, entre os que o seu harness oferece ("Modo do implement" na referência
+  dele), com o que a seção "O modo" de `references/leva.md` indica para a previsão marcado como
+  recomendado e a razão de cada um na descrição. Harness com só o inline não pergunta o modo;
+- só no Claude Code, os **modelos**, cada um com "o da sessão" recomendado ou outro que o usuário
+  nomeia: o **da revisão** sempre, e o **do implement** só com o modo recomendado em sub-agents ou
+  workflow (o usuário trocou o inline por um deles? pergunte-o na rodada seguinte).
+
+Depois, consolide o entendimento numa tabela, com as linhas da execução no fim, e peça o **sim do
+usuário** — a única confirmação de conteúdo da leva inteira.
 
 ## Grave o entendimento
 
@@ -49,13 +65,15 @@ e o que não estiver escrito não chega lá. Ele nasce onde as notas do projeto 
   que `to-spec` e `to-tickets` já escrevem por padrão (`.scratch/<feature>/`).
 
 O documento leva o pedido original, o vocabulário canônico do `domain-modeling`, a tabela de
-decisões inteira do interrogatório e os fatos do código que as sustentam (caminho e linha).
+decisões inteira do interrogatório e os fatos do código que as sustentam (caminho e linha). No
+fim, a seção `## Execução`, que a leva lê no lugar de perguntar: o modo do implement, a previsão
+de tickets que o sustentou e, no Claude Code, o modelo do implement (com o modo paralelo) e o da
+revisão, cada um pelo nome ou "o da sessão".
 Guarde como ele é endereçável (título da nota ou caminho do arquivo): a linha cita isso.
 
 ## Entregue a linha
 
-O modo do implement e os modelos dos agentes não se perguntam aqui: a leva os pergunta na
-terceira parada, quando os tickets já estão na mesa. Imprima o aviso e a linha para o usuário
+Imprima o aviso e a linha para o usuário
 colar, e pare: parar é ter entregado a linha. A linha sai **pronta do localizador**: rode-o com o
 documento, imprima a saída num bloco de código exatamente como saiu, sem reescrever nem juntar
 linhas.

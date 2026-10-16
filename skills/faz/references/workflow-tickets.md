@@ -1,6 +1,6 @@
 # Esqueleto do Workflow de implementação
 
-Vale quando o implement do `/faz` roda em **workflow** (só no Claude Code, escolhido na terceira parada: `leva.md`); o `PREAMBULO`
+Vale quando o implement do `/faz` roda em **workflow** (só no Claude Code, escolhido no fim do interrogatório e gravado na seção `## Execução` do documento: `leva.md`); o `PREAMBULO`
 abaixo é o dos três modos. O `/faz` já invocou a `implement-spec`; os agentes por ticket não a
 invocam de novo — o preâmbulo carrega o que ela pede, e o portão é quem cobra.
 
@@ -249,7 +249,7 @@ for (let onda = 1; ; onda++) {
 }
 ```
 
-O modelo do implement escolhido na terceira parada entra em `model` de cada
+O modelo do implement da seção `## Execução` do documento entra em `model` de cada
 `agent()`, o da conciliação inclusive; o da sessão é `model` omitido.
 
 Cada agente de ticket marca o próprio `ticket` e `portao` no painel da leva, que assim tem o tempo
