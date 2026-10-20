@@ -76,6 +76,7 @@ export type Marco = {
   marco: string
   documento?: string
   pedido?: string
+  canal?: string
   linha?: string
   fase?: string
   modo?: Leva['modo']

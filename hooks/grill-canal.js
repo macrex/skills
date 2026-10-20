@@ -22,17 +22,22 @@
 const { opcoesNosSettings } = require('./vault-rules.js');
 
 // O que o hook injeta no Claude Code, por modo.
+// O canal que o usuario nomeia no pedido vale so para aquele grill, por cima do configurado,
+// que nunca muda por isso.
+const SO_ESTE = `O canal que o usuario pediu para este grill (terminal/CLI ou tela) ganha do configurado so neste grill: nunca mude a opcao do canal, os settings.json nem a variavel GRILL_CANAL por causa dele.`;
+
+// O que o hook injeta no Claude Code, por modo.
 const INSTRUCAO = {
-  perguntar: `Antes da primeira rodada do grill, pergunte ao usuario pelo AskUserQuestion qual canal ele quer: CLI (como de costume) ou tela (uma pagina HTML local). Se ele escolher tela, invoque a skill grill-tela e conduza o grill por ela, sem usar o AskUserQuestion nas rodadas.`,
+  perguntar: `Antes da primeira rodada do grill, pergunte ao usuario pelo AskUserQuestion qual canal ele quer: CLI (como de costume) ou tela (uma pagina HTML local), salvo se ele ja o disse para este grill. Se ele escolher tela, invoque a skill grill-tela e conduza o grill por ela, sem usar o AskUserQuestion nas rodadas. ${SO_ESTE}`,
   // no tela, o mod do painel (hooks/register.ts) leva o AskUserQuestion do grill da /faz a pagina;
   // no grilling de fora dela, o mod acrescenta ao resultado da skill que o grill vai pela grill-tela
-  tela: `O usuario configurou o grill para a tela: sem perguntar o canal, faca cada rodada pelo AskUserQuestion, como no CLI; o plugin a publica na pagina da grill-tela e recusa a chamada com a URL: diga ao usuario onde responder e encerre o turno, e a resposta dada na pagina chega na mensagem seguinte, com a URL. Na fronteira vazia, invoque a skill grill-tela so para a tela final, nessa URL; se nenhum resultado trouxe a URL, o usuario voltou ao CLI e o grill termina nele.`,
+  tela: `O usuario configurou o grill para a tela: sem perguntar o canal, faca cada rodada pelo AskUserQuestion, como no CLI; o plugin a publica na pagina da grill-tela e recusa a chamada com a URL: diga ao usuario onde responder e encerre o turno, e a resposta dada na pagina chega na mensagem seguinte, com a URL. Na fronteira vazia, invoque a skill grill-tela so para a tela final, nessa URL; se nenhum resultado trouxe a URL, o usuario voltou ao CLI e o grill termina nele. Pediu o terminal para este grill? Na /faz, o marco grill com canal cli o deixa no terminal; fora dela, conduza-o pelo AskUserQuestion sem a grill-tela. ${SO_ESTE}`,
 };
 
 // A regra permanente dos harnesses sem o hook, por modo.
 const REGRA = {
-  perguntar: `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), antes da primeira rodada pergunte ao usuario, em texto, qual canal ele quer: CLI (no terminal, como de costume) ou tela (uma pagina HTML local), e encerre o turno. Se ele escolher tela, carregue a skill grill-tela e conduza o grill por ela, sem fazer as perguntas das rodadas no terminal.`,
-  tela: `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), sem perguntar o canal, carregue a skill grill-tela e conduza o grill por ela desde a primeira rodada, sem fazer as perguntas das rodadas no terminal.`,
+  perguntar: `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), antes da primeira rodada pergunte ao usuario, em texto, qual canal ele quer: CLI (no terminal, como de costume) ou tela (uma pagina HTML local), salvo se ele ja o disse para este grill, e encerre o turno. Se ele escolher tela, carregue a skill grill-tela e conduza o grill por ela, sem fazer as perguntas das rodadas no terminal. ${SO_ESTE}`,
+  tela: `Quando for conduzir o grill da skill grilling (do Matt Pocock, tambem pela grill-with-docs ou pela /faz), sem perguntar o canal, carregue a skill grill-tela e conduza o grill por ela desde a primeira rodada, sem fazer as perguntas das rodadas no terminal, salvo se o usuario pediu o terminal para este grill. ${SO_ESTE}`,
 };
 
 const SINONIMOS = { perguntar: 'perguntar', pergunta: 'perguntar', tela: 'tela', navegador: 'tela', browser: 'tela', cli: 'cli' };

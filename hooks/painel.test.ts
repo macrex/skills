@@ -990,6 +990,44 @@ describe('painel da leva', () => {
     expect(comandos.map(c => c.slice(0, 2))).toEqual([['rodada', URL]])
   })
 
+  test('no canal tela, o marco grill com canal cli deixa so este grill no terminal: antes do grilling a pagina nem sobe, depois dele ela volta ao CLI', { options: { grill_canal: 'tela' } }, async ($, on) => {
+    const { marco } = mundo($, on)
+    const URL = 'http://127.0.0.1:47110/g/a/20261020-100000?t=abc123'
+    const comandos: string[][] = []
+    const nativas: string[] = []
+    on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ fase: 'inicio', historico: [] }) } }))
+    on('process.run', ($, e) => {
+      const [, , sub, ...args] = e.argv
+      comandos.push([sub, ...args])
+      return { value: { exitCode: 0, stdout: sub === 'iniciar' ? `${URL}\n` : 'ok\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('tool.call', { tool: 'Skill' }, () => ({ result: 'ok' }) as never)
+    on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+      nativas.push(e.questions[0].question)
+      return { result: { questions: e.questions, answers: { [e.questions[0].question]: 'Sim' } } } as never
+    })
+    on('skill.prompt', ($, e) => ({ text: e.text }))
+    const perguntar = (question: string) => $.tool.call({ tool: 'AskUserQuestion', questions: [{ header: 'Tema', question, multiSelect: false, options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }] }] } as never)
+
+    // o marco antes do grilling: nenhuma pagina sobe, e a rodada pergunta no dialogo nativo
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    await marco({ marco: 'grill', pedido: 'grill pelo celular', canal: 'cli' })
+    const r = await $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args: 'grill pelo celular' } as never)
+    expect(r.context).toBeUndefined()
+    await perguntar('Primeira?')
+    expect(comandos.filter(c => c[0] === 'iniciar' || c[0] === 'rodada')).toEqual([])
+    expect(nativas).toEqual(['Primeira?'])
+
+    // o marco depois do grilling, que ja subiu a pagina: ela volta ao CLI, e a rodada tambem vai ao dialogo
+    await $.skill.prompt({ skill: 'macrex-skills:faz', text: 'x' })
+    await $.tool.call({ tool: 'Skill', skill: 'mattpocock-skills:grilling', args: 'outro grill' } as never)
+    await marco({ marco: 'grill', pedido: 'outro grill', canal: 'cli' })
+    expect(comandos.at(-1)).toEqual(['cli', URL])
+    await perguntar('Segunda?')
+    expect(comandos.filter(c => c[0] === 'rodada')).toEqual([])
+    expect(nativas).toEqual(['Primeira?', 'Segunda?'])
+  })
+
   test('no canal tela, a segunda /faz antes de qualquer pergunta cria outro grill na grill-tela, sem herdar a URL da primeira', { options: { grill_canal: 'tela' } }, async ($, on) => {
     const { marco } = mundo($, on)
     const URL = (n: number) => `http://127.0.0.1:47110/g/a/2026100${n}-000000?t=abc123`

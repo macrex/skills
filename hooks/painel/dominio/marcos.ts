@@ -141,7 +141,8 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
 export function aplicarNoGrill(grill: Grill | null, m: Marco, agora: number): Aplicado<Grill> | Erro {
   if (m.marco === 'grill') {
     if (typeof m.pedido !== 'string' || !m.pedido.trim()) return { erro: 'grill exige o pedido em poucas palavras' }
-    return { id: novoId(agora), pedido: m.pedido, inicio: agora, perguntas: [] }
+    // o canal cli e o terminal que o usuario pediu so para este grill, no lugar da opcao tela
+    return { id: novoId(agora), pedido: m.pedido, inicio: agora, perguntas: [], ...(m.canal === 'cli' && { canal: 'cli' as const }) }
   }
   if (!grill) return { erro: 'nenhum grill neste workspace: registre o marco grill antes' }
   if (m.marco === 'linha') {

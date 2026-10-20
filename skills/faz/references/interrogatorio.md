@@ -35,6 +35,15 @@ dentro delas. As perguntas do `AskUserQuestion` entram no painel pelo `header`, 
 (nunca `Q1`). No mesmo painel, depois: `entendimento` com o `documento`, quando ele estiver
 gravado. A linha da leva o painel pega sozinho do localizador.
 
+O canal do grill é o configurado (no Claude Code, a opção **Canal do grill** do plugin), salvo
+quando o pedido nomeia outro para este grill — "pelo terminal", "pelo CLI", "pelo
+`AskUserQuestion`", "na tela". Esse vale só para este grill: **nunca** mude a opção, os
+`settings.json`, o `GRILL_CANAL` nem o bloco `<grill-canal>` por causa dele, e não discuta o
+configurado. O terminal no lugar da tela, no Claude Code, é o marco `grill` com `canal: "cli"`,
+chamado **sozinho e antes** do `grilling` e do `domain-modeling`: o plugin não sobe a página e o
+`AskUserQuestion` pergunta no terminal. A tela no lugar do terminal é a skill `grill-tela`
+conduzindo o ciclo inteiro.
+
 ## A rodada da execução
 
 Fronteira de conteúdo vazia, a última rodada do grill, pelo mesmo canal das outras, decide como a

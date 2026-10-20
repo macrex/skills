@@ -596,6 +596,7 @@ export function registrarSessao(on: On, ctx: Contexto) {
           marco: { type: 'string', enum: [...MARCOS, ...MARCOS_DO_GRILL] },
           documento: { type: 'string', description: 'inicio e entendimento: o documento da leva (titulo da nota ou caminho)' },
           pedido: { type: 'string', maxLength: 60, description: 'grill: o pedido em poucas palavras' },
+          canal: { type: 'string', enum: ['cli'], description: 'grill: so quando o usuario pediu o terminal para este grill, no lugar da tela configurada' },
           linha: { type: 'string', maxLength: 4000, description: 'linha: a linha da leva que o /faz imprimiu ao fim do grill, inteira e com as mesmas quebras' },
           fase: { type: 'string', enum: FASES },
           modo: { type: 'string', enum: MODOS, description: 'fase implement: como o implement roda' },
@@ -693,10 +694,12 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       // o marco grill da mesma leva de chamadas do grilling (o grill desta sessao, sem perguntas
       // nem documento) so troca o pedido: a URL da grill-tela e o inicio ficam
       const soPedido = e.marco === 'grill' && (await read($, GRILL_DA_SESSAO)) && atual && atual.perguntas.length === 0 && atual.documento == null
-      const grill = soPedido ? { ...atual, pedido: aplicado.pedido } : aplicado
+      const grill = soPedido ? { ...atual, pedido: aplicado.pedido, ...(aplicado.canal && { canal: aplicado.canal }) } : aplicado
       await (e.marco === 'grill' && !soPedido ? salvarGrillNovo($, grill) : salvarGrill($, grill))
       await update($, GRILL, () => grill)
       if (e.marco === 'grill') await update($, GRILL_DA_SESSAO, () => true)
+      // o terminal pedido depois de o grilling ja ter subido a pagina: ela volta ao CLI
+      if (soPedido && grill.canal === 'cli' && grill.tela && !grill.telaFim) await voltarAoTerminal($, grill.tela, 0, 'o usuário pediu este grill no terminal')
       if (e.marco === 'entendimento') await registrarNoHistoricoDeGrills($, { tipo: 'sim', documento: grill.documento })
       // a linha que o localizador ja trouxe nao vai de novo
       if (e.marco === 'linha' && grill.linha !== atual?.linha) await registrarNoHistoricoDeGrills($, { tipo: 'linha', linha: grill.linha! })
