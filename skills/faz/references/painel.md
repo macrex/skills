@@ -7,9 +7,10 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
   `qualidade`), a de `implement` com o `modo` (o da seção `## Execução` do documento, `leva.md`) e o
   `branch` da leva (`leva/<slug>`), que o estado da leva guarda para a retomada.
-- `tickets` com a lista `{ id, titulo }` assim que o `to-tickets` publicar e de novo, inteira e com
-  os novos no fim, quando a leva ganhar tickets (os que já andaram guardam o portão e o tempo; nunca
-  reenvie o `portao` deles); `ticket` com o `id`
+- `tickets` com a lista `{ id, titulo, previsao }` assim que o `to-tickets` publicar, a `previsao`
+  de cada ticket e a `previsao` da leva inteira em minutos inteiros ("A previsão de tempo", em
+  `leva.md`), e de novo, inteira e com os novos no fim, quando a leva ganhar tickets (os que já
+  andaram guardam o portão, o tempo e a previsão; nunca reenvie o `portao` deles); `ticket` com o `id`
   dele ao começar cada um; `portao` com o `ticket`, `verde` ou `vermelho`, os `reparos` (0 a 2) e
   os `testes` (ex. `3/4`, até 20 caracteres) quando o executor os informou, e as `notas` do que
   ele entregou (até 500 caracteres). Nos modos workflow e sub-agents quem marca `ticket` e
@@ -28,7 +29,8 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
   `Download real`), com a contagem em `detalhe` (até 60 caracteres). O nome do item nunca é o da
   fase, que já é o título do cartão.
 - `fechamento` no fim, depois do commit squash: o hook `so_com_pedido` só libera esse commit com
-  a leva aberta, e o `fechamento` a fecha.
+  a leva aberta, e o `fechamento` a fecha. O resultado traz a tabela dos tempos, previsto contra
+  real, que vai à seção `## Tempos` da nota de evolução como veio.
 
 **Retomada:** resposta do `inicio` que começa com `retomada na fase` traz a leva aberta do mesmo
 documento. Diga ao usuário em uma linha de onde retomou, pule as fases já passadas, comece o

@@ -8,7 +8,7 @@ import type { AgentInfo, BuiltinToolResults, EngineInterface, On, ProcessRunInit
 import type { Grill, Leva, LevaAgente, LevaHistorico } from '../../../types/index.d.ts'
 import { FERRAMENTA, MARCOS, MARCOS_DO_GRILL, RONCO, FASES, PORTOES, MODOS, NO_HISTORICO, SKILL_DA_FASE, DA_LISTA, VIVOS, MUDAM, URL_DA_TELA, RETOMAR } from '../dominio/vocabulario.ts'
 import type { Aba, Marco } from '../dominio/vocabulario.ts'
-import { nomeDa, somar, porcento, custoDosTokens } from '../dominio/formato.ts'
+import { nomeDa, somar, porcento, custoDosTokens, tabelaDeTempos } from '../dominio/formato.ts'
 import { novoId, semSkill, retoma, doInicio, aplicar, aplicarNoGrill, naTela } from '../dominio/marcos.ts'
 import { vivo, idDeParar, alertas } from '../dominio/alertas.ts'
 import { arquivosDoDiff } from '../dominio/diff.ts'
@@ -603,8 +603,13 @@ export function registrarSessao(on: On, ctx: Contexto) {
           branch: { type: 'string', description: 'fase implement: o branch da leva, ex. leva/worktrees' },
           tickets: {
             type: 'array',
-            items: { type: 'object', properties: { id: { type: 'string' }, titulo: { type: 'string' } }, required: ['id', 'titulo'] },
+            items: {
+              type: 'object',
+              properties: { id: { type: 'string' }, titulo: { type: 'string' }, previsao: { type: 'integer', minimum: 1, description: 'a previsao do ticket, em minutos' } },
+              required: ['id', 'titulo'],
+            },
           },
+          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos' },
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
           item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, ou a Conciliacao do implement, nunca o da fase' },
           detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
@@ -747,7 +752,9 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       await update($, USO, () => ({}))
       $.ui.toast('Leva registrada: /painel-macrex mostra o andamento')
     }
-    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}` }
+    // o primeiro fechamento devolve os tempos, previsto contra real, que a nota de evolucao leva ao vault
+    const tempos = e.marco === 'fechamento' && !antes!.fechada ? `\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\n${tabelaDeTempos(leva)}` : ''
+    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}${tempos}` }
   })
 
   // o /cpv digitado depois do fechamento fecha a leva no git: o painel para de pedi-lo.

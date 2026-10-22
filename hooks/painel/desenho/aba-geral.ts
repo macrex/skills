@@ -7,7 +7,7 @@ import { verdes, dolares, duracao, custoDoItem, custoDaFase } from '../dominio/f
 import { semSkill } from '../dominio/marcos.ts'
 import { vivo, semSaida, textoSemSaida, idDeParar } from '../dominio/alertas.ts'
 import type { Acoes, Desenho, Primitivas, Parte } from './primitivas.ts'
-import { linhasDePortao } from './aba-tickets.ts'
+import { linhasDePortao, contraPrevisto } from './aba-tickets.ts'
 import { daPaginaDoGrill } from './aba-grill.ts'
 
 // a grade das fases, com o grill na frente: tres chips por linha onde cabem, senao dois, senao
@@ -56,7 +56,7 @@ export function geralDaLeva(
   const { leva, ultimoGrill, skills, historico, agora } = dados
   const { Box, Text, Button, tela, cartao, apagado, linhaLarga, largura } = kit
   const { chip, chipDoGrill, fases, grade, comLimpar } = daGeral(kit, agora, acoes)
-  const { ticket, item } = linhasDePortao(kit, agora)
+  const { ticket, item, previsto } = linhasDePortao(kit, agora)
   const ate = leva.fim ?? agora
   // uma fase dura da sua entrada ate a entrada seguinte, ou ate agora (o fim, se fechada)
   const entradas = leva.entradas ?? {}
@@ -108,6 +108,8 @@ export function geralDaLeva(
     'total',
     leva.inicio != null ? duracao(ate - leva.inicio) : '—',
     leva.fechada && h(Text, { color: leva.cpv == null ? AMARELO : VERDE }, `leva fechada, ${leva.cpv == null ? 'falta o /cpv' : '/cpv rodou'}`),
+    // a previsao da leva inteira contra o total, do inicio ao fechamento
+    leva.previsao != null && cartao('Previsão', previsto(contraPrevisto(leva.previsao, leva.inicio != null ? ate - leva.inicio : undefined))),
     grade([chipDoGrill(doGrill), ...fases.map(chipDaFase)]),
     leva.tickets.length > 0 && cartao('Tickets', ...leva.tickets.map(ticket)),
     ...Object.entries(FASES_COM_ITENS).map(([f, titulo]) => {

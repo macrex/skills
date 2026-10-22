@@ -46,7 +46,7 @@ tracker que `to-spec`, `to-tickets` e `code-review` esperam ter recebido:
 | code-review | `code-review`. Com o squash staged e sem commit, o que ela ancora em `<fixo>...HEAD` é vazio por desenho: o diff é `git diff HEAD` mais os arquivos de `git ls-files --others --exclude-standard`, lidos inteiros, menos o que já estava sujo antes da leva; a lista de commits é vazia, e a checagem de diff não-vazio se faz sobre esses dois. Passe a spec como argumento (o conteúdo, via `ler_nota`, quando está no vault). Os dois sub-agentes que ela manda abrir (Standards e Spec) você mesmo abre ("Sub-agente" na referência do seu harness), no modelo da revisão do documento; sem sub-agente no harness, os dois eixos rodam na sessão, um de cada vez, cada um com o seu relatório | dois relatórios, lado a lado |
 | correções | sem skill: um sub-agente (ou a sessão, onde não há), no mesmo modelo da revisão, recebe os dois relatórios e aplica tudo; achado que se revela errado é recusado com o motivo. O que elas mudam entra no índice só pelos caminhos da leva (`git add <caminho>`, nunca `git add -A`) | working tree corrigida e staged, suíte verde |
 | qualidade | sem skill: os verificadores do projeto; depois um script no scratchpad sobe o que der para subir (no Claude Code a skill `run` ajuda) e exercita os caminhos reais | contagem de verificações; falha causada pelo script conserta o script e reexecuta |
-| fechamento | só com a qualidade verde, a ordem de "O fechamento", abaixo: versão, segredos, commit squash local, limpeza dos branches, nota de evolução no tracker | um commit local só; na nota, o que mudou, o que a revisão pegou, o que não foi verificado |
+| fechamento | só com a qualidade verde, a ordem de "O fechamento", abaixo: versão, segredos, commit squash local, limpeza dos branches, nota de evolução no tracker | um commit local só; na nota, o que mudou, o que a revisão pegou, o que não foi verificado e os tempos, previsto contra real |
 
 ## A execução: o modo e os modelos, já no documento
 
@@ -61,6 +61,16 @@ linha, antes do implement, o modo e se a tabela confirmou a previsão, e a nota 
 registra a diferença. Documento sem a seção (entendimento anterior a ela): escolha o modo por "O
 modo", abaixo, com os modelos da sessão, e diga qual e por quê em uma linha. Nos dois casos, siga
 sem perguntar.
+
+## A previsão de tempo
+
+Publicada a tabela do `to-tickets`, antes do implement, preveja em minutos inteiros quanto cada
+ticket vai levar e quanto a leva inteira vai levar, do `inicio` ao `fechamento` (o que já passou
+conta). A previsão é o seu julgamento do que você levaria, pelo modo, pela profundidade e pelo
+acoplamento de cada ticket, nunca tabela nem fórmula. Ela vai no marco `tickets`
+(`references/painel.md`), e o painel a mostra contra o tempo real, que ele mesmo mede; diga-a ao
+usuário na linha do modo. A nota de evolução leva as duas ao vault ("O fechamento", abaixo), onde
+as levas se comparam para a previsão melhorar.
 
 ## O modo: o paralelismo que o acoplamento deixa
 
@@ -183,13 +193,14 @@ Só com a qualidade verde, nesta ordem, na working tree principal:
    `git branch -D` do branch da leva e dos `leva/<slug>-<n>`. No Windows a remoção falha com
    arquivo preso por processo: apague a pasta, rode o `git worktree prune` de novo e apague o
    branch; worktree ou branch `leva/*` órfão de leva já fechada sai junto;
-5. a nota de evolução no tracker;
-6. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
-   com a leva aberta.
+5. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
+   com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real;
+6. a nota de evolução no tracker, com a seção `## Tempos`: a tabela do resultado do `fechamento`
+   como veio, e uma frase sobre o maior desvio. Sem painel, a seção leva só as previsões.
 
-Qualidade vermelha, segredo achado ou validação reprovada: o commit squash não acontece; tudo
-fica staged, o branch da leva fica (o trabalho está commitado nele), a nota segue, e o relatório diz
-por quê.
+Qualidade vermelha, segredo achado ou validação reprovada: o commit squash e o `fechamento` não
+acontecem; tudo fica staged, o branch da leva fica (o trabalho está commitado nele), a nota segue
+com as previsões em `## Tempos`, e o relatório diz por quê.
 
 ## Quando algo trava
 

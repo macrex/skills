@@ -49,6 +49,9 @@ export function aplicar(leva: Leva | null, m: Marco, agora: number, usd: number 
   return novo && !novo.erro ? { ...novo, marcadaEm: agora } : novo
 }
 
+// a previsao ausente, ou um inteiro de minutos
+const minutos = (v: unknown) => v == null || (Number.isInteger(v) && (v as number) >= 1)
+
 // o agente que marca o ticket entra nos dele: os turnos dele somam o custo do ticket (turn.complete)
 const comAgente = (t: LevaTicket, agentId: string | undefined) => (agentId && !t.agentes?.includes(agentId) ? { ...t, agentes: [...(t.agentes ?? []), agentId] } : t)
 
@@ -85,8 +88,14 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
       if (!Array.isArray(m.tickets) || !m.tickets.every(t => t && t.id != null && typeof t.titulo === 'string')) {
         return { erro: 'tickets exige uma lista de { id, titulo }' }
       }
-      // a lista reenviada no meio da leva (tickets novos no fim) guarda o andamento dos que ja tem
-      return { ...leva, tickets: m.tickets.map(t => ({ ...(leva.tickets.find(v => v.id === String(t.id)) ?? { estado: 'pendente' as const }), id: String(t.id), titulo: t.titulo })) }
+      if (![m.previsao, ...m.tickets.map(t => t.previsao)].every(minutos)) return { erro: 'previsao e um numero inteiro de minutos, de 1 para cima' }
+      // a lista reenviada no meio da leva (tickets novos no fim) guarda o andamento e a previsao dos
+      // que ja tem
+      return {
+        ...leva,
+        ...(m.previsao != null && { previsao: m.previsao }),
+        tickets: m.tickets.map(t => ({ ...(leva.tickets.find(v => v.id === String(t.id)) ?? { estado: 'pendente' as const }), id: String(t.id), titulo: t.titulo, ...(t.previsao != null && { previsao: t.previsao }) })),
+      }
     case 'ticket':
       return {
         ...leva,

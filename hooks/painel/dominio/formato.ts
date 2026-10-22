@@ -76,3 +76,20 @@ export function duracao(ms: number) {
   const m = Math.floor(s / 60)
   return m < 60 ? `${m}m${dois(s % 60)}s` : `${Math.floor(m / 60)}h${dois(m % 60)}m`
 }
+// a previsao, que vem em minutos inteiros
+export const prevista = (min: number) => (min < 60 ? `${min}m` : `${Math.floor(min / 60)}h${dois(min % 60)}m`)
+
+// A tabela dos tempos da leva, previsto contra real, por ticket e da leva inteira: o resultado do
+// fechamento a entrega para a secao ## Tempos da nota de evolucao, onde as levas se comparam depois.
+// O desvio e o real sobre o previsto, em %; sem um dos dois, —.
+export function tabelaDeTempos(leva: Leva) {
+  const desvio = (previsto?: number, real?: number) => (previsto == null || real == null ? '—' : `${real >= previsto * 60000 ? '+' : '-'}${Math.round((Math.abs(real - previsto * 60000) / (previsto * 60000)) * 100)}%`)
+  const linha = (nome: string, estado: string, previsto?: number, real?: number) => `| ${nome} | ${estado} | ${previsto == null ? '—' : prevista(previsto)} | ${real == null ? '—' : duracao(real)} | ${desvio(previsto, real)} |`
+  const real = (inicio?: number, fim?: number) => (inicio != null && fim != null ? fim - inicio : undefined)
+  return [
+    '| Ticket | Portão | Previsto | Real | Desvio |',
+    '|---|---|---|---|---|',
+    ...leva.tickets.map(t => linha(`${t.id} ${t.titulo}`, t.estado, t.previsao, real(t.inicioEm, t.fimEm))),
+    linha('Leva inteira', leva.fechada ? 'fechada' : 'aberta', leva.previsao, real(leva.inicio, leva.fim)),
+  ].join('\n')
+}

@@ -81,7 +81,8 @@ export type Marco = {
   fase?: string
   modo?: Leva['modo']
   branch?: string
-  tickets?: { id: string; titulo: string }[]
+  tickets?: { id: string; titulo: string; previsao?: number }[]
+  previsao?: number
   ticket?: string
   item?: string
   detalhe?: string

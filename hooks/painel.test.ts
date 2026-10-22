@@ -106,6 +106,34 @@ describe('painel da leva', () => {
     expect(q).toMatch(/02 {2}Ferramenta faz_marco {2,}em curso ◐ {2,}40s/)
     expect(q).toMatch(/03 {2}Ticket novo {2,}pendente/)
   })
+  test('o marco tickets com as previsoes as mostra ao lado do tempo real, e o fechamento devolve a tabela dos tempos para a nota de evolucao', async ($, on) => {
+    const { relogio, marco } = mundo($, on)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', previsao: 0 }] })).deny).toMatch(/minutos/)
+    await marco({ marco: 'tickets', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10 }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5 }] })
+    // o reenvio sem as previsoes guarda as que ja vieram
+    await marco({ marco: 'tickets', tickets: [...TICKETS, { id: '03', titulo: 'Ticket novo' }] })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await relogio.advance(segundos(8 * 60))
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    const ui = await $.ui.mount(PANE)
+    // a Geral: o cartao Previsao da leva inteira e, na linha de cada ticket, a previsao dele
+    const q = await quadro(ui)
+    expect(q).toMatch(/Previsão\n *previsto 1h30m {3}real 8m00s {3}9% do previsto/)
+    expect(q).toMatch(/01 {2}Mod do painel {2,}portão ✓ {2}≈10m {2,}8m00s/)
+    expect(q).toMatch(/02 {2}Ferramenta faz_marco {2,}pendente {2}≈5m/)
+    expect(q).not.toMatch(/Ticket novo.*≈/)
+    // a Tickets: embaixo de cada ticket com previsao, o previsto, o real e quanto do previsto ele gastou
+    await ui.press({ key: 'aba:tickets' })
+    const t = await quadro(ui)
+    expect(t).toMatch(/Mod do painel.*\n *previsto 10m {3}real 8m00s {3}80% do previsto\n/)
+    expect(t).toMatch(/Ferramenta faz_marco.*\n *previsto 5m\n/)
+    expect(t).toMatch(/Ticket novo.*\n *sem notas ainda/)
+
+    await relogio.advance(segundos(60))
+    const r = await marco({ marco: 'fechamento' })
+    expect(r.result).toContain(['| Ticket | Portão | Previsto | Real | Desvio |', '|---|---|---|---|---|', '| 01 Mod do painel | verde | 10m | 8m00s | -20% |', '| 02 Ferramenta faz_marco | pendente | 5m | — | — |', '| 03 Ticket novo | pendente | — | — | — |', '| Leva inteira | fechada | 1h30m | 9m00s | -90% |'].join('\n'))
+  })
   test('/painel-macrex abre o pane e, aberto, fecha', async ($, on) => {
     const abertos = new Set<string>()
     on('ui.open', ($, e) => { abertos.add(e.id); return { value: { isPlaced: true } } })
@@ -2000,7 +2028,7 @@ describe('painel da leva', () => {
     expect((await ui.find({ type: 'Text', text: /^code-review\b/ }))?.text).not.toMatch(/!/)
 
     // o fechamento nunca tem !, e zera as skills: a leva seguinte confere do zero
-    expect((await marco({ marco: 'fechamento' })).result).toBe('marco registrado; fase fechamento')
+    expect((await marco({ marco: 'fechamento' })).result).toMatch(/^marco registrado; fase fechamento\n/)
     expect(await ui.find({ type: 'Text', text: /^fechamento\b/ })).toBeUndefined()
     expect((await marco({ marco: 'inicio', documento: 'seguinte' })).result).toBe('marco registrado; fase spec sem /to-spec invocada')
     expect((await marco({ marco: 'fase', fase: 'revisao' })).result).toBe('marco registrado; fase revisao sem /code-review invocada')

@@ -8,6 +8,8 @@ export type LevaTicket = {
   notas?: string
   inicioEm?: number
   fimEm?: number
+  // a previsao do ticket em minutos, que a leva da no marco tickets antes do implement
+  previsao?: number
   // no modo inline, o custo da sessao (US$) no primeiro marco ticket e o gasto ate o portao; nos
   // paralelos, a soma dos turnos dos agentes que marcaram o ticket, pelos tokens e o preco do modelo
   custoInicio?: number
@@ -36,6 +38,8 @@ export type Leva = {
   entradas?: Record<string, number>
   inicio?: number
   fim?: number
+  // a previsao da leva inteira em minutos, do inicio ao fechamento (marco tickets)
+  previsao?: number
   tickets: LevaTicket[]
   itens?: LevaItem[]
   sujos?: string[]
