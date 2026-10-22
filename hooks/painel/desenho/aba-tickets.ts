@@ -16,7 +16,9 @@ export function contraPrevisto(previsao: number, real: number | undefined): Part
 // ticket e item: o portao (verde ✓, vermelho ✗, em curso ◐), a previsao do ticket (≈) e o tempo,
 // alinhados a direita
 export function linhasDePortao({ Text, linhaLarga, largura }: Primitivas, agora: number) {
-  const realDe = (t: ComPortao) => (t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? (t.fimEm ?? agora) - t.inicioEm : undefined)
+  // o tempo do item nao conta o que ele passou esperando, nem a espera aberta
+  const esperado = (t: ComPortao) => (t.esperaMs ?? 0) + (t.esperaDesde != null ? agora - t.esperaDesde : 0)
+  const realDe = (t: ComPortao) => (t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? (t.fimEm ?? agora) - t.inicioEm - esperado(t) : undefined)
   const tempoDe = (t: ComPortao) => {
     const real = realDe(t)
     return real == null ? '' : duracao(real)
@@ -25,6 +27,7 @@ export function linhasDePortao({ Text, linhaLarga, largura }: Primitivas, agora:
   const previsto = (partes: Parte[]) => h(Text, { color: TEXTO }, ...partes.map(([t, p]) => h(Text, p ?? {}, t)))
   const portao = (t: ComPortao, rotulo: string): [string, string] => {
     if (t.estado === 'pendente') return ['pendente', APAGADO]
+    if (t.estado === 'em-curso' && t.esperaDesde != null) return [`${t.detalhe ? `${t.detalhe} ` : ''}aguardando ◌`, AMARELO]
     if (t.estado === 'em-curso') return [`${t.detalhe ? `${t.detalhe} ` : ''}em curso ◐`, LARANJA]
     const reparos = t.reparos ? ` · ${t.reparos} ${t.reparos === 1 ? 'reparo' : 'reparos'}` : ''
     return [`${rotulo}${t.estado === 'verde' ? '✓' : '✗'}${reparos}`, t.estado === 'verde' ? VERDE : VERMELHO]

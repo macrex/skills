@@ -86,6 +86,7 @@ export type Marco = {
   ticket?: string
   item?: string
   detalhe?: string
+  espera?: boolean
   portao?: 'verde' | 'vermelho'
   reparos?: number
   testes?: string

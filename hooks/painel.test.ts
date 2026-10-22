@@ -1804,6 +1804,26 @@ describe('painel da leva', () => {
     expect(await quadro(ui)).toMatch(/Ferramenta faz_marco[\s\S]*\nConciliação 1\s+2\/2 ✓/)
   })
 
+  test('o item em espera para o proprio relogio ate o marco seguinte, e o tempo dele e so o trabalhado', async ($, on) => {
+    const { relogio, marco } = mundo($, on)
+    await marco({ marco: 'inicio', documento: 'doc' })
+    await marco({ marco: 'fase', fase: 'implement' })
+    await marco({ marco: 'item', item: 'Conciliação 1' })
+    await relogio.advance(segundos(60))
+    await marco({ marco: 'item', item: 'Conciliação 1', espera: true, detalhe: 'esperando 02' })
+    await relogio.advance(segundos(600))
+
+    const ui = await $.ui.mount(PANE)
+    expect((await ui.find({ type: 'Text', text: /^Conciliação 1\b/ }))?.text).toMatch(/esperando 02 aguardando ◌\s+1m00s$/)
+    expect((await ui.find({ type: 'Text', text: /^esperando 02 aguardando ◌$/ }))?.props.color).toBe('#e0af68')
+
+    await marco({ marco: 'item', item: 'Conciliação 1', detalhe: '1/2' })
+    await relogio.advance(segundos(30))
+    await marco({ marco: 'item', item: 'Conciliação 1', portao: 'verde', detalhe: '2/2' })
+    expect((await ui.find({ type: 'Text', text: /^Conciliação 1\b/ }))?.text).toMatch(/2\/2 ✓\s+1m30s$/)
+    expect((await marco({ marco: 'item', item: 'x', espera: 'sim' as never })).deny).toMatch(/espera/)
+  })
+
   test('com a leva ativa, o tempo da fase anda sozinho no pane, sem marco novo', async ($, on) => {
     const { relogio, marco, sessao } = mundo($, on)
     await sessao()

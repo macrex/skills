@@ -613,6 +613,7 @@ export function registrarSessao(on: On, ctx: Contexto) {
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
           item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, ou a Conciliacao do implement, nunca o da fase' },
           detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
+          espera: { type: 'boolean', description: 'item: true para o relogio do item enquanto ele espera (a conciliacao esperando o ticket seguinte); o marco seguinte do item o retoma' },
           portao: { type: 'string', enum: PORTOES },
           reparos: { type: 'integer', minimum: 0, maximum: 2 },
           testes: { type: 'string', maxLength: 20, description: 'portao: contagem de testes, ex. 3/4' },

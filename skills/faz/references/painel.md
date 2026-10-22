@@ -21,7 +21,10 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
   `ticket` e `portao` para o fechado que nenhum agente marcou. O verde já marcado não se reenvia.
 - `item` na conciliação de cada onda, na fase implement: `Conciliação <n>`, com o `<n>` da onda,
   ao começar e de novo, com `portao` e a contagem de tickets conciliados sobre os da onda em
-  `detalhe` (ex. `3/3`), quando ela terminar.
+  `detalhe` (ex. `3/3`), quando ela terminar. A conciliação que fica esperando o ticket seguinte (no
+  modo sub-agents) manda o mesmo item com `espera: true` e `detalhe` `esperando <n>` antes de esperar,
+  e de novo sem `espera` quando ele chega: o relógio do item para na espera, e o tempo dele é só o
+  trabalhado.
 - `item` em cada passo da revisão, das correções e da qualidade: um por eixo da revisão
   (`Standards`, `Spec`) ao abrir o sub-agente e de novo, com `portao` e o número de achados em
   `detalhe`, quando o relatório chegar; nas correções, `Achados da revisão`, com a contagem de

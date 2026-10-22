@@ -123,7 +123,11 @@ paga com elas:
 
 **O que cada modo cumpre igual.** O preâmbulo — o `PREAMBULO` de
 `workflow-tickets.md`, ao lado deste arquivo: TDD nos seams acordados,
-verificação frequente, a suíte inteira no fim, commit só no branch do ticket, nunca na working
+verificação frequente, o portão do ticket no fim (a suíte e os verificadores de minutos, e do pesado —
+o e2e no navegador, as baterias — só a parte que cobre o que ele mudou: o pesado inteiro roda na
+conciliação, com a máquina livre, porque rodado por tickets paralelos ao mesmo tempo ele disputa a
+máquina e falha à toa), uma repetição só, sozinha, da parte que falha, relatada como instável quando
+passa, commit só no branch do ticket, nunca na working
 tree principal, e nenhum ticket sobe a `# Versao` do `SKILL.md` nem o `plugin.json` —, o portão
 booleano e as notas que passam de um ticket ao seguinte são os mesmos nos três;
 muda quem os executa:
@@ -139,7 +143,7 @@ muda quem os executa:
   ("Mensagem a um sub-agente" na referência dele): o primeiro ticket verde abre o sub-agente que
   concilia, no modelo do implement, com o prompt de `conciliar` só com ele e a linha "outros
   tickets da onda chegam por mensagem: depois do merge e da rápida de cada um, devolva o que fez e
-  espere; a inteira e a remoção, só quando a mensagem disser que a onda fechou". Cada verde
+  espere, com o item em espera no painel; a inteira e a remoção, só quando a mensagem disser que a onda fechou". Cada verde
   seguinte vai a ele por mensagem, na ordem em que chega; a última, depois que o último ticket da
   onda voltou, diz que ela fechou e traz as worktrees e os branches a remover. Assim só a rápida
   roda enquanto os outros tickets trabalham, e a inteira, com a máquina livre. Sem mensagem a
@@ -158,9 +162,11 @@ muda quem os executa:
 - **Conciliação**, ao fim de cada onda, automática e sem perguntar nada: numa worktree do branch
   da leva (`git worktree add <pasta> leva/<slug>`), um `git merge --no-ff leva/<slug>-<n>` por
   ticket verde da onda, os conflitos resolvidos ali, a verificação rápida (os comandos de
-  segundos) depois de cada merge e a inteira uma vez, depois do último, com até dois reparos
-  commitados no branch da leva. A ponta de antes da onda não se reverifica: a conciliação
-  anterior, ou o portão de cada ticket, já rodou a inteira sobre ela; nem a árvore que acabou de
+  segundos e os testes dos arquivos que o merge trouxe, nunca a suíte que leva minutos) depois de
+  cada merge e a inteira (a suíte, o e2e, as baterias) uma vez, depois do último, um comando por
+  vez, com até dois reparos commitados no branch da leva. A ponta de antes da onda não se
+  reverifica: a conciliação anterior já rodou a inteira sobre ela, e na primeira onda o portão de
+  cada ticket rodou sobre ela; nem a árvore que acabou de
   passar, só porque ganhou um commit. A onda seguinte parte da ponta conciliada; ticket nunca é
   refeito porque a base mudou.
 - **Squash**, depois do implement, na working tree principal: antes, compare
@@ -196,7 +202,9 @@ Só com a qualidade verde, nesta ordem, na working tree principal:
 5. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
    com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real;
 6. a nota de evolução no tracker, com a seção `## Tempos`: a tabela do resultado do `fechamento`
-   como veio, e uma frase sobre o maior desvio. Sem painel, a seção leva só as previsões.
+   como veio, e uma frase sobre o maior desvio. Sem painel, a seção leva só as previsões. As
+   falhas instáveis que os portões e as conciliações relataram vão nas Pendências, com o texto
+   literal e o que rodava junto, para o projeto corrigir.
 
 Qualidade vermelha, segredo achado ou validação reprovada: o commit squash e o `fechamento` não
 acontecem; tudo fica staged, o branch da leva fica (o trabalho está commitado nele), a nota segue

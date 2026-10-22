@@ -122,11 +122,15 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
       if (!FASES_COM_ITENS[f]) return { erro: `item vai so nas fases ${Object.keys(FASES_COM_ITENS).join(', ')}; veio fase ${f}` }
       if (m.portao != null && !PORTOES.includes(m.portao)) return { erro: `portao deve ser verde ou vermelho, veio ${m.portao}` }
       if (m.detalhe != null && (typeof m.detalhe !== 'string' || m.detalhe.length > 60)) return { erro: 'detalhe e um texto de ate 60 caracteres' }
+      if (m.espera != null && typeof m.espera !== 'boolean') return { erro: `espera e true ou false, veio ${m.espera}` }
       if (m.item.trim() === FASES_COM_ITENS[f]) return { erro: `item repete o titulo do cartao (${m.item}): nomeie o passo, ex. Achados da revisao, Testes, Build` }
       // o mesmo item da mesma fase e atualizado, e guarda a hora em que comecou; o que ja
       // chega com o portao, sem ter aberto em curso, conta da entrada na fase
       const itens = leva.itens ?? []
       const velho = itens.find(i => i.fase === f && i.titulo === m.item)
+      // a espera abre com espera true e fecha no marco seguinte do item, o do portao inclusive
+      const parado = velho?.esperaDesde
+      const esperaMs = (velho?.esperaMs ?? 0) + (parado != null && (!m.espera || m.portao) ? agora - parado : 0)
       // a fase vale: o FASES_COM_ITENS acima a conferiu
       const novo: LevaItem = {
         fase: f as LevaItem['fase'],
@@ -135,6 +139,8 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
         detalhe: m.detalhe ?? velho?.detalhe,
         inicioEm: velho?.inicioEm ?? (m.portao && leva.entradas?.[f]) ?? agora,
         fimEm: m.portao ? agora : undefined,
+        esperaMs: esperaMs || undefined,
+        esperaDesde: m.espera && !m.portao ? (parado ?? agora) : undefined,
         // o custo conta do primeiro marco em curso; o que chega com o portao nao abriu, ate reabrir
         custoInicio: velho?.custoInicio ?? (m.portao ? undefined : usd),
         custoFim: m.portao ? usd : undefined,

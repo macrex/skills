@@ -25,6 +25,10 @@ export type LevaItem = {
   detalhe?: string
   inicioEm: number
   fimEm?: number
+  // o tempo em que o item ficou parado esperando (a conciliacao esperando o ticket seguinte), que o
+  // tempo dele nao conta, e a hora em que a espera aberta comecou
+  esperaMs?: number
+  esperaDesde?: number
   // o custo da sessao (US$) no primeiro marco do item e no marco com o portao. Os dois pontos, e nao
   // a diferenca como no ticket: o desenho cruza os itens da fase e soma a fase do primeiro ao ultimo
   custoInicio?: number

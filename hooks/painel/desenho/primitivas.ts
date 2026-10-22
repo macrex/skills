@@ -12,7 +12,7 @@ import { pedacos } from '../dominio/diff.ts'
 export type Desenho = ReturnType<typeof h>
 export type Parte = [string, Record<string, unknown>?]
 // a linha do ticket e a do item: o portao e o tempo
-export type ComPortao = { estado: LevaTicket['estado'] | LevaItem['estado']; detalhe?: string; reparos?: number; inicioEm?: number; fimEm?: number; custo?: number }
+export type ComPortao = { estado: LevaTicket['estado'] | LevaItem['estado']; detalhe?: string; reparos?: number; inicioEm?: number; fimEm?: number; esperaMs?: number; esperaDesde?: number; custo?: number }
 // o mobile nao tem Input: a aba Arquivos o pede como sempre pediu
 export type Elementos = ElementTable<'terminal' | 'desktop' | 'vscode'>
 // os efeitos dos botoes e do campo, que o nucleo liga ao $
