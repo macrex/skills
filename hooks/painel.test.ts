@@ -3,6 +3,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
+import { juntos } from './painel/dominio/tempos.ts'
 
 const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'painel-macrex', props: {}, surface: 'terminal' } as const
 const SURFACES = ['terminal', 'desktop'] as const
@@ -110,7 +111,10 @@ describe('painel da leva', () => {
     const { relogio, marco } = mundo($, on)
     await marco({ marco: 'inicio', documento: 'doc' })
     expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', previsao: 0 }] })).deny).toMatch(/minutos/)
-    await marco({ marco: 'tickets', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10 }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5 }] })
+    expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', previsao: 10 }] })).deny).toMatch(/previsao vai com o perfil do ticket .*; falta no 01/)
+    await marco({ marco: 'tickets', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10, perfil: 'unidade' }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5, perfil: 'texto' }] })
+    // o reenvio da previsao sem o perfil guarda o que ja veio
+    expect((await marco({ marco: 'tickets', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10 }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5 }] })).deny).toBeUndefined()
     // o reenvio sem as previsoes guarda as que ja vieram
     await marco({ marco: 'tickets', tickets: [...TICKETS, { id: '03', titulo: 'Ticket novo' }] })
     await marco({ marco: 'ticket', ticket: '01' })
@@ -133,6 +137,82 @@ describe('painel da leva', () => {
     await relogio.advance(segundos(60))
     const r = await marco({ marco: 'fechamento' })
     expect(r.result).toContain(['| Ticket | Portão | Previsto | Real | Desvio |', '|---|---|---|---|---|', '| 01 Mod do painel | verde | 10m | 8m00s | -20% |', '| 02 Ferramenta faz_marco | pendente | 5m | — | — |', '| 03 Ticket novo | pendente | — | — | — |', '| Leva inteira | fechada | 1h30m | 9m00s | -90% |'].join('\n'))
+  })
+  test('a fase tickets devolve a calibracao do time.md; o fechamento grava nele a leva em tempo da maquina, sem a espera pelo usuario', async ($, on) => {
+    const { relogio, marco } = mundo($, on)
+    const arquivos: Record<string, string> = {}
+    on('fs.read', ($, e) => (e.path in arquivos ? { value: arquivos[e.path]! } : { deny: 'ENOENT' }))
+    on('fs.write', ($, e) => { arquivos[e.path] = e.text; return { value: undefined } })
+    on('classic.PermissionRequest', () => ({}) as never)
+    on('turn.complete', () => ({ text: '' }))
+    on('prompt.submit', ($, e) => ({ text: e.text }))
+    await marco({ marco: 'inicio', documento: '2026-10-22 Modo Trio — entendimento do grill' })
+    // sem time.md, a fase tickets diz que nao ha calibracao
+    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Sem calibracao neste projeto/)
+    expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', perfil: 'lento' }] })).deny).toMatch(/perfil e um de texto, unidade, tela, pesado/)
+    await marco({ marco: 'tickets', previsao: 60, tickets: [{ id: '01', titulo: 'Núcleo', previsao: 40, perfil: 'unidade' }, { id: '02', titulo: 'E2e', previsao: 10, perfil: 'pesado' }] })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    // 10 min de trabalho com 5 min de permissao pendente no meio: o ticket leva 5 min de maquina
+    await relogio.advance(segundos(3 * 60))
+    await $.classic.PermissionRequest({ tool_name: 'Bash' } as never)
+    await relogio.advance(segundos(5 * 60))
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' } as never)
+    // o principal parado 4 min ate o usuario digitar: outra espera
+    await relogio.advance(segundos(4 * 60))
+    await $.prompt.submit({ text: 'continua', origin: { kind: 'composer' } } as never)
+    await relogio.advance(segundos(2 * 60))
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde', reparos: 1 })
+    await marco({ marco: 'ticket', ticket: '02' })
+    await relogio.advance(segundos(20 * 60))
+    await marco({ marco: 'portao', ticket: '02', portao: 'verde' })
+    const r = await marco({ marco: 'fechamento' })
+    expect(r.result).toContain('| 01 Núcleo | verde | 40m | 5m00s | -88% |')
+    expect(r.result).toContain('| Leva inteira | fechada | 1h00m | 25m00s | -58% |')
+    expect(r.result).toContain('| Espera do usuário | — | — | 9m00s | — |')
+    expect(r.result).toMatch(/time\.md da raiz atualizado/)
+    // o time.md da raiz, no separador que o engine der ao caminho
+    const timeMd = () => Object.entries(arquivos).find(([p]) => /^D:[\\/]ws[\\/]a[\\/]time\.md$/.test(p))?.[1] ?? ''
+    const md = timeMd()
+    // a data e a do inicio da leva no relogio, sem a data do documento
+    // no inline, um ticket por vez: Juntos 1
+    expect(md).toMatch(/\n\| \d{4}-\d\d-\d\d \| Modo Trio \| 01 Núcleo \| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 9m00s \| 0,13× \|\n/)
+    expect(md).toContain('| Modo Trio | 02 E2e | pesado | inline | 1 | — | 10m | 20m00s | — | 2,00× |')
+    expect(md).toContain('| Modo Trio | fase implement | — | inline | — | — | — | 25m00s | 9m00s | — |')
+    expect(md).toMatch(/\| pesado \| inline \| 1 \| 1 \| 10m \| 20m00s \| 2,00× \|\n\| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 0,13× \|\n\| Leva inteira \| inline \| 1 \| — \| 1h00m \| 25m00s \| 0,42× \|/)
+    expect(md).toContain('| inline | 1 | 25m00s | 25m00s | 1,00× |')
+
+    // a leva seguinte ve a calibracao na entrada da fase tickets, e o fechamento dela guarda as linhas da anterior
+    await marco({ marco: 'inicio', documento: 'Outra' })
+    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Calibracao deste projeto \(time\.md da raiz\)[^]*\| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 0,13× \|/)
+    // dois tickets na mesma onda, no modo paralelo: dividem o relogio do implement
+    await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'Só texto', previsao: 10, perfil: 'unidade' }, { id: '02', titulo: 'Paralelo', previsao: 10, perfil: 'unidade' }] })
+    await marco({ marco: 'fase', fase: 'implement', modo: 'sub-agents' })
+    await marco({ marco: 'ticket', ticket: '01' })
+    await marco({ marco: 'ticket', ticket: '02' })
+    await relogio.advance(segundos(15 * 60))
+    await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    await relogio.advance(segundos(5 * 60))
+    await marco({ marco: 'portao', ticket: '02', portao: 'verde' })
+    await marco({ marco: 'fechamento' })
+    const depois = timeMd()
+    expect(depois).toContain('| Modo Trio | 01 Núcleo |')
+    expect(depois).toContain('| Outra | 01 Só texto | unidade | sub-agents | 2 | — | 10m | 15m00s |')
+    expect(depois).toContain('| Outra | 02 Paralelo | unidade | sub-agents | 2 | — | 10m | 20m00s |')
+    expect(depois).toMatch(/\n2 levas no Registro\./)
+    // a calibracao separa o modo: o inline e o paralelo nao se misturam
+    expect(depois).toContain('| unidade | inline | 1 | 1 | 40m | 5m00s | 0,13× |')
+    expect(depois).toContain('| unidade | sub-agents | 2 | 2 | 10m | 17m30s | 1,75× |')
+    // 35 min de tickets em 20 min de implement
+    expect(depois).toContain('| sub-agents | 1 | 35m00s | 20m00s | 1,75× |')
+  })
+  test('o Juntos de cada ticket e o pico de tickets rodando no intervalo dele, ele incluso', async () => {
+    const t = (id: string, inicioEm: number, fimEm: number) => ({ id, titulo: id, estado: 'verde' as const, inicioEm, fimEm })
+    // a de 0 a 10, b de 2 a 4, c de 5 a 12, d de 11 a 13: a cruza b e c, mas nunca os tres juntos
+    const [a, b, c, d] = [t('a', 0, 10), t('b', 2, 4), t('c', 5, 12), t('d', 11, 13)]
+    const todos = [a, b, c, d]
+    expect([a, b, c, d].map(x => juntos(x, todos))).toEqual([2, 2, 2, 2])
+    expect(juntos({ ...a, estado: 'em-curso' }, todos)).toBeUndefined()
   })
   test('/painel-macrex abre o pane e, aberto, fecha', async ($, on) => {
     const abertos = new Set<string>()
@@ -2027,7 +2107,8 @@ describe('painel da leva', () => {
     await skill('to-tickets')
     await skill('mattpocock-skills:grilling')
     expect((await marco({ marco: 'inicio', documento: 'doc' })).result).toBe('marco registrado; fase spec')
-    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toBe('marco registrado; fase tickets')
+    // a fase tickets traz a calibracao do time.md na linha seguinte
+    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/^marco registrado; fase tickets\n/)
     expect((await marco({ marco: 'fase', fase: 'implement' })).result).toBe('marco registrado; fase implement sem /implement-spec invocada')
     expect((await marco({ marco: 'fase', fase: 'revisao' })).result).toBe('marco registrado; fase revisao sem /code-review invocada')
     expect((await marco({ marco: 'fase', fase: 'correcoes' })).result).toBe('marco registrado; fase correcoes')

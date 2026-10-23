@@ -2,7 +2,7 @@
 
 import type { Leva, LevaItem, LevaTicket } from '../../../types/index.d.ts'
 import { LARANJA, TEXTO, APAGADO, VERDE, VERMELHO, AMARELO } from '../dominio/vocabulario.ts'
-import { verdes, dolares, duracao, prevista } from '../dominio/formato.ts'
+import { verdes, dolares, duracao, prevista, daMaquina } from '../dominio/formato.ts'
 import type { ComPortao, Primitivas, Parte } from './primitivas.ts'
 
 // a previsao contra o real, por extenso: o previsto, o real e quanto do previsto ele ja gastou,
@@ -15,10 +15,12 @@ export function contraPrevisto(previsao: number, real: number | undefined): Part
 
 // ticket e item: o portao (verde ✓, vermelho ✗, em curso ◐), a previsao do ticket (≈) e o tempo,
 // alinhados a direita
-export function linhasDePortao({ Text, linhaLarga, largura }: Primitivas, agora: number) {
-  // o tempo do item nao conta o que ele passou esperando, nem a espera aberta
-  const esperado = (t: ComPortao) => (t.esperaMs ?? 0) + (t.esperaDesde != null ? agora - t.esperaDesde : 0)
-  const realDe = (t: ComPortao) => (t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? (t.fimEm ?? agora) - t.inicioEm - esperado(t) : undefined)
+export function linhasDePortao({ Text, linhaLarga, largura }: Primitivas, agora: number, esperas?: [number, number][]) {
+  // o tempo do item nao conta o que ele passou esperando, nem a espera aberta; o de todos, a espera
+  // pelo usuario (esperas da leva)
+  // ponytail: o item parado esperando no mesmo instante em que o usuario e esperado desconta os dois
+  const esperou = (t: ComPortao) => (t.esperaMs ?? 0) + (t.esperaDesde != null ? agora - t.esperaDesde : 0)
+  const realDe = (t: ComPortao) => (t.inicioEm != null && (t.fimEm != null || t.estado === 'em-curso') ? daMaquina(t.inicioEm, t.fimEm ?? agora, esperas)! - esperou(t) : undefined)
   const tempoDe = (t: ComPortao) => {
     const real = realDe(t)
     return real == null ? '' : duracao(real)
@@ -46,7 +48,7 @@ export function linhasDePortao({ Text, linhaLarga, largura }: Primitivas, agora:
 export function abaTickets(kit: Primitivas, { leva, agora }: { leva: Leva | null; agora: number }) {
   const { Box, Text, tela, cartao, apagado } = kit
   if (!leva) return tela('Nenhuma leva neste workspace', 'verdes', '—', cartao(null, apagado('os tickets aparecem quando o to-tickets publica')))
-  const { ticket, item, previsto, realDe } = linhasDePortao(kit, agora)
+  const { ticket, item, previsto, realDe } = linhasDePortao(kit, agora, leva.esperas)
   const comNotas = (t: LevaTicket, i: number) =>
     h(
       Box,

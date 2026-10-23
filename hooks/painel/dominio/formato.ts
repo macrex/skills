@@ -79,17 +79,26 @@ export function duracao(ms: number) {
 // a previsao, que vem em minutos inteiros
 export const prevista = (min: number) => (min < 60 ? `${min}m` : `${Math.floor(min / 60)}h${dois(min % 60)}m`)
 
+// o quanto de [inicio, fim] caiu em espera pelo usuario
+export const esperado = (inicio: number, fim: number, esperas: [number, number][] = []) =>
+  esperas.reduce((soma, [a, b]) => soma + Math.max(0, Math.min(b, fim) - Math.max(a, inicio)), 0)
+// o tempo da maquina entre dois marcos, sem as esperas pelo usuario, ou undefined sem um deles
+export const daMaquina = (inicio: number | undefined, fim: number | undefined, esperas?: [number, number][]) =>
+  inicio == null || fim == null ? undefined : fim - inicio - esperado(inicio, fim, esperas)
+
 // A tabela dos tempos da leva, previsto contra real, por ticket e da leva inteira: o resultado do
 // fechamento a entrega para a secao ## Tempos da nota de evolucao, onde as levas se comparam depois.
-// O desvio e o real sobre o previsto, em %; sem um dos dois, —.
+// O real e o da maquina; a espera pelo usuario, quando houve, vai numa linha propria. O desvio e o
+// real sobre o previsto, em %; sem um dos dois, —.
 export function tabelaDeTempos(leva: Leva) {
   const desvio = (previsto?: number, real?: number) => (previsto == null || real == null ? '—' : `${real >= previsto * 60000 ? '+' : '-'}${Math.round((Math.abs(real - previsto * 60000) / (previsto * 60000)) * 100)}%`)
   const linha = (nome: string, estado: string, previsto?: number, real?: number) => `| ${nome} | ${estado} | ${previsto == null ? '—' : prevista(previsto)} | ${real == null ? '—' : duracao(real)} | ${desvio(previsto, real)} |`
-  const real = (inicio?: number, fim?: number) => (inicio != null && fim != null ? fim - inicio : undefined)
+  const espera = leva.inicio != null && leva.fim != null ? esperado(leva.inicio, leva.fim, leva.esperas) : 0
   return [
     '| Ticket | Portão | Previsto | Real | Desvio |',
     '|---|---|---|---|---|',
-    ...leva.tickets.map(t => linha(`${t.id} ${t.titulo}`, t.estado, t.previsao, real(t.inicioEm, t.fimEm))),
-    linha('Leva inteira', leva.fechada ? 'fechada' : 'aberta', leva.previsao, real(leva.inicio, leva.fim)),
+    ...leva.tickets.map(t => linha(`${t.id} ${t.titulo}`, t.estado, t.previsao, daMaquina(t.inicioEm, t.fimEm, leva.esperas))),
+    linha('Leva inteira', leva.fechada ? 'fechada' : 'aberta', leva.previsao, daMaquina(leva.inicio, leva.fim, leva.esperas)),
+    ...(espera ? [linha('Espera do usuário', '—', undefined, espera)] : []),
   ].join('\n')
 }

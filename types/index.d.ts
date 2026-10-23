@@ -8,8 +8,10 @@ export type LevaTicket = {
   notas?: string
   inicioEm?: number
   fimEm?: number
-  // a previsao do ticket em minutos, que a leva da no marco tickets antes do implement
+  // a previsao do ticket em minutos, que a leva da no marco tickets antes do implement, e o perfil
+  // dele, que agrupa os tickets na calibracao do time.md
   previsao?: number
+  perfil?: 'texto' | 'unidade' | 'tela' | 'pesado'
   // no modo inline, o custo da sessao (US$) no primeiro marco ticket e o gasto ate o portao; nos
   // paralelos, a soma dos turnos dos agentes que marcaram o ticket, pelos tokens e o preco do modelo
   custoInicio?: number
@@ -44,6 +46,9 @@ export type Leva = {
   fim?: number
   // a previsao da leva inteira em minutos, do inicio ao fechamento (marco tickets)
   previsao?: number
+  // os intervalos [inicio, fim] em que a leva esperou o usuario (permissao pendente, ou a sessao
+  // parada ate ele digitar), que o tempo da maquina desconta
+  esperas?: [number, number][]
   tickets: LevaTicket[]
   itens?: LevaItem[]
   sujos?: string[]
@@ -185,8 +190,10 @@ declare module 'claude-code' {
       filtro: string
       // as chaves dos alertas ja avisados num toast
       alertados: string[]
-      // a permissao pendente e o loop que a pediu (sem agentId, o principal)
-      permissao: { ferramenta: string; agentId?: string } | null
+      // a permissao pendente, o loop que a pediu (sem agentId, o principal) e desde quando
+      permissao: { ferramenta: string; agentId?: string; desde?: number } | null
+      // a hora em que o laco principal parou com a leva aberta, ate o proximo prompt
+      ocioso: number | null
     }
   }
 }

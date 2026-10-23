@@ -66,11 +66,38 @@ sem perguntar.
 
 Publicada a tabela do `to-tickets`, antes do implement, preveja em minutos inteiros quanto cada
 ticket vai levar e quanto a leva inteira vai levar, do `inicio` ao `fechamento` (o que já passou
-conta). A previsão é o seu julgamento do que você levaria, pelo modo, pela profundidade e pelo
-acoplamento de cada ticket, nunca tabela nem fórmula. Ela vai no marco `tickets`
-(`references/painel.md`), e o painel a mostra contra o tempo real, que ele mesmo mede; diga-a ao
-usuário na linha do modo. A nota de evolução leva as duas ao vault ("O fechamento", abaixo), onde
-as levas se comparam para a previsão melhorar.
+conta). **O tempo é o da máquina**: o seu, com as ferramentas, os sub-agentes e os verificadores
+rodando — nunca o de um desenvolvedor humano escrevendo o código, a âncora que mais erra: nas
+primeiras levas medidas, ela previu de 2 a 5 vezes o real dos tickets de código e ficou abaixo do
+real dos que rodam e2e ou bateria. A espera pelo usuário (permissão pendente, a sessão parada até
+ele digitar) não entra; o painel a mede à parte.
+
+Antes de prever, leia a calibração do projeto: no Claude Code, ela vem no resultado do marco `fase`
+`tickets`; nos outros harnesses, na seção `## Calibração` do `time.md` da raiz, quando ele existe.
+Para cada ticket:
+
+1. dê o **perfil**, pelo mais pesado que o portão dele vai rodar: `texto` (só .md ou
+   configuração), `unidade` (a suíte de unidade), `tela` (interface conferida no navegador) ou
+   `pesado` (e2e, bateria ou build de minutos);
+2. parta do Real (mediana) do perfil **no modo da leva** e ajuste pela profundidade e pelo
+   acoplamento do ticket contra os do Registro do `time.md`; o Real/previsto diz para que lado as
+   previsões anteriores erraram. Os tickets de uma onda paralela dividem a máquina — o e2e e a
+   bateria de um atrasam os outros —, então o real de cada um é o que ele leva com a onda inteira
+   rodando (o Juntos da calibração diz com quantos); sem linha do perfil no modo, parta da de outro
+   modo e diga que o fez;
+3. no `pesado`, conte os verificadores que o portão roda pela duração que eles têm no projeto e uma
+   repetição da parte instável: é ali que o real passa do previsto.
+
+A leva inteira **nunca é a soma dos tickets no modo paralelo**: os de uma onda correm no mesmo
+relógio, e cada onda dura o seu ticket mais longo, mais a conciliação que espera por ele. Some as
+ondas, confira o implement contra o Tickets/implement do modo na calibração (quanto de ticket cabe
+em cada minuto de implement) e acrescente o Real das fases `revisao`, `correcoes` e `qualidade`. No
+inline, a soma dos tickets e das conciliações é o implement. Sem calibração, o
+julgamento segue o mesmo princípio: minutos de máquina, com o portão pesando mais que o código. A
+previsão e o perfil vão no marco `tickets` (`references/painel.md`), e o painel os mostra contra o
+tempo da máquina, que ele mesmo mede; diga a previsão ao usuário na linha do modo. No fechamento, o
+painel grava a leva no `time.md` da raiz, de onde a previsão seguinte parte, e a nota de evolução
+leva a tabela ao vault ("O fechamento", abaixo).
 
 ## O modo: o paralelismo que o acoplamento deixa
 
@@ -200,7 +227,9 @@ Só com a qualidade verde, nesta ordem, na working tree principal:
    arquivo preso por processo: apague a pasta, rode o `git worktree prune` de novo e apague o
    branch; worktree ou branch `leva/*` órfão de leva já fechada sai junto;
 5. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
-   com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real;
+   com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real, e o painel
+   grava a leva no `time.md` da raiz, que fica na working tree, fora do commit da leva: nunca o
+   commite nem o descarte;
 6. a nota de evolução no tracker, com a seção `## Tempos`: a tabela do resultado do `fechamento`
    como veio, e uma frase sobre o maior desvio. Sem painel, a seção leva só as previsões. As
    falhas instáveis que os portões e as conciliações relataram vão nas Pendências, com o texto

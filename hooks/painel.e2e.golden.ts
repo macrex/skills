@@ -1071,7 +1071,7 @@ mcp__macrex-skills__faz_marco: {"result":"marco registrado; linha"}
 Skill: {"result":"ok"}
 Skill: {"result":"ok"}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase spec"}
-mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase tickets sem /to-tickets invocada"}
+mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase tickets sem /to-tickets invocada\\nSem calibracao neste projeto (time.md da raiz ausente ou sem tempo real): preveja em tempo da maquina (\\"A previsao de tempo\\", leva.md da /faz); o fechamento comeca o time.md."}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase tickets"}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase tickets"}
 mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase implement"}
@@ -1105,7 +1105,7 @@ mcp__macrex-skills__faz_marco: {"deny":"item repete o titulo do cartao (Qualidad
 painel-macrex: {"text":"Painel da leva fechado."}
 painel-macrex: {"text":"Painel da leva aberto."}
 Edit: {"result":{}}
-mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase fechamento\\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\\n| Ticket | Portão | Previsto | Real | Desvio |\\n|---|---|---|---|---|\\n| 01 E2e golden | verde | — | 18s | — |\\n| 02 Domínio puro | verde | — | 10m08s | — |\\n| 03 Composition root | verde | — | 10s | — |\\n| Leva inteira | fechada | — | 11m10s | — |"}
+mcp__macrex-skills__faz_marco: {"result":"marco registrado; fase fechamento\\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\\n| Ticket | Portão | Previsto | Real | Desvio |\\n|---|---|---|---|---|\\n| 01 E2e golden | verde | — | 18s | — |\\n| 02 Domínio puro | verde | — | 10m08s | — |\\n| 03 Composition root | verde | — | 10s | — |\\n| Leva inteira | fechada | — | 11m10s | — |\\ntime.md da raiz atualizado com as linhas desta leva; ele fica na working tree, fora do commit da leva"}
 mcp__macrex-skills__faz_marco: {"result":"o usuario limpou o painel: siga sem registrar os marcos desta leva"}`,
   "91 toasts": `Grill na tela: http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123
 Grill na tela: http://127.0.0.1:47110/g/painel/20261009-142524?t=abc123

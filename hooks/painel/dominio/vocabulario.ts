@@ -28,6 +28,10 @@ export const LARANJA = '#d77757'
 export const FASES = ['spec', 'tickets', 'implement', 'revisao', 'correcoes', 'qualidade', 'fechamento']
 export const PORTOES = ['verde', 'vermelho']
 export const MODOS = ['inline', 'sub-agents', 'workflow']
+// o perfil do ticket pelo mais pesado que o portao dele roda: texto (so .md ou configuracao),
+// unidade (a suite de unidade), tela (interface conferida no navegador), pesado (e2e, bateria ou
+// build de minutos)
+export const PERFIS = ['texto', 'unidade', 'tela', 'pesado']
 // as fases cujo andamento chega item a item (a do implement, so a Conciliacao), e o titulo do cartao de cada uma
 export const FASES_COM_ITENS: Record<string, string> = { implement: 'Implementação', revisao: 'Revisão', correcoes: 'Correções', qualidade: 'Qualidade' }
 export const NO_HISTORICO = 5
@@ -81,7 +85,7 @@ export type Marco = {
   fase?: string
   modo?: Leva['modo']
   branch?: string
-  tickets?: { id: string; titulo: string; previsao?: number }[]
+  tickets?: { id: string; titulo: string; previsao?: number; perfil?: string }[]
   previsao?: number
   ticket?: string
   item?: string

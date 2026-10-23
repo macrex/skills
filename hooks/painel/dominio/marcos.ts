@@ -1,7 +1,7 @@
 // O reducer dos marcos da leva e do grill, puro: o estado novo ou a recusa, sem tocar no antigo.
 
 import type { Grill, Leva, LevaItem, LevaTicket } from '../../../types/index.d.ts'
-import { MARCOS, FASES, PORTOES, MODOS, FASES_COM_ITENS, SKILL_DA_FASE, CONTROLE } from './vocabulario.ts'
+import { MARCOS, FASES, PORTOES, MODOS, PERFIS, FASES_COM_ITENS, SKILL_DA_FASE, CONTROLE } from './vocabulario.ts'
 import type { Marco } from './vocabulario.ts'
 import { comCusto } from './formato.ts'
 
@@ -89,12 +89,23 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
         return { erro: 'tickets exige uma lista de { id, titulo }' }
       }
       if (![m.previsao, ...m.tickets.map(t => t.previsao)].every(minutos)) return { erro: 'previsao e um numero inteiro de minutos, de 1 para cima' }
-      // a lista reenviada no meio da leva (tickets novos no fim) guarda o andamento e a previsao dos
-      // que ja tem
+      if (!m.tickets.every(t => t.perfil == null || PERFIS.includes(t.perfil))) return { erro: `perfil e um de ${PERFIS.join(', ')}` }
+      // a previsao sem perfil cai em "sem perfil" na calibracao do time.md: o perfil vai junto, ou ja veio antes
+      const semPerfil = m.tickets.find(t => t.previsao != null && t.perfil == null && !leva.tickets.find(v => v.id === String(t.id))?.perfil)
+      if (semPerfil) return { erro: `previsao vai com o perfil do ticket (${PERFIS.join(', ')}); falta no ${semPerfil.id}` }
+      // a lista reenviada no meio da leva (tickets novos no fim) guarda o andamento, a previsao e o
+      // perfil dos que ja tem
       return {
         ...leva,
         ...(m.previsao != null && { previsao: m.previsao }),
-        tickets: m.tickets.map(t => ({ ...(leva.tickets.find(v => v.id === String(t.id)) ?? { estado: 'pendente' as const }), id: String(t.id), titulo: t.titulo, ...(t.previsao != null && { previsao: t.previsao }) })),
+        tickets: m.tickets.map(t => ({
+          ...(leva.tickets.find(v => v.id === String(t.id)) ?? { estado: 'pendente' as const }),
+          id: String(t.id),
+          titulo: t.titulo,
+          ...(t.previsao != null && { previsao: t.previsao }),
+          // o PERFIS.includes acima garante o perfil
+          ...(t.perfil != null && { perfil: t.perfil as LevaTicket['perfil'] }),
+        })),
       }
     case 'ticket':
       return {

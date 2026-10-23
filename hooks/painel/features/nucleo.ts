@@ -6,9 +6,10 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, BuiltinToolResults, EngineInterface, On, ProcessRunInit, RenderElement } from 'claude-code'
 import type { Grill, Leva, LevaAgente, LevaHistorico } from '../../../types/index.d.ts'
-import { FERRAMENTA, MARCOS, MARCOS_DO_GRILL, RONCO, FASES, PORTOES, MODOS, NO_HISTORICO, SKILL_DA_FASE, DA_LISTA, VIVOS, MUDAM, URL_DA_TELA, RETOMAR } from '../dominio/vocabulario.ts'
+import { FERRAMENTA, MARCOS, MARCOS_DO_GRILL, RONCO, FASES, PORTOES, MODOS, PERFIS, NO_HISTORICO, SKILL_DA_FASE, DA_LISTA, VIVOS, MUDAM, URL_DA_TELA, RETOMAR } from '../dominio/vocabulario.ts'
 import type { Aba, Marco } from '../dominio/vocabulario.ts'
 import { nomeDa, somar, porcento, custoDosTokens, tabelaDeTempos } from '../dominio/formato.ts'
+import { TIME_MD, calibracao, comCalibracao, comLeva } from '../dominio/tempos.ts'
 import { novoId, semSkill, retoma, doInicio, aplicar, aplicarNoGrill, naTela } from '../dominio/marcos.ts'
 import { vivo, idDeParar, alertas } from '../dominio/alertas.ts'
 import { arquivosDoDiff } from '../dominio/diff.ts'
@@ -64,6 +65,9 @@ const ALERTADOS = atom({ plugin: 'macrex-skills', key: 'alertados' }, [])
 // A permissao que o Claude Code pediu e ainda espera o usuario, com o loop que a pediu, so na sessao.
 // ponytail: uma por vez; duas pendentes juntas mostram a ultima
 const PERMISSAO = atom({ plugin: 'macrex-skills', key: 'permissao' }, null)
+// A hora em que o laco principal parou com a leva aberta, so na sessao: o prompt digitado depois
+// fecha ali uma espera pelo usuario.
+const OCIOSO = atom({ plugin: 'macrex-skills', key: 'ocioso' }, null)
 // o result de uma ferramenta sem filtro e unknown: o do shell traz o stdout
 type Saida = { stdout?: unknown }
 
@@ -511,7 +515,17 @@ async function semPermissao($: EngineInterface, agentId: string | undefined) {
   const permissao = await read($, PERMISSAO)
   if (!permissao || permissao.agentId !== agentId) return
   await update($, PERMISSAO, () => null)
+  if (permissao.desde != null) await anotarEspera($, permissao.desde)
   await alertar($)
+}
+// A espera pelo usuario de `desde` ate agora entra na leva aberta, que o tempo da maquina desconta.
+async function anotarEspera($: EngineInterface, desde: number) {
+  const leva = await read($, LEVA)
+  const agora = await $.clock.now()
+  if (!leva || leva.fechada || agora <= desde) return
+  const nova = { ...leva, esperas: [...(leva.esperas ?? []), [desde, agora] as [number, number]] }
+  await $.store.set(chave(await $.session.root()), nova)
+  await update($, LEVA, () => nova)
 }
 // O turno do sub-agente que marcou tickets da leva aberta soma o custo dele, pelos tokens e o preco
 // do modelo, a cada um deles; o do laco principal o custo da sessao ja mede (no inline).
@@ -605,11 +619,16 @@ export function registrarSessao(on: On, ctx: Contexto) {
             type: 'array',
             items: {
               type: 'object',
-              properties: { id: { type: 'string' }, titulo: { type: 'string' }, previsao: { type: 'integer', minimum: 1, description: 'a previsao do ticket, em minutos' } },
+              properties: {
+                id: { type: 'string' },
+                titulo: { type: 'string' },
+                previsao: { type: 'integer', minimum: 1, description: 'a previsao do ticket, em minutos do tempo da maquina' },
+                perfil: { type: 'string', enum: PERFIS, description: 'o mais pesado que o portao do ticket roda: texto, unidade, tela ou pesado (e2e, bateria, build de minutos)' },
+              },
               required: ['id', 'titulo'],
             },
           },
-          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos' },
+          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos do tempo da maquina' },
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
           item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, ou a Conciliacao do implement, nunca o da fase' },
           detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
@@ -753,9 +772,20 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       await update($, USO, () => ({}))
       $.ui.toast('Leva registrada: /painel-macrex mostra o andamento')
     }
+    // o time.md da raiz: a entrada na fase tickets devolve a calibracao dele, antes da previsao, e o
+    // primeiro fechamento grava nele as linhas da leva; erro aqui nunca para a leva
+    const timeMd = `${raiz}/${TIME_MD}`
+    const naFaseTickets = e.marco === 'fase' && e.fase === 'tickets'
+    const fecha = e.marco === 'fechamento' && !antes!.fechada
+    const lido = naFaseTickets || fecha ? await $.fs.read(timeMd).then(t => String(t), () => '') : ''
+    const calibrar = naFaseTickets ? `\n${comCalibracao(calibracao(lido))}` : ''
     // o primeiro fechamento devolve os tempos, previsto contra real, que a nota de evolucao leva ao vault
-    const tempos = e.marco === 'fechamento' && !antes!.fechada ? `\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\n${tabelaDeTempos(leva)}` : ''
-    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}${tempos}` }
+    let tempos = ''
+    if (fecha) {
+      const gravado = await $.fs.write(timeMd, comLeva(lido, leva)).then(() => `${TIME_MD} da raiz atualizado com as linhas desta leva; ele fica na working tree, fora do commit da leva`, (erro: unknown) => `${TIME_MD} nao gravado: ${erro}`)
+      tempos = `\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\n${tabelaDeTempos(leva)}\n${gravado}`
+    }
+    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}${calibrar}${tempos}` }
   })
 
   // o /cpv digitado depois do fechamento fecha a leva no git: o painel para de pedi-lo.
@@ -857,15 +887,38 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
 export function registrarPermissaoETurno(on: On) {
   // o pedido de permissao acende o alerta; o mod so observa, a decisao segue com o Claude Code
   on('classic.PermissionRequest', async ($, e, next) => {
-    await update($, PERMISSAO, () => ({ ferramenta: e.tool_name, agentId: e.agent_id }))
+    const desde = await $.clock.now()
+    await update($, PERMISSAO, () => ({ ferramenta: e.tool_name, agentId: e.agent_id, desde }))
     await alertar($)
     return next(e)
   })
 
+  // o laco principal parado com a leva aberta e o prompt que o retoma: o digitado pelo usuario, sem
+  // sub-agente vivo, fecha uma espera pelo usuario; o turno que comeca por outro (a notificacao, a
+  // maquina voltando) so a descarta. Com matcher: o so-com-pedido.ts tem o prompt.submit sem ele
+  // ponytail: o AskUserQuestion no meio da leva nao conta como espera; a leva nao pergunta
+  on('prompt.submit', { origin: { kind: /^(composer|bridge)$/ } }, async ($, e, next) => {
+    const desde = e.turnId == null ? await read($, OCIOSO) : null
+    if (desde != null) {
+      await update($, OCIOSO, () => null)
+      if (!(await read($, AGENTES)).some(vivo)) await anotarEspera($, desde)
+    }
+    return next(e)
+  })
+  on('turn.start', async ($, e, next) => {
+    await update($, OCIOSO, () => null)
+    return next(e)
+  })
+
   // o fim de cada turno: soma os tokens do loop para a aba Uso e o custo do sub-agente aos tickets
-  // dele, fecha o sub-agente em background e apaga a permissao pendente
+  // dele, fecha o sub-agente em background e apaga a permissao pendente; o do principal com a leva
+  // aberta marca a hora em que ele parou
   on('turn.complete', async ($, e, next) => {
     await semPermissao($, e.agentId)
+    if (!e.agentId && (await ativa($))) {
+      const agora = await $.clock.now()
+      await update($, OCIOSO, () => agora)
+    }
     if (e.usage) {
       const loop = e.agentId ?? 'sessao'
       await update($, USO, uso => ({ ...uso, [loop]: { ...somar(uso[loop], e.usage!), modelo: e.usage!.model ?? uso[loop]?.modelo ?? '' } }))
