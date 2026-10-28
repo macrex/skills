@@ -93,18 +93,28 @@ function aplicarSemHora(leva: Leva | null, m: Marco, agora: number, usd: number 
       // a previsao sem perfil cai em "sem perfil" na calibracao do time.md: o perfil vai junto, ou ja veio antes
       const semPerfil = m.tickets.find(t => t.previsao != null && t.perfil == null && !leva.tickets.find(v => v.id === String(t.id))?.perfil)
       if (semPerfil) return { erro: `previsao vai com o perfil do ticket (${PERFIS.join(', ')}); falta no ${semPerfil.id}` }
+      // a previsao do ticket sai do perfil no modo, e a da leva soma as ondas: a onda e o modo vao
+      // junto do perfil ou da previsao, ou ja vieram antes
+      if (!m.tickets.every(t => t.onda == null || (Number.isInteger(t.onda) && t.onda >= 1))) return { erro: 'onda e um inteiro de 1 para cima' }
+      const comPrevisao = (t: { previsao?: number; perfil?: string }) => t.previsao != null || t.perfil != null
+      const semOnda = m.tickets.find(t => comPrevisao(t) && t.onda == null && leva.tickets.find(v => v.id === String(t.id))?.onda == null)
+      if (semOnda) return { erro: `perfil e previsao vao com a onda do ticket (1, 2, ...); falta no ${semOnda.id}` }
+      if (m.modo != null && !MODOS.includes(m.modo)) return { erro: `modo e um de ${MODOS.join(', ')}` }
+      if (m.tickets.some(comPrevisao) && m.modo == null && leva.modo == null) return { erro: 'perfil e previsao vao com o modo da leva (o da secao Execucao do documento)' }
       // a lista reenviada no meio da leva (tickets novos no fim) guarda o andamento, a previsao e o
       // perfil dos que ja tem
       return {
         ...leva,
         ...(m.previsao != null && { previsao: m.previsao }),
+        ...(m.modo != null && { modo: m.modo }),
         tickets: m.tickets.map(t => ({
           ...(leva.tickets.find(v => v.id === String(t.id)) ?? { estado: 'pendente' as const }),
           id: String(t.id),
           titulo: t.titulo,
-          ...(t.previsao != null && { previsao: t.previsao }),
+          ...(t.previsao != null && { previsao: t.previsao, fonte: t.motivo?.trim() ? ('motivo' as const) : ('agente' as const) }),
           // o PERFIS.includes acima garante o perfil
           ...(t.perfil != null && { perfil: t.perfil as LevaTicket['perfil'] }),
+          ...(t.onda != null && { onda: t.onda }),
         })),
       }
     case 'ticket':

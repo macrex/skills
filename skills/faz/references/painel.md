@@ -5,14 +5,18 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `inicio`, logo depois das três reservadas, com o `documento` da linha (o que vem depois de `leva` na abertura, sem o `até o fim` dos prompts antigos) e os `sujos` (os caminhos
   do `git status --porcelain` de antes da leva); a leva já entra na fase `spec`.
 - `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
-  `qualidade`), a de `implement` com o `modo` (o da seção `## Execução` do documento, `leva.md`) e o
-  `branch` da leva (`leva/<slug>`), que o estado da leva guarda para a retomada. O resultado da
-  `fase` `tickets` traz a calibração do `time.md` da raiz, de onde a previsão parte.
-- `tickets` com a lista `{ id, titulo, previsao, perfil }` assim que o `to-tickets` publicar, a
-  `previsao` de cada ticket e a `previsao` da leva inteira em minutos inteiros do tempo da máquina, e
-  o `perfil` de cada ticket (`texto`, `unidade`, `tela` ou `pesado`; "A previsão de tempo", em
-  `leva.md`), que o painel exige junto da previsão do ticket, e de novo, inteira e com os novos no fim, quando a leva ganhar tickets (os que já
-  andaram guardam o portão, o tempo, a previsão e o perfil; nunca reenvie o `portao` deles); `ticket` com o `id`
+  `qualidade`, `fechamento`), a de `implement` com o `modo` (o da seção `## Execução` do documento,
+  `leva.md`) e o `branch` da leva (`leva/<slug>`), que o estado da leva guarda para a retomada. O
+  resultado da `fase` `tickets` traz a calibração do `time.md` da raiz, de onde a previsão parte, e
+  a `fase` `fechamento`, antes do commit squash, grava a leva nele, para o `git add time.md`.
+- `tickets` com a lista `{ id, titulo, perfil, onda }` e o `modo` da seção `## Execução` assim que
+  o `to-tickets` publicar: o `perfil` de cada ticket (`texto`, `unidade`, `tela` ou `pesado`; "A
+  previsão de tempo", em `leva.md`) e a `onda` dele. Com o `time.md`, o painel dá a previsão de
+  cada ticket pela mediana do perfil no modo e a da leva pelas ondas, e o resultado traz as duas;
+  a `previsao` de um ticket, em minutos inteiros do tempo da máquina, só vai com o `motivo`, o fato
+  que o tira da mediana, ou volta recusada. Sem o `time.md`, mande a `previsao` de cada ticket e a
+  da leva inteira. De novo, inteira e com os novos no fim, quando a leva ganhar tickets (os que já
+  andaram guardam o portão, o tempo, a previsão, o perfil e a onda; nunca reenvie o `portao` deles); `ticket` com o `id`
   dele ao começar cada um; `portao` com o `ticket`, `verde` ou `vermelho`, os `reparos` (0 a 2) e
   os `testes` (ex. `3/4`, até 20 caracteres) quando o executor os informou, e as `notas` do que
   ele entregou (até 500 caracteres). Nos modos workflow e sub-agents quem marca `ticket` e
@@ -36,7 +40,8 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `fechamento` no fim, depois do commit squash: o hook `so_com_pedido` só libera esse commit com
   a leva aberta, e o `fechamento` a fecha. O resultado traz a tabela dos tempos, previsto contra
   o real da máquina (a espera pelo usuário numa linha à parte), que vai à seção `## Tempos` da nota
-  de evolução como veio, e diz se o painel gravou a leva no `time.md` da raiz.
+  de evolução como veio. O `time.md` a `fase` `fechamento` já gravou; sem ela, o `fechamento` o
+  grava, e ele fica na working tree até o próximo commit.
 
 **Retomada:** resposta do `inicio` que começa com `retomada na fase` traz a leva aberta do mesmo
 documento. Diga ao usuário em uma linha de onde retomou, pule as fases já passadas, comece o

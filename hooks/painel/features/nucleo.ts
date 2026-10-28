@@ -8,8 +8,8 @@ import type { AgentInfo, BuiltinToolResults, EngineInterface, On, ProcessRunInit
 import type { Grill, Leva, LevaAgente, LevaHistorico } from '../../../types/index.d.ts'
 import { FERRAMENTA, MARCOS, MARCOS_DO_GRILL, RONCO, FASES, PORTOES, MODOS, PERFIS, NO_HISTORICO, SKILL_DA_FASE, DA_LISTA, VIVOS, MUDAM, URL_DA_TELA, RETOMAR } from '../dominio/vocabulario.ts'
 import type { Aba, Marco } from '../dominio/vocabulario.ts'
-import { nomeDa, somar, porcento, custoDosTokens, tabelaDeTempos } from '../dominio/formato.ts'
-import { TIME_MD, calibracao, comCalibracao, comLeva } from '../dominio/tempos.ts'
+import { nomeDa, somar, porcento, custoDosTokens, tabelaDeTempos, prevista } from '../dominio/formato.ts'
+import { TIME_MD, calibracao, comCalibracao, comLeva, medianas, pelaBase, previsaoDaLeva } from '../dominio/tempos.ts'
 import { novoId, semSkill, retoma, doInicio, aplicar, aplicarNoGrill, naTela } from '../dominio/marcos.ts'
 import { vivo, idDeParar, alertas } from '../dominio/alertas.ts'
 import { arquivosDoDiff } from '../dominio/diff.ts'
@@ -613,7 +613,7 @@ export function registrarSessao(on: On, ctx: Contexto) {
           canal: { type: 'string', enum: ['cli'], description: 'grill: so quando o usuario pediu o terminal para este grill, no lugar da tela configurada' },
           linha: { type: 'string', maxLength: 4000, description: 'linha: a linha da leva que o /faz imprimiu ao fim do grill, inteira e com as mesmas quebras' },
           fase: { type: 'string', enum: FASES },
-          modo: { type: 'string', enum: MODOS, description: 'fase implement: como o implement roda' },
+          modo: { type: 'string', enum: MODOS, description: 'fase implement e tickets: como o implement roda' },
           branch: { type: 'string', description: 'fase implement: o branch da leva, ex. leva/worktrees' },
           tickets: {
             type: 'array',
@@ -622,13 +622,15 @@ export function registrarSessao(on: On, ctx: Contexto) {
               properties: {
                 id: { type: 'string' },
                 titulo: { type: 'string' },
-                previsao: { type: 'integer', minimum: 1, description: 'a previsao do ticket, em minutos do tempo da maquina' },
+                previsao: { type: 'integer', minimum: 1, description: 'a previsao do ticket, em minutos do tempo da maquina; com o time.md, so com o motivo (sem ela, o painel da a mediana do perfil)' },
                 perfil: { type: 'string', enum: PERFIS, description: 'o mais pesado que o portao do ticket roda: texto, unidade, tela ou pesado (e2e, bateria, build de minutos)' },
+                onda: { type: 'integer', minimum: 1, description: 'a onda do ticket (1, 2, ...), que so o bloqueadoPor separa' },
+                motivo: { type: 'string', maxLength: 200, description: 'o fato do ticket que tira a previsao dele da mediana do perfil no time.md' },
               },
               required: ['id', 'titulo'],
             },
           },
-          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos do tempo da maquina' },
+          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos do tempo da maquina, so sem o time.md da raiz; com ele, o painel a calcula pelas ondas' },
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
           item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, ou a Conciliacao do implement, nunca o da fase' },
           detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
@@ -738,6 +740,35 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
     const leva = aplicar(antes, e, await $.clock.now(), usd, chamada.agentId)!
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
+    // o marco tickets da a previsao dos tickets pela base do time.md da raiz e calcula a da leva pelas ondas
+    const base = e.marco === 'tickets' && leva.modo ? await $.session.root().then(r => $.fs.read(`${r}/${TIME_MD}`)).then(t => String(t), () => '') : ''
+    let calculada = ''
+    if (calibracao(base)) {
+      const med = medianas(base)
+      const preenchida = pelaBase(leva.tickets, e.tickets!, leva.modo!, med)
+      if ('erro' in preenchida) return { deny: preenchida.erro }
+      // o objeto e novo, o aplicar acabou de cria-lo
+      leva.tickets = preenchida.tickets
+      const previsao = previsaoDaLeva(leva.tickets, leva.modo!, med)
+      const porTicket = leva.tickets.filter(t => t.previsao != null).map(t => `${t.id} ${prevista(t.previsao!)}`).join(', ')
+      if (previsao) leva.previsao = previsao
+      calculada = `\nprevisao dos tickets (a mediana do perfil no modo, ou a sua com motivo): ${porTicket}${previsao ? `\nprevisao da leva inteira calculada pelo painel pelas ondas e pela base do ${TIME_MD}: ${prevista(previsao)}; e ela que voce diz ao usuario` : ''}`
+    }
+    // a entrada na fase fechamento grava a leva no time.md da raiz, antes do commit squash, que o leva
+    // junto e o faz viajar com o push; o fechamento depois do commit nao o regrava
+    const timeMd = `${await $.session.root()}/${TIME_MD}`
+    const naFaseFechamento = e.marco === 'fase' && e.fase === 'fechamento' && !leva.fechada
+    let gravadoNaFase = ''
+    if (naFaseFechamento) {
+      const lido = await $.fs.read(timeMd).then(t => String(t), () => '')
+      gravadoNaFase = await $.fs.write(timeMd, comLeva(lido, { ...leva, fim: leva.entradas?.fechamento })).then(
+        () => {
+          leva.noTimeMd = true
+          return `\n${TIME_MD} da raiz gravado com as linhas desta leva: ponha-o no indice (git add ${TIME_MD}) para ele ir no commit squash`
+        },
+        (erro: unknown) => `\n${TIME_MD} nao gravado: ${erro}; o fechamento tenta de novo`,
+      )
+    }
     // a leva comeca (ou retoma): o grill sai da aba Geral
     if (e.marco === 'inicio') await tirarGrillDaTela($)
     if (retoma(antes, e)) {
@@ -773,19 +804,20 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       $.ui.toast('Leva registrada: /painel-macrex mostra o andamento')
     }
     // o time.md da raiz: a entrada na fase tickets devolve a calibracao dele, antes da previsao, e o
-    // primeiro fechamento grava nele as linhas da leva; erro aqui nunca para a leva
-    const timeMd = `${raiz}/${TIME_MD}`
+    // primeiro fechamento grava nele as linhas da leva que a fase fechamento nao gravou; erro aqui nunca para a leva
     const naFaseTickets = e.marco === 'fase' && e.fase === 'tickets'
     const fecha = e.marco === 'fechamento' && !antes!.fechada
-    const lido = naFaseTickets || fecha ? await $.fs.read(timeMd).then(t => String(t), () => '') : ''
+    const lido = naFaseTickets || (fecha && !antes!.noTimeMd) ? await $.fs.read(timeMd).then(t => String(t), () => '') : ''
     const calibrar = naFaseTickets ? `\n${comCalibracao(calibracao(lido))}` : ''
     // o primeiro fechamento devolve os tempos, previsto contra real, que a nota de evolucao leva ao vault
     let tempos = ''
     if (fecha) {
-      const gravado = await $.fs.write(timeMd, comLeva(lido, leva)).then(() => `${TIME_MD} da raiz atualizado com as linhas desta leva; ele fica na working tree, fora do commit da leva`, (erro: unknown) => `${TIME_MD} nao gravado: ${erro}`)
+      const gravado = antes!.noTimeMd
+        ? `${TIME_MD} da raiz gravado na entrada da fase fechamento, no commit da leva`
+        : await $.fs.write(timeMd, comLeva(lido, leva)).then(() => `${TIME_MD} da raiz atualizado com as linhas desta leva; ele fica na working tree, fora do commit da leva`, (erro: unknown) => `${TIME_MD} nao gravado: ${erro}`)
       tempos = `\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\n${tabelaDeTempos(leva)}\n${gravado}`
     }
-    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}${calibrar}${tempos}` }
+    return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}${calibrar}${calculada}${gravadoNaFase}${tempos}` }
   })
 
   // o /cpv digitado depois do fechamento fecha a leva no git: o painel para de pedi-lo.

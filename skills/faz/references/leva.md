@@ -79,25 +79,34 @@ Para cada ticket:
 1. dê o **perfil**, pelo mais pesado que o portão dele vai rodar: `texto` (só .md ou
    configuração), `unidade` (a suíte de unidade), `tela` (interface conferida no navegador) ou
    `pesado` (e2e, bateria ou build de minutos);
-2. parta do Real (mediana) do perfil **no modo da leva** e ajuste pela profundidade e pelo
-   acoplamento do ticket contra os do Registro do `time.md`; o Real/previsto diz para que lado as
-   previsões anteriores erraram. Os tickets de uma onda paralela dividem a máquina — o e2e e a
-   bateria de um atrasam os outros —, então o real de cada um é o que ele leva com a onda inteira
-   rodando (o Juntos da calibração diz com quantos); sem linha do perfil no modo, parta da de outro
-   modo e diga que o fez;
-3. no `pesado`, conte os verificadores que o portão roda pela duração que eles têm no projeto e uma
-   repetição da parte instável: é ali que o real passa do previsto.
+2. dê a **onda**, a que o `bloqueadoPor` da tabela dá (1, 2, ...);
+3. a **previsão** é a mediana do Real do perfil **no modo da leva**: no Claude Code, com o
+   `time.md`, o painel a preenche sozinho no marco `tickets`, e você não a manda. Nos testes cegos
+   das levas medidas, a mediana sem ajuste acertou de 0,8 a 1,1 vez o real, e cada ajuste por
+   julgamento, mesmo o de um engenheiro que decompõe o ticket, a inflou de 1,6 a 4 vezes: a
+   âncora de um desenvolvedor humano é o erro que a base existe para corrigir. Mande a sua só
+   quando o ticket tem um fato que os da base não tinham — um verificador a mais que roda por
+   minutos, uma bateria inteira no portão, o dobro de arquivos —, com esse fato no `motivo`; o
+   painel recusa a previsão sem ele. A tabela Fonte da previsão da calibração diz quanto cada
+   origem acertou no projeto: com o Real/previsto do `motivo` abaixo do da `mediana`, os desvios
+   anteriores inflaram, e só um fato do portão (o verificador que roda por minutos) tira o ticket
+   da mediana — volume de dado ou de testes não tirou. Sem linha do perfil no modo, ou fora do Claude Code, parta
+   da mediana do perfil em outro modo e diga que o fez; sem base nenhuma, minutos de máquina,
+   com o portão pesando mais que o código.
 
-A leva inteira **nunca é a soma dos tickets no modo paralelo**: os de uma onda correm no mesmo
-relógio, e cada onda dura o seu ticket mais longo, mais a conciliação que espera por ele. Some as
-ondas, confira o implement contra o Tickets/implement do modo na calibração (quanto de ticket cabe
-em cada minuto de implement) e acrescente o Real das fases `revisao`, `correcoes` e `qualidade`. No
-inline, a soma dos tickets e das conciliações é o implement. Sem calibração, o
-julgamento segue o mesmo princípio: minutos de máquina, com o portão pesando mais que o código. A
-previsão e o perfil vão no marco `tickets` (`references/painel.md`), e o painel os mostra contra o
-tempo da máquina, que ele mesmo mede; diga a previsão ao usuário na linha do modo. No fechamento, o
-painel grava a leva no `time.md` da raiz, de onde a previsão seguinte parte, e a nota de evolução
-leva a tabela ao vault ("O fechamento", abaixo).
+A leva inteira **nunca é a soma dos tickets no modo paralelo**: cada onda dura o seu ticket mais
+longo, mais a conciliação dela, e as outras fases somam a mediana de cada uma. No Claude Code, com o
+`time.md`, quem faz essa conta é o painel, pela onda e pela previsão de cada ticket, e o resultado
+do marco `tickets` devolve as previsões dos tickets e a da leva, que é a que você diz ao usuário.
+Sem o painel ou sem o `time.md`, faça você a mesma conta (no inline, a soma dos tickets e das
+conciliações é o implement). O perfil, a onda, o modo e a previsão que você der vão no marco
+`tickets` (`references/painel.md`), e o painel os mostra contra o tempo da máquina, que ele mesmo
+mede; diga a previsão ao usuário na linha do modo. Na entrada da fase `fechamento`, o painel grava
+a leva no `time.md` da raiz, que vai no commit squash da leva e viaja com o push, com a conciliação
+de cada onda numa linha própria, e refaz a calibração sobre as levas mais recentes, sem o real
+contaminado (acima de 3× ou abaixo de ⅓ da mediana do grupo). Linha que não serve mais —
+a leva que rodou com a máquina travada, ou as de antes de uma mudança no portão do ticket — se
+apaga do Registro à mão. A nota de evolução leva a tabela ao vault ("O fechamento", abaixo).
 
 ## O modo: o paralelismo que o acoplamento deixa
 
@@ -217,20 +226,23 @@ Só com a qualidade verde, nesta ordem, na working tree principal:
 2. o varredor de segredos do `/cpv`: `node skills/cpv/scripts/segredos.js <raiz>` neste
    repositório; em outro, o `scripts/segredos.js` da skill `cpv` instalada. Só segue com a última
    linha começando com `LIMPO`;
-3. o commit squash, local: `git commit -m "<mensagem>" -- <caminhos da leva>` (os do
+3. onde há painel, o marco `fase` `fechamento`, que grava a leva no `time.md` da raiz, e
+   `git add time.md`: ele vai no commit squash mesmo que já estivesse sujo antes da leva, porque
+   traz as linhas das levas anteriores que nenhum commit levou, e é assim que a base chega à outra
+   máquina;
+4. o commit squash, local: `git commit -m "<mensagem>" -- <caminhos da leva>` (os do
    `git diff --cached --name-only HEAD`, fora os sujos de antes dela, que o pathspec deixa de
-   fora), com a mensagem no estilo do `git log` do repositório e a autoria do usuário (o
+   fora, menos o `time.md`, que vai), com a mensagem no estilo do `git log` do repositório e a autoria do usuário (o
    `user.name` e o `user.email` do git), sem `Co-Authored-By` nem trailer de assistente. **Nunca
    push**: enviar à origem é do `/cpv`, que o usuário digita;
-4. a limpeza: `git worktree remove --force` de cada worktree da leva, `git worktree prune` e
+5. a limpeza: `git worktree remove --force` de cada worktree da leva, `git worktree prune` e
    `git branch -D` do branch da leva e dos `leva/<slug>-<n>`. No Windows a remoção falha com
    arquivo preso por processo: apague a pasta, rode o `git worktree prune` de novo e apague o
    branch; worktree ou branch `leva/*` órfão de leva já fechada sai junto;
-5. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
-   com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real, e o painel
-   grava a leva no `time.md` da raiz, que fica na working tree, fora do commit da leva: nunca o
-   commite nem o descarte;
-6. a nota de evolução no tracker, com a seção `## Tempos`: a tabela do resultado do `fechamento`
+6. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
+   com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real; o `time.md`
+   já foi no commit, e ele não o regrava;
+7. a nota de evolução no tracker, com a seção `## Tempos`: a tabela do resultado do `fechamento`
    como veio, e uma frase sobre o maior desvio. Sem painel, a seção leva só as previsões. As
    falhas instáveis que os portões e as conciliações relataram vão nas Pendências, com o texto
    literal e o que rodava junto, para o projeto corrigir.

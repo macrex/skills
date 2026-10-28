@@ -3,7 +3,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { juntos } from './painel/dominio/tempos.ts'
+import { juntos, calibracao, medianas, previsaoDaLeva, comLeva } from './painel/dominio/tempos.ts'
 
 const PANE = { plugin: 'macrex-skills', component: 'Pane', requestId: 'painel-macrex', props: {}, surface: 'terminal' } as const
 const SURFACES = ['terminal', 'desktop'] as const
@@ -112,8 +112,11 @@ describe('painel da leva', () => {
     await marco({ marco: 'inicio', documento: 'doc' })
     expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', previsao: 0 }] })).deny).toMatch(/minutos/)
     expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', previsao: 10 }] })).deny).toMatch(/previsao vai com o perfil do ticket .*; falta no 01/)
-    await marco({ marco: 'tickets', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10, perfil: 'unidade' }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5, perfil: 'texto' }] })
-    // o reenvio da previsao sem o perfil guarda o que ja veio
+    // a previsao vai com a onda do ticket e o modo da leva, de onde o painel a calcula
+    expect((await marco({ marco: 'tickets', modo: 'inline', tickets: [{ id: '01', titulo: 'um', previsao: 10, perfil: 'unidade' }] })).deny).toMatch(/perfil e previsao vao com a onda do ticket .*; falta no 01/)
+    expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', previsao: 10, perfil: 'unidade', onda: 1 }] })).deny).toMatch(/perfil e previsao vao com o modo da leva/)
+    await marco({ marco: 'tickets', modo: 'inline', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10, perfil: 'unidade', onda: 1 }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5, perfil: 'texto', onda: 2 }] })
+    // o reenvio da previsao sem o perfil e a onda guarda o que ja veio
     expect((await marco({ marco: 'tickets', previsao: 90, tickets: [{ id: '01', titulo: 'Mod do painel', previsao: 10 }, { id: '02', titulo: 'Ferramenta faz_marco', previsao: 5 }] })).deny).toBeUndefined()
     // o reenvio sem as previsoes guarda as que ja vieram
     await marco({ marco: 'tickets', tickets: [...TICKETS, { id: '03', titulo: 'Ticket novo' }] })
@@ -150,7 +153,8 @@ describe('painel da leva', () => {
     // sem time.md, a fase tickets diz que nao ha calibracao
     expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Sem calibracao neste projeto/)
     expect((await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'um', perfil: 'lento' }] })).deny).toMatch(/perfil e um de texto, unidade, tela, pesado/)
-    await marco({ marco: 'tickets', previsao: 60, tickets: [{ id: '01', titulo: 'Núcleo', previsao: 40, perfil: 'unidade' }, { id: '02', titulo: 'E2e', previsao: 10, perfil: 'pesado' }] })
+    // sem time.md, a previsao da leva e a que o agente deu
+    expect((await marco({ marco: 'tickets', modo: 'inline', previsao: 60, tickets: [{ id: '01', titulo: 'Núcleo', previsao: 40, perfil: 'unidade', onda: 1 }, { id: '02', titulo: 'E2e', previsao: 10, perfil: 'pesado', onda: 2 }] })).result).not.toMatch(/calculada/)
     await marco({ marco: 'fase', fase: 'implement', modo: 'inline' })
     await marco({ marco: 'ticket', ticket: '01' })
     // 10 min de trabalho com 5 min de permissao pendente no meio: o ticket leva 5 min de maquina
@@ -176,35 +180,85 @@ describe('painel da leva', () => {
     const md = timeMd()
     // a data e a do inicio da leva no relogio, sem a data do documento
     // no inline, um ticket por vez: Juntos 1
-    expect(md).toMatch(/\n\| \d{4}-\d\d-\d\d \| Modo Trio \| 01 Núcleo \| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 9m00s \| 0,13× \|\n/)
+    expect(md).toMatch(/\n\| \d{4}-\d\d-\d\d \| Modo Trio \| 01 Núcleo \| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 9m00s \| 0,13× \| agente \|\n/)
     expect(md).toContain('| Modo Trio | 02 E2e | pesado | inline | 1 | — | 10m | 20m00s | — | 2,00× |')
     expect(md).toContain('| Modo Trio | fase implement | — | inline | — | — | — | 25m00s | 9m00s | — |')
-    expect(md).toMatch(/\| pesado \| inline \| 1 \| 1 \| 10m \| 20m00s \| 2,00× \|\n\| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 0,13× \|\n\| Leva inteira \| inline \| 1 \| — \| 1h00m \| 25m00s \| 0,42× \|/)
-    expect(md).toContain('| inline | 1 | 25m00s | 25m00s | 1,00× |')
+    expect(md).toMatch(/\| pesado \| inline \| 1 \| 1 \| 20m00s \| 20m00s a 20m00s \| 2,00× \|\n\| unidade \| inline \| 1 \| 1 \| 5m00s \| 5m00s a 5m00s \| 0,13× \|\n\| Leva inteira \| inline \| 1 \| — \| 25m00s \| 25m00s a 25m00s \| 0,42× \|/)
+    expect(md).toContain('| implement | inline | 1 | 25m00s |')
 
     // a leva seguinte ve a calibracao na entrada da fase tickets, e o fechamento dela guarda as linhas da anterior
     await marco({ marco: 'inicio', documento: 'Outra' })
-    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Calibracao deste projeto \(time\.md da raiz\)[^]*\| unidade \| inline \| 1 \| 1 \| 40m \| 5m00s \| 0,13× \|/)
-    // dois tickets na mesma onda, no modo paralelo: dividem o relogio do implement
-    await marco({ marco: 'tickets', tickets: [{ id: '01', titulo: 'Só texto', previsao: 10, perfil: 'unidade' }, { id: '02', titulo: 'Paralelo', previsao: 10, perfil: 'unidade' }] })
+    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Calibracao deste projeto \(time\.md da raiz\)[^]*\| unidade \| inline \| 1 \| 1 \| 5m00s \| 5m00s a 5m00s \| 0,13× \|/)
+    // com a mediana do perfil no modo, o painel da a previsao do ticket; a do agente so vem com o motivo
+    expect((await marco({ marco: 'tickets', modo: 'inline', tickets: [{ id: '01', titulo: 'Só texto', previsao: 30, perfil: 'unidade', onda: 1 }] })).deny).toMatch(/previsao do 01 sem motivo: o painel da a previsao do ticket pela mediana do unidade em inline no time\.md \(5m00s\)/)
+    const preenchida = await marco({ marco: 'tickets', modo: 'inline', tickets: [{ id: '01', titulo: 'Só texto', previsao: 30, perfil: 'unidade', onda: 1, motivo: 'reescreve o núcleo' }, { id: '03', titulo: 'Sem previsão', perfil: 'unidade', onda: 2 }] })
+    expect(preenchida.result).toMatch(/previsao dos tickets .*: 01 30m, 03 5m\n/)
+    // dois tickets na mesma onda, no modo paralelo: dividem o relogio do implement, e a leva conta a onda pelo mais longo
+    const calculada = await marco({ marco: 'tickets', modo: 'sub-agents', previsao: 500, tickets: [{ id: '01', titulo: 'Só texto', previsao: 10, perfil: 'unidade', onda: 1 }, { id: '02', titulo: 'Paralelo', previsao: 12, perfil: 'unidade', onda: 1 }] })
+    expect(calculada.result).toMatch(/previsao da leva inteira calculada pelo painel .*: 12m;/)
     await marco({ marco: 'fase', fase: 'implement', modo: 'sub-agents' })
     await marco({ marco: 'ticket', ticket: '01' })
     await marco({ marco: 'ticket', ticket: '02' })
     await relogio.advance(segundos(15 * 60))
     await marco({ marco: 'portao', ticket: '01', portao: 'verde' })
+    // a conciliacao espera o 02 por 5 min, que o real dela nao conta
+    await marco({ marco: 'item', item: 'Conciliação 1', espera: true, detalhe: 'esperando 02' })
     await relogio.advance(segundos(5 * 60))
     await marco({ marco: 'portao', ticket: '02', portao: 'verde' })
-    await marco({ marco: 'fechamento' })
+    await marco({ marco: 'item', item: 'Conciliação 1' })
+    await relogio.advance(segundos(3 * 60))
+    await marco({ marco: 'item', item: 'Conciliação 1', portao: 'verde', detalhe: '2/2' })
+    // a entrada na fase fechamento grava o time.md, para ele ir no commit squash; o fechamento depois do commit nao o regrava
+    expect((await marco({ marco: 'fase', fase: 'fechamento' })).result).toMatch(/time\.md da raiz gravado com as linhas desta leva: ponha-o no indice/)
+    const naFase = timeMd()
+    expect(naFase).toContain('| Outra | Leva inteira | — | sub-agents | — | — | 12m | 23m00s |')
+    await relogio.advance(segundos(60))
+    expect((await marco({ marco: 'fechamento' })).result).toMatch(/time\.md da raiz gravado na entrada da fase fechamento, no commit da leva/)
+    expect(timeMd()).toBe(naFase)
     const depois = timeMd()
     expect(depois).toContain('| Modo Trio | 01 Núcleo |')
-    expect(depois).toContain('| Outra | 01 Só texto | unidade | sub-agents | 2 | — | 10m | 15m00s |')
-    expect(depois).toContain('| Outra | 02 Paralelo | unidade | sub-agents | 2 | — | 10m | 20m00s |')
-    expect(depois).toMatch(/\n2 levas no Registro\./)
+    // a previsao sem base e sem motivo e o julgamento do agente
+    expect(depois).toContain('| Outra | 01 Só texto | unidade | sub-agents | 2 | — | 10m | 15m00s | — | 1,50× | agente |')
+    expect(depois).toContain('| Fonte da previsão | Modo | Tickets | Real/previsto (mediana) |\n|---|---|---|---|\n| agente | inline | 2 | 1,06× |\n| agente | sub-agents | 2 | 1,58× |')
+    expect(depois).toContain('| Outra | 02 Paralelo | unidade | sub-agents | 2 | — | 12m | 20m00s |')
+    expect(depois).toContain('| Outra | Conciliação 1 | — | sub-agents | — | — | — | 3m00s | — | — |')
+    expect(depois).toMatch(/\n2 levas no Registro; a calibração usa todas\./)
     // a calibracao separa o modo: o inline e o paralelo nao se misturam
-    expect(depois).toContain('| unidade | inline | 1 | 1 | 40m | 5m00s | 0,13× |')
-    expect(depois).toContain('| unidade | sub-agents | 2 | 2 | 10m | 17m30s | 1,75× |')
-    // 35 min de tickets em 20 min de implement
-    expect(depois).toContain('| sub-agents | 1 | 35m00s | 20m00s | 1,75× |')
+    expect(depois).toContain('| unidade | inline | 1 | 1 | 5m00s | 5m00s a 5m00s | 0,13× |')
+    expect(depois).toContain('| unidade | sub-agents | 2 | 2 | 17m30s | 15m00s a 20m00s |')
+    expect(depois).toContain('| conciliação (por onda) | sub-agents | 1 | 3m00s |')
+    // a soma dos tickets sobre o implement saiu: ela induzia a somar os tickets do modo paralelo
+    expect(depois).not.toMatch(/Tickets\/implement/)
+  })
+  test('a calibracao usa as 5 levas mais recentes e deixa de fora o real acima de 3× ou abaixo de 1/3 da mediana do grupo', async () => {
+    const linha = (dia: number, real: string) => `| 2026-10-0${dia} | Leva ${dia} | 01 Um | unidade | inline | 1 | 0 | 10m | ${real} | — | 1,00× |`
+    const md = ['| Data | Leva | Ticket | Perfil | Modo | Juntos | Reparos | Previsto | Real | Espera | Real/previsto |', '|---|---|---|---|---|---|---|---|---|---|---|', linha(1, '1h40m'), linha(2, '10m'), linha(3, '12m'), linha(4, '11m'), linha(5, '3h20m'), linha(6, '9m')].join('\n')
+    const c = calibracao(md)
+    // a leva 1 saiu pela janela, a 5 pela mediana (11m): sobram 9, 10, 11 e 12
+    expect(c).toMatch(/^6 levas no Registro; a calibração usa as 5 mais recentes e deixa de fora 1 real contaminado/)
+    expect(c).toContain('| unidade | inline | 4 | 1 | 10m30s | 9m00s a 11m00s |')
+    expect(medianas(md)('unidade', 'inline')).toBe(10.5)
+  })
+  test('o Registro guarda a fonte da previsao de cada ticket, e o antigo, sem ela, a ganha como julgamento do agente', async () => {
+    const antigo = ['## Registro', '', '| Data | Leva | Ticket | Perfil | Modo | Juntos | Reparos | Previsto | Real | Espera | Real/previsto |', '|---|---|---|---|---|---|---|---|---|---|---|', '| 2026-10-01 | A | 01 Um | unidade | inline | 1 | 0 | 10m | 5m | — | 0,50× |', '| 2026-10-01 | A | fase spec | — | inline | — | — | — | 2m | — | — |'].join('\n')
+    const t = (id: string, previsao: number, fonte: 'mediana' | 'motivo', real: number) => ({ id, titulo: id, estado: 'verde' as const, perfil: 'unidade' as const, previsao, fonte, inicioEm: 0, fimEm: real * 60000 })
+    const md = comLeva(antigo, { documento: 'B', fase: 'fechamento', fases: [], tickets: [t('01', 6, 'mediana', 6), t('02', 20, 'motivo', 5)], modo: 'inline', inicio: 0, fim: 60000, fechada: true })
+    expect(md).toContain('| 2026-10-01 | A | 01 Um | unidade | inline | 1 | 0 | 10m | 5m | — | 0,50× | agente |')
+    expect(md).toContain('| 2026-10-01 | A | fase spec | — | inline | — | — | — | 2m | — | — | — |')
+    expect(md).toContain('| B | 01 01 | unidade | inline | 2 | — | 6m | 6m00s | — | 1,00× | mediana |')
+    // quanto cada fonte acerta: o motivo do 02 previu 4× o real
+    expect(md).toContain('| agente | inline | 1 | 0,50× |\n| mediana | inline | 1 | 1,00× |\n| motivo | inline | 1 | 0,25× |')
+  })
+  test('a previsao da leva soma as ondas pelo ticket mais longo (no inline, pela soma), a conciliacao de cada onda e as outras fases', async () => {
+    const base: Record<string, number> = { 'conciliação\tsub-agents': 5, 'fase revisao\tinline': 4 }
+    const med = (nome: string, modo: string) => base[`${nome}\t${modo}`]
+    const t = (id: string, onda: number, previsao: number) => ({ id, titulo: id, estado: 'pendente' as const, onda, previsao })
+    const tickets = [t('01', 1, 20), t('02', 1, 30), t('03', 2, 10)]
+    // 30 + 5 e 10 + 5 nas ondas, e a revisao do inline, sem amostra no sub-agents
+    expect(previsaoDaLeva(tickets, 'sub-agents', med)).toBe(54)
+    // no inline os tickets da onda somam; a conciliacao vem do sub-agents
+    expect(previsaoDaLeva(tickets, 'inline', med)).toBe(74)
+    expect(previsaoDaLeva([{ ...tickets[0]!, onda: undefined }], 'inline', med)).toBeUndefined()
   })
   test('o Juntos de cada ticket e o pico de tickets rodando no intervalo dele, ele incluso', async () => {
     const t = (id: string, inicioEm: number, fimEm: number) => ({ id, titulo: id, estado: 'verde' as const, inicioEm, fimEm })
