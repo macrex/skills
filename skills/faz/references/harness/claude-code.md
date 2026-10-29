@@ -7,7 +7,12 @@
   `Read` não é invocar. Recusa numa das três reservadas é turno expirado, nome partido ou
   mensagem que virou comando: peça ao usuário que cole o nome de novo, sozinho numa linha, e espere.
 - **Perguntar:** `AskUserQuestion`.
-- **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão.
+- **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão. Com `name`, ele roda
+  como teammate: a resposta final não volta como resultado da ferramenta, chega na
+  `idle_notification`, cortada perto de 16 mil caracteres, e repete o que ele já mandou por
+  `SendMessage`. Por isso o prompt de cada um (ticket e conciliação) leva a linha "Entregue o
+  retorno inteiro uma vez, por `SendMessage` ao team-lead; a resposta final é só
+  `entregue: <ticket ou item>`".
 - **Mensagem a um sub-agente:** `SendMessage`, com o `name` dele; o que já devolveu retoma com o
   contexto.
 - **Modo do implement:** workflow, pela ferramenta `Workflow`, com o esqueleto em
