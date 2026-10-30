@@ -213,14 +213,15 @@ export function pelaBase(tickets: LevaTicket[], enviados: NonNullable<Marco['tic
 }
 
 // A previsao da leva inteira pelas ondas, em minutos: cada onda dura o seu ticket mais longo (no
-// inline, a soma) mais a conciliacao dela, e as outras fases a mediana delas no modo, ou em outro
-// modo sem amostra nele. Undefined sem a previsao e a onda de todo ticket.
+// inline, a soma) mais a conciliacao dela no modo, e as outras fases a mediana delas no modo, ou em
+// outro modo sem amostra nele. A conciliacao nao vem de outro modo: a do sub-agents espera e junta
+// worktrees paralelas e mediu 4× a do inline. Undefined sem a previsao e a onda de todo ticket.
 export function previsaoDaLeva(tickets: LevaTicket[], modo: string, med: Medianas) {
   if (!tickets.length || tickets.some(t => t.previsao == null || t.onda == null)) return undefined
   const outro = (nome: string) => med(nome, modo) ?? MODOS.map(m => med(nome, m)).find(v => v != null) ?? 0
   const ondas = [...new Set(tickets.map(t => t.onda!))]
   const daOnda = (o: number) => tickets.filter(t => t.onda === o).map(t => t.previsao!)
-  const implement = ondas.reduce((s, o) => s + (modo === 'inline' ? daOnda(o).reduce((a, b) => a + b, 0) : Math.max(...daOnda(o))) + outro('conciliação'), 0)
+  const implement = ondas.reduce((s, o) => s + (modo === 'inline' ? daOnda(o).reduce((a, b) => a + b, 0) : Math.max(...daOnda(o))) + (med('conciliação', modo) ?? 0), 0)
   const fases = ['spec', 'tickets', 'revisao', 'correcoes', 'qualidade'].reduce((s, f) => s + outro(`fase ${f}`), 0)
   return Math.round(implement + fases)
 }

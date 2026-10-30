@@ -256,8 +256,8 @@ describe('painel da leva', () => {
     const tickets = [t('01', 1, 20), t('02', 1, 30), t('03', 2, 10)]
     // 30 + 5 e 10 + 5 nas ondas, e a revisao do inline, sem amostra no sub-agents
     expect(previsaoDaLeva(tickets, 'sub-agents', med)).toBe(54)
-    // no inline os tickets da onda somam; a conciliacao vem do sub-agents
-    expect(previsaoDaLeva(tickets, 'inline', med)).toBe(74)
+    // no inline os tickets da onda somam; a conciliacao do sub-agents nao entra, so a revisao
+    expect(previsaoDaLeva(tickets, 'inline', med)).toBe(64)
     expect(previsaoDaLeva([{ ...tickets[0]!, onda: undefined }], 'inline', med)).toBeUndefined()
   })
   test('o Juntos de cada ticket e o pico de tickets rodando no intervalo dele, ele incluso', async () => {
