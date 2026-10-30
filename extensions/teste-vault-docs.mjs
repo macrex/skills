@@ -123,6 +123,7 @@ const resultado = await salvar.execute('chamada-1', {
   resumo: 'nota criada pelo autoteste',
   data: '2026-01-01',
   descricao_projeto: 'projeto temporario do autoteste',
+  repo: process.cwd(), // o hub aponta a pasta da sessao: o contexto dele entra no system prompt
 });
 assert.match(resultado.content[0].text, /Salva/, 'salvar_nota responde com a confirmacao do servidor');
 
@@ -152,6 +153,7 @@ assert.ok(!secao.includes('<vault-obsidian>'), 'a tag de abertura sai: o Pi embr
 assert.ok(!secao.includes('</vault-obsidian>'), 'a tag de fechamento sai');
 assert.match(secao, /O vault e a memoria dos projetos/, 'o texto e o mesmo do hook do Claude Code');
 assert.match(secao, /mcp__vault-docs__\*/, 'os prefixos de ferramenta continuam no texto');
+assert.match(secao, /<vault-contexto>[\s\S]*Projeto: projeto-teste/, 'o contexto_projeto da pasta entra depois das regras');
 for (const retorno of comSecao.retornos) {
   assert.ok(!retorno || retorno.systemPrompt === undefined, 'a extensao nao substitui o system prompt da rodada');
   assert.ok(!retorno || retorno.forceSystemPrompt === undefined, 'nem forca um prompt inteiro');

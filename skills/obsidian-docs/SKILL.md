@@ -17,7 +17,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 15.4
+# Versao: 15.5
 
 Todo acesso ao vault é pelo MCP `vault-docs`, que aplica as convenções (pasta por tipo, nome
 datado, frontmatter, entrada no hub e no `Home.md`, commit → `pull --rebase` → push). Você decide
@@ -42,7 +42,8 @@ graphify, que é opcional (`mapa_codigo` antes de mexer, `consultar_codigo` para
 ## Regra dura
 
 - Todo artefato `.md` de documentação nasce no vault via `salvar_nota`, e o que já existe muda
-  in-place com `atualizar_nota`. No repo do projeto ficam só os operacionais que ferramentas leem
+  in-place com `atualizar_nota`; para mudar uma seção, `secao=<título>` com o conteúdo novo dela
+  em `corpo`, sem reenviar a nota inteira. No repo do projeto ficam só os operacionais que ferramentas leem
   em lugar fixo: `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `README.md`, configs.
 - Projeto = nome da pasta do repo git, minúsculo, sem acento. **Hub existente sempre ganha**: na
   primeira gravação da sessão num projeto, `contexto_projeto` (ou `visao_geral`) para não duplicar
@@ -71,15 +72,23 @@ O servidor avisa o que foge do padrão (nunca recusa), e `validar tipo=padrao` o
 - `arquivos`: caminhos tocados pela leva (`git diff --name-only`), relativos ao repo; o servidor
   anexa `## Componentes tocados` pelo grafo. Sempre em evolução, bug e spec de mudança.
 - **Ticket** de um artefato (quebra de spec/plano em tarefas, inclusive por `to-tickets`):
-  `tipo=plano` + `artefato=<nome da nota de origem>`, que o grava em `Specs/Tickets - <artefato>/`.
+  `tipo=plano` + `artefato=<nome da nota de origem>`, que o grava em `Specs/Tickets - <artefato>/`
+  e o lista na seção `## Tickets` da nota de origem, fora do hub; a nota de origem já tem de estar
+  no vault. Tickets antigos ainda listados no hub vão para a spec com
+  `python servidor_vault.py --migrar-tickets`, que só mostra, e `--aplicar`, que move e commita.
 - **Lote**: várias notas de uma vez (tickets, migração) levam `lote=true`, e um
   `sincronizar mensagem=<...>` fecha tudo num commit — sem ele a nota fica só na máquina local.
   Nota avulsa não usa lote.
-- **Tamanho**: acima de 40.000 caracteres `ler_nota` devolve só o esboço; prefira spec curta mais
-  tickets, ou `dividir_nota`. Nome errado → `renomear_nota`.
+- **Tamanho**: acima de 12.000 caracteres `ler_nota` devolve só o esboço, e a gravação avisa
+  com as maiores seções; prefira spec curta mais tickets, ou `dividir_nota`. Nome errado →
+  `renomear_nota`.
 
 ## Ciclo de vida
 
+- **Nota de estado** (spec, plano, arquitetura, adr, analise) descreve como algo é agora: quando
+  muda, reescreva-a para o estado atual, sem seção Histórico, bloco "Atualização" datado ou marca
+  SUPERADA (a gravação avisa, e é o A10 do `validar`). O que mudou e por quê vai para a evolução, e
+  a decisão superada vira nota nova, com `sucessora=` na antiga.
 - Concluiu o que a nota descreve (plano executado, bug corrigido) → `status=resolvido` na hora;
   `rascunho` → `status=ativo` quando aprovada; substituída → `sucessora=<nome da nova nota>`.
 - **Evolução**, ao fechar uma leva ou versão: uma nota `tipo=evolucao` por leva e por projeto. Abre
@@ -89,7 +98,9 @@ O servidor avisa o que foge do padrão (nunca recusa), e `validar tipo=padrao` o
   abertura e as pendências da última evolução. Mesmo tema e arquivos da última evolução →
   `atualizar_nota` nela, não nota nova.
 - Ao fechar a leva e após migração, `validar projeto=<projeto>`: erro se corrige na hora
-  (`atualizar_nota`, ou criar a nota que o link espera), não se relata.
+  (`atualizar_nota`, ou criar a nota que o link espera), não se relata. O ciclo de vida que
+  ficou para trás (`validar tipo=ciclo`: nota substituída sem `obsoleto`, ticket aberto de spec
+  resolvida) se corrige junto, com `status=`.
 
 ## Mapa do Codigo (só se o projeto usa graphify)
 

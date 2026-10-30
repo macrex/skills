@@ -20,7 +20,7 @@ const SECAO = 'vault-obsidian';
 const PROTOCOLO = '2025-06-18';
 // ponytail: o teto do problema python3/python e o mesmo que o README documenta para a
 // rota plugin — no pior caso custa uma tentativa a mais no inicio da sessao.
-const PYTHONS = ['python3', 'python'];
+const PYTHONS: string[] = regrasDoVault.PYTHONS;
 const PRAZO_ABERTURA = 5_000;
 
 // As tags saem: o Pi embrulha o valor de sections[tag] na propria tag, e o texto
@@ -207,11 +207,17 @@ export default async function (pi: any) {
   }
 
   // `sections` e o caminho barato: o Pi faz diff das secoes e so manda o que mudou.
-  // Devolver systemPrompt substituiria o prompt inteiro da rodada.
+  // Devolver systemPrompt substituiria o prompt inteiro da rodada. O contexto da pasta,
+  // o mesmo que o hook do SessionStart anexa no Claude Code, se calcula na primeira rodada.
+  let contexto: string | undefined;
   pi.on('before_agent_start', async (evento: any) => {
     const opcoes = evento.systemPromptOptions;
     if (!opcoes) return;
-    (opcoes.sections ||= {})[SECAO] = REGRAS;
+    // shortcut: o spawnSync trava o event loop do Pi por ate 8 s na primeira rodada e sobe um
+    // segundo python ao lado do servidor ja vivo no rpc; trocar pelo rpc quando uma ferramenta
+    // do servidor achar o projeto pela pasta.
+    contexto ??= regrasDoVault.blocoDeContexto(vault, process.cwd());
+    (opcoes.sections ||= {})[SECAO] = REGRAS + contexto;
   });
 
   pi.on('session_shutdown', () => {

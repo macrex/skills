@@ -206,11 +206,33 @@ def eh_hub(n):
             or bool(n["projeto"] and n["rel"] == f"{n['projeto']}/{n['projeto']}.md"))
 
 
-def hub_de(n):
-    """rel do hub que lista a nota: o do projeto; Home para um hub."""
+def spec_de_origem(n):
+    """Nome da spec de origem de um ticket (nota em `Tickets - <spec>/`); None fora de um."""
+    partes = n["rel"].rsplit("/", 2)
+    pasta = partes[-2] if len(partes) == 3 else ""
+    return pasta[len("Tickets - "):] if pasta.startswith("Tickets - ") else None
+
+
+def eh_a_spec(n):
+    """A nota em `Specs/`, ao lado da pasta dos tickets: ganha da homonima do mesmo projeto
+    (a evolucao da mesma leva costuma ter o nome da spec)."""
+    return n["rel"] == f"{n['projeto']}/Specs/{n['nome']}.md"
+
+
+def spec_de(n, idx):
+    """rel da spec de origem de um ticket, no projeto dele; None fora de um ou sem ela no vault."""
+    return idx["specs"].get((n["projeto"], spec_de_origem(n)))
+
+
+def lista_de(n, idx):
+    """rel da nota que lista esta: a spec de origem para um ticket, o hub do projeto para o
+    resto, Home para um hub."""
     if eh_hub(n):
         return "Home.md"
-    return f"{n['projeto']}/{n['projeto']}.md" if n["projeto"] else None
+    hub = f"{n['projeto']}/{n['projeto']}.md" if n["projeto"] else None
+    origem, quem_lista = spec_de(n, idx), idx["backlinks"].get(n["nome"], ())
+    # o ticket antigo fica com o hub, que o lista ate o --migrar-tickets
+    return origem if origem and (origem in quem_lista or hub not in quem_lista) else hub
 
 
 def resumos_do_hub(texto):
@@ -225,25 +247,30 @@ def resumos_do_hub(texto):
 
 def indice(todas):
     """Sobre a lista que notas() acabou de devolver: por_nome (nome -> rel, a
-    primeira ganha), backlinks (nome -> [rel]) e resumos (rel do hub -> {nome: resumo})."""
+    primeira ganha), backlinks (nome -> [rel]), specs ((projeto, nome) -> rel das specs
+    de origem de tickets) e resumos (rel do hub ou da spec de origem -> {nome: resumo})."""
     global _INDICE
     if _INDICE["versao"] == _VERSAO:
         return _INDICE
-    por_nome, backlinks, resumos = {}, defaultdict(list), {}
+    por_nome, backlinks, specs, resumos = {}, defaultdict(list), {}, {}
+    origens = {(n["projeto"], o) for n in todas if (o := spec_de_origem(n))}
     for n in todas:
         por_nome.setdefault(n["nome"], n["rel"])
         for alvo in {nome_alvo(l) for l in n["links"]}:
             backlinks[alvo].append(n["rel"])
-        if eh_hub(n):
+        if (n["projeto"], n["nome"]) in origens and ((n["projeto"], n["nome"]) not in specs
+                                                     or eh_a_spec(n)):
+            specs[(n["projeto"], n["nome"])] = n["rel"]
+        if eh_hub(n) or (n["projeto"], n["nome"]) in origens:
             resumos[n["rel"]] = resumos_do_hub(n["texto"])
-    _INDICE = {"versao": _VERSAO, "por_nome": por_nome,
-               "backlinks": dict(backlinks), "resumos": resumos}
+    _INDICE = {"versao": _VERSAO, "por_nome": por_nome, "backlinks": dict(backlinks),
+               "specs": specs, "resumos": resumos}
     return _INDICE
 
 
 def resumo_de(n, idx):
     """A linha curada que o hub guarda sobre a nota; None se ela nao esta listada."""
-    return idx["resumos"].get(hub_de(n), {}).get(n["nome"])
+    return idx["resumos"].get(lista_de(n, idx), {}).get(n["nome"])
 
 
 def secoes_de(corpo):
@@ -438,18 +465,23 @@ def buscar(consulta="", projeto=None, tipo=None, status=None, limite=None):
         if not all(t in titulo or t in corpo for t in termos):
             continue
         pontos = sum(5 for t in termos if t in titulo)
-        pontos += sum(corpo.count(t) for t in termos)
+        # ate 5 por termo: sem teto, a nota longa e repetitiva ganhava da que trata do assunto
+        pontos += sum(min(corpo.count(t), 5) for t in termos)
         achadas.append((pontos, n))
     filtros = rotulo_filtros(projeto, tipo, status)
     if not achadas:
         return (f'Nenhuma nota para "{consulta}"{filtros}. Tente menos termos, '
                 "sem filtros, ou visao_geral para ver o que existe.")
-    achadas.sort(key=lambda par: (-par[0], par[1]["rel"]))
+    achadas.sort(key=lambda par: ("obsoleto" in valores(par[1]["fm"].get("status")),
+                                  -par[0], par[1]["rel"]))
     idx = indice(todas)
     linhas = [f'{len(achadas)} nota(s) para "{consulta}"{filtros}'
               + (f", mostrando {limite}:" if len(achadas) > limite else ":")]
     for _, n in achadas[:limite]:
         linhas.append(f"\n- {n['rel']}\n  {linha_meta(n)}")
+        suc = SUBSTITUIDA_RE.match(corpo_de(n))
+        if suc:
+            linhas.append(f"  substituída por [[{suc.group(1)}]]")
         # a linha curada do hub diz o que a nota E; o trecho so diz onde o termo caiu
         resumo = resumo_de(n, idx)
         if resumo:
@@ -491,49 +523,65 @@ def resolver(nota, todas):
                   "ou o nome como em wikilink; use buscar ou listar_notas para achar.")
 
 
-TETO_NOTA = 40000  # caracteres: acima disto, ler integral custa mais de 10 mil tokens
+TETO_NOTA = 12000  # caracteres: acima disto, ler integral custa uns 3 mil tokens
+
+
+def tamanhos_das_secoes(corpo):
+    """[(nivel, titulo, caracteres)] dos cabecalhos abaixo do `# titulo`, que e a nota inteira."""
+    secoes, linhas = secoes_de(corpo)
+    return [(nivel, titulo, sum(len(l) + 1 for l in linhas[ini:fim]))
+            for nivel, titulo, ini, fim in secoes if nivel > 1]
 
 
 def esboco(alvo):
     """Nota grande: abertura e cabecalhos com o tamanho de cada secao, para escolher."""
     corpo = corpo_de(alvo)
-    secoes, linhas = secoes_de(corpo)
     saida = [f"Caminho: {alvo['rel']}",
              f"Nota grande ({len(alvo['texto'])} caracteres): escolha secao=<titulo>, "
              "corte com max_chars=N ou peca integral=true.", ""]
     abertura = paragrafo_de_abertura(corpo)
     if abertura:
         saida += [abertura, ""]
-    secoes = [s for s in secoes if s[0] > 1]  # o `# titulo` e a nota inteira
+    secoes = tamanhos_das_secoes(corpo)
     saida.append("Secoes:" if secoes else "Sem cabecalhos alem do titulo.")
-    saida += [f"- {'#' * nivel} {titulo} ({sum(len(l) + 1 for l in linhas[ini:fim])} caracteres)"
-              for nivel, titulo, ini, fim in secoes]
+    saida += [f"- {'#' * nivel} {titulo} ({tam} caracteres)" for nivel, titulo, tam in secoes]
     return "\n".join(saida)
+
+
+def secao_pedida(corpo, secao, rel, nivel_min=1):
+    """((nivel, titulo, ini, fim), linhas do corpo, erro) da secao de nivel >= nivel_min
+    que bate com o pedido: titulo exato, depois prefixo, depois contem. Nenhuma ou mais
+    de uma: secao None e o erro que explica, com as secoes."""
+    pedido = normalizar(str(secao).lstrip("#").strip())
+    secoes, linhas = secoes_de(corpo)
+    secoes = [s for s in secoes if s[0] >= nivel_min]
+    for grupo in ([s for s in secoes if normalizar(s[1]) == pedido],
+                  [s for s in secoes if normalizar(s[1]).startswith(pedido)],
+                  [s for s in secoes if pedido in normalizar(s[1])]):
+        if len(grupo) == 1:
+            return grupo[0], linhas, None
+        if grupo:
+            return None, linhas, (f'Mais de uma secao bate com "{secao}" em {rel}; repita com o '
+                                  "titulo exato: " + "; ".join(f"{'#' * n} {t}" for n, t, _, _ in grupo))
+    disponiveis = ", ".join(f"{'#' * n} {t}" for n, t, _, _ in secoes) or "nenhuma"
+    return None, linhas, f'Secao "{secao}" nao existe em {rel}. Secoes: {disponiveis}'
 
 
 def ler_nota(nota="", secao=None, max_chars=None, integral=False):
     alvo, erro = resolver(nota, notas())
     if erro:
         return erro
-    pedido = normalizar(str(secao or "").lstrip("#").strip())
-    if not pedido:
+    if not normalizar(str(secao or "").lstrip("#").strip()):
         if len(alvo["texto"]) > TETO_NOTA and not integral and max_chars is None:
             return esboco(alvo)
         return f"Caminho: {alvo['rel']}\n\n" + cortar(alvo["texto"], max_chars)
-    secoes, linhas = secoes_de(corpo_de(alvo))
-    for grupo in ([s for s in secoes if normalizar(s[1]) == pedido],
-                  [s for s in secoes if normalizar(s[1]).startswith(pedido)],
-                  [s for s in secoes if pedido in normalizar(s[1])]):
-        if len(grupo) == 1:
-            nivel, titulo, ini, fim = grupo[0]
-            bloco = "\n".join(linhas[ini:fim]).rstrip("\n")
-            return (f"Caminho: {alvo['rel']}\nSecao: {'#' * nivel} {titulo}\n\n"
-                    + cortar(bloco, max_chars))
-        if grupo:
-            return (f'Mais de uma secao bate com "{secao}" em {alvo["rel"]}; repita com o '
-                    "titulo exato: " + "; ".join(f"{'#' * n} {t}" for n, t, _, _ in grupo))
-    disponiveis = ", ".join(f"{'#' * n} {t}" for n, t, _, _ in secoes) or "nenhuma"
-    return f'Secao "{secao}" nao existe em {alvo["rel"]}. Secoes: {disponiveis}'
+    achada, linhas, erro = secao_pedida(corpo_de(alvo), secao, alvo["rel"])
+    if erro:
+        return erro
+    nivel, titulo, ini, fim = achada
+    bloco = "\n".join(linhas[ini:fim]).rstrip("\n")
+    return (f"Caminho: {alvo['rel']}\nSecao: {'#' * nivel} {titulo}\n\n"
+            + cortar(bloco, max_chars))
 
 
 def conexoes(nota=""):
@@ -543,19 +591,22 @@ def conexoes(nota=""):
         return erro
     idx = indice(todas)
     por_nome, por_rel = idx["por_nome"], {n["rel"]: n for n in todas}
-    proj, hub_rel, hub = alvo["projeto"], hub_de(alvo), eh_hub(alvo)
+    proj, lista_rel, hub = alvo["projeto"], lista_de(alvo, idx), eh_hub(alvo)
+    hub_proj = f"{proj}/{proj}.md" if proj else None
 
     mae = alvo["fm"].get("parte_de")
 
     def estrutural(rel):
         """Link que a convencao gera sozinha: nota <-> hub do projeto, hub <-> Home,
-        nota-mae <-> anexo."""
-        if rel in ("Home.md", hub_rel):
+        nota-mae <-> anexo, spec de origem <-> ticket."""
+        if rel in ("Home.md", lista_rel, hub_proj, spec_de(alvo, idx)):
             return True
         outra = por_rel.get(rel)
         if not outra:
             return False
         if outra["fm"].get("parte_de") == alvo["nome"] or (mae and outra["nome"] == mae):
+            return True
+        if spec_de(outra, idx) == alvo["rel"]:
             return True
         return bool(hub and (outra["projeto"] == proj or (proj is None and eh_hub(outra))))
 
@@ -569,7 +620,7 @@ def conexoes(nota=""):
         if rel is None:
             quebrados.append(link)
         elif estrutural(rel):
-            if rel not in ("Home.md", hub_rel):
+            if rel not in ("Home.md", lista_rel):
                 proprias += 1  # nota do proprio projeto, listada por este hub
         elif rel != alvo["rel"]:
             saida.append(rel)
@@ -579,12 +630,17 @@ def conexoes(nota=""):
     if hub and proj:
         linhas.append(f"Hub de {proj}: {proprias} nota(s) do projeto listadas "
                       f"(contexto_projeto {proj} para ve-las)")
-    elif not hub and hub_rel:
-        linhas.append(f"Hub: [[{proj}]] (" + ("lista esta nota" if hub_rel in backlinks
-                                               else "NAO lista esta nota: validar aponta") + ")")
+    elif not hub and lista_rel:
+        rotulo = (f"Hub: [[{proj}]]" if lista_rel == hub_proj
+                  else f"Spec de origem: [[{por_rel[lista_rel]['nome']}]]")
+        linhas.append(f"{rotulo} (" + ("lista esta nota" if lista_rel in backlinks
+                                       else "NAO lista esta nota: validar aponta") + ")")
     anexos = sum(1 for n in todas if n["fm"].get("parte_de") == alvo["nome"])
     if anexos:
         linhas.append(f"Anexos: {anexos} (o indice esta na propria nota)")
+    tickets = sum(1 for n in todas if spec_de(n, idx) == alvo["rel"])
+    if tickets:
+        linhas.append(f"Tickets: {tickets} (a lista esta na propria nota)")
     if mae:
         linhas.append(f"Parte de [[{mae}]]")
     linhas.append(f"Relacionadas de saida ({len(saida) + len(quebrados)}):"
@@ -687,6 +743,21 @@ def contexto_projeto(projeto="", por_secao=None):
     return texto
 
 
+def contexto_da_pasta(pasta):
+    """O contexto_projeto do projeto cujo hub aponta a pasta (`Repo:`), senao o do nome
+    dela; vazio sem hub. E o que o hook do SessionStart injeta."""
+    alvo = os.path.normcase(os.path.abspath(os.path.expanduser(pasta)))
+    projeto = next((n["projeto"] for n in notas()
+                    if n["projeto"] and eh_hub(n) and (m := REPO_RE.search(n["texto"]))
+                    and os.path.normcase(os.path.abspath(os.path.expanduser(
+                        caminho_da_linha(m.group(1))))) == alvo),
+                   os.path.basename(os.path.abspath(pasta)))
+    try:
+        return contexto_projeto(projeto)
+    except ErroUso:
+        return ""
+
+
 # ---------- escrita ----------
 
 TIPOS = {"spec", "plano", "bug", "evolucao", "arquitetura", "adr", "analise", "mapa"}
@@ -696,7 +767,8 @@ PASTAS = {"spec": "Specs", "plano": "Specs", "bug": "Bugs", "evolucao": "Evoluco
 # Alem do que o SO proibe, `# ^ [ ]` e a crase: no nome, eles quebram o wikilink que
 # aponta a nota (a crase porque links_de tira trechos de codigo antes de ler os links).
 NOME_PROIBIDO_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f#^\[\]`]')
-SUBSTITUIDA_RE = re.compile(r"^Substituída por \[\[[^\]]*\]\]\.\n+")
+SUBSTITUIDA_RE = re.compile(r"^Substituída por \[\[([^\]]*)\]\]\.\n+")
+SUBSTITUIDA_LINHA_RE = re.compile(r"(?m)^Substituída por \[\[")  # a mao, fora do topo
 PREFIXO_DATA_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")
 
 
@@ -897,7 +969,41 @@ SINONIMOS = {
 }
 PENDENCIAS = ("pendencias",) + SINONIMOS["pendencias"]  # o que contexto_projeto mostra
 TETO_TITULO, TETO_RESUMO, TETO_TAGS = 80, 200, 3
-PADRAO = ("A4", "A5", "A6", "A7", "A8", "A9")  # codigos do validar que o padrao usa
+PADRAO = ("A4", "A5", "A6", "A7", "A8", "A9", "A10")  # codigos do validar que o padrao usa
+# A nota de estado se reescreve quando muda; evolucao e ticket sao registros datados.
+NOTAS_DE_ESTADO = ("spec", "plano", "arquitetura", "adr", "analise")
+SECAO_DE_REMENDO = ("historico", "changelog", "atualizacoes")
+LINHA_DE_REMENDO_RE = re.compile(r"(?m)^(Última atualização:|> \*\*Atualização)")
+SUPERADA_RE = re.compile(r"\bSUPERADA\b")
+
+
+def remendos(corpo):
+    """O que o corpo traz de remendo: secao de historico, bloco de atualizacao, SUPERADA."""
+    # so o titulo exato, abaixo do `# titulo` da nota: "Atualizacoes de seguranca" nao e remendo
+    achados = [f"{'#' * nivel} {t}" for nivel, t, _, _ in secoes_de(corpo)[0]
+               if nivel > 1 and normalizar(t) in SECAO_DE_REMENDO]
+    texto = sem_codigo(corpo)
+    achados += sorted({m.group(1) for m in LINHA_DE_REMENDO_RE.finditer(texto)})
+    if SUPERADA_RE.search(texto):
+        achados.append("SUPERADA")
+    return achados
+
+
+def aviso_de_remendo(tipo, corpo):
+    achados = remendos(corpo) if tipo in NOTAS_DE_ESTADO else []
+    return ("remendo em nota de estado (" + ", ".join(achados) + "): reescreva a nota no estado "
+            "atual; o que mudou vai para a evolucao, e a decisao superada vira nota nova com "
+            "sucessora") if achados else None
+
+
+def aviso_de_tamanho(texto):
+    """Nota acima do teto, com as maiores secoes: e onde dividir ou enxugar."""
+    if len(texto) <= TETO_NOTA:
+        return None
+    maiores = sorted(tamanhos_das_secoes(partir(texto)[1]), key=lambda s: -s[2])[:3]
+    return (f"nota com {len(texto)} caracteres (teto {TETO_NOTA}: ler_nota devolve o esboco)"
+            + ("; maiores secoes: " + ", ".join(f"{'#' * n} {t} ({c})" for n, t, c in maiores)
+               if maiores else "") + "; divida (dividir_nota) ou enxugue")
 
 
 def secoes_faltando(tipo, corpo):
@@ -929,6 +1035,9 @@ def avisos_padrao(tipo, titulo, resumo, tags, corpo, ticket=False):
         faltam = secoes_faltando(tipo, corpo)
         if faltam:
             avisos.append("secoes do padrao ausentes: " + ", ".join(f"## {s}" for s in faltam))
+        remendo = aviso_de_remendo(tipo, corpo)
+        if remendo:
+            avisos.append(remendo)
     return avisos
 
 
@@ -978,6 +1087,13 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
         raise ErroUso(f"ja existe: {rel}. Mudar o conteudo: atualizar_nota; "
                       "regravar do zero: sobrescrever=true.")
     todas = notas()
+    origem = None
+    if artefato:
+        origem = max((n for n in todas if n["projeto"] == projeto
+                      and n["nome"] == nome_de_nota(artefato)), key=eh_a_spec, default=None)
+        if origem is None:
+            raise ErroUso(f"spec de origem nao existe no projeto {projeto}: {artefato}. "
+                          "Grave-a antes dos tickets (salvar_nota).")
     hub_novo = garantir_hub(projeto, descricao_projeto, repo)
     aviso = None
     if arquivos:
@@ -990,9 +1106,12 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
     texto = (bloco_frontmatter(projeto, tipo, status, data, tags) + "\n"
              + com_cabecalho(corpo, titulo, projeto) + "\n")
     escrever(caminho, texto)
-    hub = os.path.join(VAULT, projeto, projeto + ".md")
-    escrever(hub, inserir_na_secao(ler(hub), secao, f"- [[{nome}]] — {resumo}"))
+    # o ticket e listado pela spec de origem: no hub, uma linha por ticket inchava o indice
+    lista, secao = ((os.path.join(VAULT, *origem["rel"].split("/")), "Tickets") if origem
+                    else (os.path.join(VAULT, projeto, projeto + ".md"), secao))
+    escrever(lista, inserir_na_secao(ler(lista), secao, f"- [[{nome}]] — {resumo}"))
     linhas = [f"Salva: {rel}",
+              "Spec de origem: entrada adicionada em ## Tickets" if origem else
               "Hub: " + ("criado e registrado no Home" if hub_novo else "entrada adicionada")]
     if hub_novo:
         np = normalizar(projeto)
@@ -1018,15 +1137,19 @@ def salvar_nota(projeto="", tipo="", titulo="", corpo="", resumo="", status="ati
             if abertas:
                 linhas.append("Linkadas ainda ativas: " + ", ".join(f"[[{a}]]" for a in abertas)
                               + " — se a leva as concluiu, atualizar_nota status=resolvido")
+    linhas += ["Padrao: " + a for a in filter(None, [aviso_de_tamanho(texto)])]  # o mapa inclusive
     linhas.append("Git: " + (LOTE_PENDENTE if lote else
                              sincronizar(f"{projeto}: {nome if tipo == 'mapa' else titulo}")))
     return "\n".join(linhas)
 
 
 def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, resumo=None,
-                   lote=False):
+                   secao=None, lote=False):
     if corpo is None and status is None and tags is None and not sucessora and not resumo:
         raise ErroUso("informe ao menos um de: corpo, status, tags, sucessora, resumo")
+    secao = str(secao or "").lstrip("#").strip() or None  # vazia: o corpo inteiro, como sem secao
+    if secao is not None and corpo is None:
+        raise ErroUso("secao= troca o conteudo de uma secao: passe em corpo o conteudo novo dela")
     abrir_lote() if lote else puxar()
     todas = notas()
     alvo, erro = resolver(nota, todas)
@@ -1041,7 +1164,16 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
                       "(sobrescrever=true)")
     projeto = alvo["projeto"] or alvo["fm"].get("projeto", "")
     mudou = []
-    if corpo is not None:  # a cabeca termina em `---`: a linha em branco vem daqui
+    if secao is not None:  # o cabecalho fica; o conteudo, subsecoes inclusive, e trocado
+        # do nivel 2 em diante: o `# titulo` e a nota inteira, que se troca sem secao=
+        achada, linhas, erro = secao_pedida(resto, secao, alvo["rel"], nivel_min=2)
+        if erro:
+            raise ErroUso(erro)
+        nivel, titulo, ini, fim = achada
+        linhas[ini + 1:fim] = [""] + str(corpo).strip("\n").split("\n") + [""]
+        resto = "\n".join(linhas).rstrip("\n") + "\n"
+        mudou.append(f"secao {'#' * nivel} {titulo}")
+    elif corpo is not None:  # a cabeca termina em `---`: a linha em branco vem daqui
         resto = "\n\n" + com_cabecalho(corpo, PREFIXO_DATA_RE.sub("", alvo["nome"]), projeto) + "\n"
         mudou.append("corpo")
     if sucessora:
@@ -1073,19 +1205,30 @@ def atualizar_nota(nota="", corpo=None, status=None, tags=None, sucessora=None, 
             cabeca = cabeca.replace("\n---", f"\n{linha}\n---", 1)
         mudou.append("tags")
     escrever(os.path.join(VAULT, *alvo["rel"].split("/")), cabeca + resto)
-    if resumo:
-        hub = os.path.join(VAULT, projeto, projeto + ".md")
+    avisos = [aviso_de_tamanho(cabeca + resto)]
+    tipo = valores(alvo["fm"].get("tipo"))[0]
+    if not alvo["fm"].get("parte_de") and tipo != "mapa":  # anexo e mapa: so o tamanho conta
+        avisos += avisos_padrao(tipo, PREFIXO_DATA_RE.sub("", alvo["nome"]), "",
+                                lista_tags(tags if tags is not None else
+                                           str(alvo["fm"].get("tags", "")).strip("[]")),
+                                resto, ticket=spec_de_origem(alvo) is not None)
+    if resumo:  # a linha esta na nota que lista esta: o hub, ou a spec de origem do ticket
+        idx = indice(todas)
+        lista = lista_de(alvo, idx)
+        onde = "na spec de origem" if lista and lista == spec_de(alvo, idx) else "no hub"
+        caminho = os.path.join(VAULT, *lista.split("/")) if lista else ""
         padrao = re.compile(r"(?m)^(- \[\[" + re.escape(alvo["nome"]) + r"(?:\|[^\]]*)?\]\]).*$")
         resumo = " ".join(str(resumo).split())
-        novo, n = (padrao.subn(lambda m: f"{m.group(1)} — {resumo}", ler(hub))
-                   if os.path.exists(hub) else ("", 0))
+        novo, n = (padrao.subn(lambda m: f"{m.group(1)} — {resumo}", ler(caminho))
+                   if os.path.exists(caminho) else ("", 0))
         if n:
-            escrever(hub, novo)
-            mudou.append("resumo no hub")
+            escrever(caminho, novo)
+            mudou.append(f"resumo {onde}")
         else:
-            mudou.append("resumo ignorado: a nota nao esta listada no hub")
-    return (f"Atualizada: {alvo['rel']} ({', '.join(mudou)})\nGit: "
-            + (LOTE_PENDENTE if lote else sincronizar(f"{projeto}: {alvo['nome']}")))
+            mudou.append(f"resumo ignorado: a nota nao esta listada {onde}")
+    return "\n".join([f"Atualizada: {alvo['rel']} ({', '.join(mudou)})"]
+                     + ["Padrao: " + a for a in avisos if a]
+                     + ["Git: " + (LOTE_PENDENTE if lote else sincronizar(f"{projeto}: {alvo['nome']}"))])
 
 
 def sincronizar_lote(mensagem=""):
@@ -1215,6 +1358,60 @@ def dividir_nota(nota="", lote=False):
                        sincronizar(f"{alvo['projeto']}: divide {alvo['nome']} em {len(partes)} anexos")))
 
 
+def migrar_tickets(aplicar=False):
+    """Move as linhas de ticket dos hubs para a secao Tickets da spec de origem.
+    Sem aplicar, so mostra; ticket cuja spec nao esta no vault fica no hub."""
+    if aplicar:
+        puxar()
+    todas = notas()
+    por_rel = {n["rel"]: n for n in todas}
+    idx = indice(todas)
+    por_nome = idx["por_nome"]
+    por_spec, hubs, sem_spec = defaultdict(list), {}, []
+    for hub in todas:
+        if not (hub["projeto"] and eh_hub(hub)):
+            continue
+        linhas = ler(os.path.join(VAULT, *hub["rel"].split("/"))).split("\n")
+        ficam = []
+        for linha in linhas:
+            m = HUB_LINHA_RE.match(linha)
+            ticket = por_rel.get(por_nome.get(nome_alvo(m.group(1)))) if m else None
+            origem = spec_de_origem(ticket) if ticket and ticket["projeto"] == hub["projeto"] else None
+            spec = spec_de(ticket, idx) if origem else None
+            if spec:
+                por_spec[spec].append(linha)
+                continue
+            if origem:
+                sem_spec.append(ticket["rel"])
+            ficam.append(linha)
+        if len(ficam) < len(linhas):
+            hubs[hub["rel"]] = "\n".join(ficam)
+    total = sum(len(v) for v in por_spec.values())
+    saida = [f"{total} linha(s) de ticket em {len(hubs)} hub(s) vao para {len(por_spec)} "
+             "spec(s) de origem" + (":" if total else ".")]
+    saida += [f"- {rel}: {len(v)}" for rel, v in sorted(por_spec.items())]
+    if sem_spec:
+        saida.append(f"Sem a spec de origem no vault, ficam no hub ({len(sem_spec)}): "
+                     + ", ".join(sem_spec))
+    if not aplicar or not total:
+        if total:
+            saida.append("Nada foi movido: repita com --aplicar para mover e commitar.")
+        return "\n".join(saida)
+    caminhos = []
+    for rel, texto in hubs.items():
+        caminhos.append(os.path.join(VAULT, *rel.split("/")))
+        escrever(caminhos[-1], texto)
+    for rel, movidas in por_spec.items():
+        caminhos.append(os.path.join(VAULT, *rel.split("/")))
+        texto = ler(caminhos[-1])
+        for linha in movidas:
+            texto = inserir_na_secao(texto, "Tickets", linha)
+        escrever(caminhos[-1], texto)
+    saida.append("Git: " + sincronizar(f"vault: {total} ticket(s) saem dos hubs para a spec de origem",
+                                       caminhos))
+    return "\n".join(saida)
+
+
 # ---------- linter ----------
 
 TIPOS_VALIDOS = TIPOS | {"hub"}
@@ -1224,9 +1421,11 @@ OBRIGATORIOS = ("projeto", "tipo", "status", "data")
 def validar_vault(projeto=None, tipo=None):
     """(erros, avisos, totais) — o mesmo vocabulario e parser que a gravacao usa."""
     todas = notas()
+    idx = indice(todas)
     if projeto:
         p = normalizar(projeto)
         todas = [n for n in todas if n["projeto"] and normalizar(n["projeto"]) == p]
+    por_rel = {n["rel"]: n for n in todas}
     erros, avisos = [], []
     por_nome, links_para, com_saida = {}, defaultdict(list), set()
     projetos = defaultdict(list)
@@ -1270,7 +1469,11 @@ def validar_vault(projeto=None, tipo=None):
             continue
         citados = hub["links"]
         for n in nomes:  # anexo (parte_de:) e listado pela nota-mae, nao pelo hub
-            if n["nome"] != proj and n["nome"] not in citados and not n["fm"].get("parte_de"):
+            if spec_de_origem(n):  # ticket: a spec de origem o lista; o hub, so antes da migracao
+                spec = por_rel.get(spec_de(n, idx))
+                if n["nome"] not in citados | (spec["links"] if spec else set()):
+                    erros.append(("E5", n["rel"], "nao listada na spec de origem"))
+            elif n["nome"] != proj and n["nome"] not in citados and not n["fm"].get("parte_de"):
                 erros.append(("E5", n["rel"], "nao listada no hub"))
     for n in sorted(todas, key=lambda x: x["rel"]):
         if n["nome"] not in links_para and n["nome"] != "Home":
@@ -1278,9 +1481,10 @@ def validar_vault(projeto=None, tipo=None):
         if n["nome"] not in com_saida:
             avisos.append(("A2", n["rel"], "sem wikilink de saida"))
         avisos += avisos_padrao_da_nota(n)
+        avisos += avisos_de_ciclo(n, por_rel.get(spec_de(n, idx)))
     filtro = {"frontmatter": ("E1", "E2", "E3"), "links": ("E4", "A2"),
               "orfas": ("A1",), "hub": ("E5", "A3"),
-              "padrao": PADRAO}.get(normalizar(tipo) if tipo else None)
+              "padrao": PADRAO, "ciclo": CICLO}.get(normalizar(tipo) if tipo else None)
     if filtro:
         erros = [e for e in erros if e[0] in filtro]
         avisos = [a for a in avisos if a[0] in filtro]
@@ -1288,7 +1492,7 @@ def validar_vault(projeto=None, tipo=None):
 
 
 def avisos_padrao_da_nota(n):
-    """A4-A9: o padrao de nota, medido sobre o que ja esta no vault."""
+    """A4-A10: o padrao de nota, medido sobre o que ja esta no vault."""
     saida = []
     if eh_hub(n):
         sem = longos = 0
@@ -1315,6 +1519,9 @@ def avisos_padrao_da_nota(n):
         faltam = secoes_faltando(t, corpo_de(n))
         if faltam:
             saida.append(("A6", n["rel"], "sem as secoes do padrao: " + ", ".join(faltam)))
+        remendo = aviso_de_remendo(t, corpo_de(n))
+        if remendo:
+            saida.append(("A10", n["rel"], remendo))
     n_tags = len(lista_tags(str(n["fm"].get("tags", "")).strip("[]")))
     if n_tags > TETO_TAGS:
         saida.append(("A7", n["rel"], f"{n_tags} tags (padrao: ate {TETO_TAGS})"))
@@ -1324,9 +1531,27 @@ def avisos_padrao_da_nota(n):
     return saida
 
 
+CICLO = ("A11", "A12")  # codigos do validar que o ciclo de vida usa
+
+
+def avisos_de_ciclo(n, spec):
+    """A11-A12: o ciclo de vida que ficou para tras."""
+    if eh_hub(n):
+        return []
+    saida = []
+    status = valores(n["fm"].get("status"))[0]
+    if status != "obsoleto" and SUBSTITUIDA_LINHA_RE.search(sem_codigo(corpo_de(n))):
+        saida.append(("A11", n["rel"], f"tem 'Substituída por' com status {status or '-'}: "
+                                       "atualizar_nota status=obsoleto"))
+    if spec and status in ("ativo", "rascunho") and valores(spec["fm"].get("status"))[0] == "resolvido":
+        saida.append(("A12", n["rel"], f"ticket {status} de spec resolvida ([[{spec['nome']}]]): "
+                                       "atualizar_nota status=resolvido"))
+    return saida
+
+
 def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False, ocultar=()):
-    """`ocultar`: codigos que entram so contados, no fim — o padrao de nota, que num
-    vault antigo sao centenas de linhas, so e listado quando pedido."""
+    """`ocultar`: codigos que entram so contados, no fim — o padrao de nota e o ciclo de
+    vida, que num vault antigo sao centenas de linhas, so sao listados quando pedidos."""
     ocultos = Counter(c for c, _, _ in avisos if c in ocultar)
     avisos = [a for a in avisos if a[0] not in ocultar]
     linhas = []
@@ -1340,15 +1565,17 @@ def relatorio_validacao(erros, avisos, totais, max_avisos=40, so_placar=False, o
     linhas += [f"Notas: {totais['notas']} | Projetos: {totais['projetos']}",
                f"Erros: {len(erros)} | Avisos: {len(avisos)}"]
     linhas += [f"  {c}: {contagem[c]}" for c in sorted(contagem)]
-    if ocultos:
-        linhas.append("Padrao de nota (validar tipo=padrao lista): "
-                      + ", ".join(f"{c}: {ocultos[c]}" for c in sorted(ocultos)))
+    for familia, rotulo, todos in (("padrao", "Padrao de nota", PADRAO), ("ciclo", "Ciclo de vida", CICLO)):
+        codigos = [c for c in todos if ocultos[c]]
+        if codigos:
+            linhas.append(f"{rotulo} (validar tipo={familia} lista): "
+                          + ", ".join(f"{c}: {ocultos[c]}" for c in codigos))
     return "\n".join(linhas)
 
 
 def validar(projeto=None, tipo=None):
     erros, avisos, totais = validar_vault(projeto, tipo)
-    return relatorio_validacao(erros, avisos, totais, ocultar=() if tipo else PADRAO)
+    return relatorio_validacao(erros, avisos, totais, ocultar=() if tipo else PADRAO + CICLO)
 
 
 # ---------- graphify (grafo de codigo do repo, via ponteiro Repo: do hub) ----------
@@ -1665,7 +1892,8 @@ FERRAMENTAS = [
      "fn": contexto_projeto},
     {"name": "buscar",
      "description": "Busca full-text nas notas, ignorando acentos e maiusculas; varios "
-                    "termos = todos precisam aparecer. Cada resultado traz o resumo da nota no hub.",
+                    "termos = todos precisam aparecer. Cada resultado traz o resumo da nota no hub; as "
+                    "obsoletas vem no fim, com a sucessora.",
      "inputSchema": esquema({
          "consulta": {"type": "string",
                       "description": "Termos de busca (obrigatorio)."},
@@ -1748,7 +1976,11 @@ FERRAMENTAS = [
      "description": "Altera uma nota existente, in-place, nos campos passados. Commit+push.",
      "inputSchema": esquema({
          "nota": P_NOTA,
-         "corpo": {"type": "string", "description": "Novo corpo completo em markdown, o texto apos o frontmatter."},
+         "corpo": {"type": "string", "description": "Novo corpo completo em markdown, o texto apos o "
+                                                     "frontmatter; com secao=, so o conteudo novo dela."},
+         "secao": {"type": "string",
+                   "description": "Titulo de uma secao, achada como no ler_nota secao=: corpo troca so "
+                                  "o conteudo dela (o cabecalho fica). Inexistente ou ambigua falha."},
          "status": {"type": "string",
                     "description": "rascunho | ativo | resolvido | obsoleto"},
          "tags": {"type": "array", "items": {"type": "string"},
@@ -1756,7 +1988,7 @@ FERRAMENTAS = [
          "sucessora": {"type": "string",
                        "description": "Nome da nota que substitui esta (sem .md): marca esta obsoleta "
                                       "e linka a substituta."},
-         "resumo": {"type": "string", "description": "Nova linha de resumo no hub."},
+         "resumo": {"type": "string", "description": "Nova linha de resumo no hub (a do ticket, na spec de origem)."},
          "lote": P_LOTE,
      }, "nota"),
      "fn": atualizar_nota},
@@ -1787,11 +2019,13 @@ FERRAMENTAS = [
      "fn": sincronizar_lote},
     {"name": "validar",
      "description": "Linter do vault: frontmatter, vocabulario, wikilinks, hub e orfas; o padrao "
-                    "de nota (A4-A9) entra so contado. Rode ao fechar uma leva.",
+                    "de nota (A4-A10) e o ciclo de vida (A11-A12) entram so contados. Rode ao fechar "
+                    "uma leva.",
      "inputSchema": esquema({
          "projeto": P_PROJETO,
          "tipo": {"type": "string",
-                  "description": "So uma checagem: frontmatter | links | orfas | hub | padrao."},
+                  "description": "So uma checagem: frontmatter | links | orfas | hub | padrao | "
+                                 "ciclo."},
      }),
      "fn": validar},
     {"name": "mapa_codigo",
@@ -1922,6 +2156,12 @@ def main():
                     help="registra este servidor no Claude Code (escopo user) e sai")
     ap.add_argument("--sem-git", action="store_true",
                     help="nunca commitar/empurrar o vault, mesmo sendo repositorio git")
+    ap.add_argument("--migrar-tickets", action="store_true",
+                    help="mostra os tickets listados nos hubs que iriam para a spec de origem")
+    ap.add_argument("--aplicar", action="store_true",
+                    help="com --migrar-tickets: move as linhas e commita")
+    ap.add_argument("--contexto", metavar="PASTA",
+                    help="imprime o contexto_projeto do projeto da pasta e sai")
     args = ap.parse_args()
 
     global VAULT, SEM_GIT
@@ -1943,6 +2183,17 @@ def main():
     for fluxo in (sys.stdin, sys.stdout):
         if hasattr(fluxo, "reconfigure"):
             fluxo.reconfigure(encoding="utf-8", newline="\n")
+
+    if args.migrar_tickets:
+        if VAULT is None:
+            sys.exit(ERRO_VAULT)
+        print(migrar_tickets(args.aplicar))
+        return
+
+    if args.contexto is not None:  # o hook nunca falha por isto: sem vault ou sem hub, nada
+        if VAULT is not None:
+            print(contexto_da_pasta(args.contexto), end="")
+        return
 
     for linha in sys.stdin:
         linha = linha.strip()

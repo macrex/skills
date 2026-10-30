@@ -22,6 +22,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const REGRAS = `<vault-obsidian>
 Este projeto documenta no vault Obsidian pelo MCP \`vault-docs\` (\`mcp__vault-docs__*\` ou \`mcp__plugin_<plugin>_vault-docs__*\`). **Sem nenhuma ferramenta do servidor vault-docs na sessao, seja qual for o prefixo, ignore este bloco.**
@@ -31,6 +32,7 @@ Este projeto documenta no vault Obsidian pelo MCP \`vault-docs\` (\`mcp__vault-d
 - **Ao fechar uma leva ou versao**, registre a evolucao (\`salvar_nota tipo=evolucao\`) com as secoes O que mudou, Verificacao e Pendencias, e rode \`validar projeto=<projeto>\`. \`salvar_nota\` avisa o que sai do padrao: corrija na hora.
 - **Migracao para o vault e CÓPIA, nunca recorte**: o original fica intocado no repositorio, inclusive o que so parece documentacao (\`LEIA.txt\`, \`HELP\`, notas em biblioteca vendorizada); nunca gere o commit \`docs: migrados para o vault Obsidian (obsidian-docs)\`.
 - **Acesso ao vault so pelas ferramentas do MCP.** NUNCA Read/Grep/Glob/Write/Edit nos arquivos dele, nem git — o servidor ja commita e empurra.
+- O que o vault diz vale para a data em que foi escrito: caminho, função ou comando citado numa nota se confere no código antes de agir.
 - Duas fontes: o que foi decidido e por que, no vault; o que o codigo e agora, no grafo do graphify. Apos cada rodada do graphify, SEMPRE \`gerar_mapa <projeto>\` com a sua \`leitura\` curada; \`graphify-out/\` fica no repositorio, no \`.gitignore\` e fora do index.
 </vault-obsidian>`;
 
@@ -79,12 +81,46 @@ function vaultConfigurado() {
   return valores.length ? false : null; // config existe e esta vazia: opt-out deliberado
 }
 
+const SERVIDOR = path.join(__dirname, '..', 'skills', 'obsidian-docs', 'scripts', 'servidor_vault.py');
+const PRAZO_CONTEXTO = 8000; // o hook tem 10 s; o resto e do node e do REGRAS
+const PYTHONS = ['python3', 'python']; // a extensao do Pi usa a mesma ordem
+
+// O contexto_projeto da pasta, pelo `--contexto` do servidor do vault, embrulhado para ir
+// depois do REGRAS; '' sem vault, sem python, sem hub, com erro ou passado o prazo. O
+// agente esquecia de pedir o contexto_projeto no comeco da sessao: lembrete nao muda
+// comportamento, injetar muda.
+function blocoDeContexto(vault, pasta) {
+  if (!vault) return '';
+  const fim = Date.now() + PRAZO_CONTEXTO;
+  for (const python of PYTHONS) {
+    const prazo = fim - Date.now();
+    if (prazo <= 0) return '';
+    const r = spawnSync(python, [SERVIDOR, '--vault', vault, '--contexto', pasta], {
+      encoding: 'utf8',
+      timeout: prazo,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (r.error && r.error.code !== 'ENOENT') return ''; // passou do prazo
+    if (r.status !== 0) continue; // python ausente ou que nao roda o servidor: o proximo
+    const contexto = r.stdout.trim();
+    return contexto ? `\n\n<vault-contexto>\n${contexto}\n</vault-contexto>` : '';
+  }
+  return '';
+}
+
+// A pasta do vault na mesma ordem do gate: a opcao do plugin, OBSIDIAN_VAULT, os settings.json.
+function pastaDoVault() {
+  return [process.env.CLAUDE_PLUGIN_OPTION_VAULT, process.env.OBSIDIAN_VAULT, ...opcoesNosSettings('vault')]
+    .map((v) => String(v || '').trim())
+    .find(Boolean);
+}
+
 // REGRAS tem um dono so: a extensao do Pi (extensions/vault-docs.ts) importa este
 // modulo para injetar no Pi o mesmo texto que o hook injeta no Claude Code. Por isso
 // o gate e a escrita em stdout so rodam quando este arquivo E o programa; importado,
 // ele exporta o texto e nao faz mais nada. opcoesNosSettings serve tambem ao gate do
 // hook do grill (grill-canal.js), que le a opcao dele nos mesmos settings.json.
-module.exports = { REGRAS, opcoesNosSettings };
+module.exports = { REGRAS, opcoesNosSettings, blocoDeContexto, PYTHONS };
 
 if (require.main === module) {
   if (vaultConfigurado() === false) process.exit(0);
@@ -94,6 +130,6 @@ if (require.main === module) {
   process.stdout.write(
     evento === 'SubagentStart'
       ? JSON.stringify({ hookSpecificOutput: { hookEventName: evento, additionalContext: REGRAS } })
-      : REGRAS
+      : REGRAS + blocoDeContexto(pastaDoVault(), process.env.CLAUDE_PROJECT_DIR || process.cwd())
   );
 }

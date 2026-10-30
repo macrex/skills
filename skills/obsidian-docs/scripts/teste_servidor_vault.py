@@ -101,6 +101,12 @@ def testes():
                            artefato="2026-01-10 Cobrança recorrente", data="2026-02-02")
     confere("pagamentos/Specs/Tickets - 2026-01-10 Cobrança recorrente/2026-02-02 T1 Criar tabela.md" in saida,
             "ticket cai em Specs/Tickets - <artefato>/")
+    spec = le("pagamentos/Specs/2026-01-10 Cobrança recorrente.md")
+    confere("\n## Tickets\n\n- [[2026-02-02 T1 Criar tabela]] — r" in spec and "Spec de origem: entrada adicionada" in saida
+            and "T1 Criar tabela" not in le("pagamentos/pagamentos.md"),
+            "ticket entra na secao Tickets da spec de origem, nao no hub")
+    recusa("ticket sem a spec de origem no vault e recusado", "spec de origem",
+           sv.salvar_nota, "pagamentos", "plano", "T9", "c", resumo="r", artefato="Nao existe")
     recusa("artefato so em spec/plano", "so vale para tipo spec ou plano",
            sv.salvar_nota, "pagamentos", "bug", "B", "c", resumo="r", artefato="x")
 
@@ -159,7 +165,7 @@ def testes():
     s = sv.ler_nota("2026-02-07 Enorme")
     confere("Nota grande" in s and "- ## A (" in s and "- ## B (" in s and "Abertura da enorme." in s and len(s) < 1000,
             "nota acima do teto devolve o esboco: abertura, secoes e tamanhos")
-    confere(len(sv.ler_nota("2026-02-07 Enorme", integral=True)) > 40000, "integral=true le a nota inteira")
+    confere(len(sv.ler_nota("2026-02-07 Enorme", integral=True)) > sv.TETO_NOTA, "integral=true le a nota inteira")
     s = sv.ler_nota("2026-02-07 Enorme", secao="B")
     confere("Secao: ## B" in s and "xxxx" in s and len(s) < 22000, "secao= numa nota grande le so a secao")
 
@@ -181,6 +187,17 @@ def testes():
     except sv.ErroUso as e:
         confere("nao tem hub" in str(e) and "pagamentos" in str(e), "projeto sem hub e recusado, com os parecidos")
 
+    # --- --contexto <pasta>: o contexto_projeto que o hook do SessionStart injeta ---
+    def contexto_cli(pasta):
+        return subprocess.run([sys.executable, sv.__file__, "--vault", sv.VAULT, "--contexto", pasta],
+                              capture_output=True, text=True, encoding="utf-8")
+    r = contexto_cli("/tmp/pagamentos")
+    confere(r.returncode == 0 and r.stdout.startswith("Projeto: pagamentos ("), f"--contexto acha o projeto pelo Repo: do hub: {r.stdout[:80]}{r.stderr}")
+    r = contexto_cli(os.path.join(sv.VAULT, "outro-lugar", "PAGAMENTOS"))
+    confere(r.stdout.startswith("Projeto: pagamentos ("), "--contexto cai no nome da pasta")
+    r = contexto_cli(os.path.join(sv.VAULT, "sem-hub"))
+    confere(r.returncode == 0 and r.stdout == "", "--contexto sem hub imprime nada e sai com 0")
+
     # --- padrao de nota: avisa ao salvar, nunca recusa ---
     saida = sv.salvar_nota("pagamentos", "evolucao", "Fecha a cobranca " + "x" * 70,
                            "Fechou [[2026-01-10 Cobrança recorrente]].", resumo="r " * 120,
@@ -201,6 +218,42 @@ def testes():
                            artefato="2026-01-10 Cobrança recorrente", data="2026-02-09")
     confere("secoes do padrao" not in saida, "ticket fica fora da checagem de secoes")
 
+    # --- remendo (A10) e tamanho: avisam na gravacao; em pagamentos-repo, longe das contagens de pagamentos ---
+    secoes_spec = "Abertura.\n\n## Objetivo\n\no\n\n## Fora de escopo\n\nf\n"
+    saida = sv.salvar_nota("pagamentos-repo", "spec", "Com remendo", secoes_spec + "\n## Histórico\n\n- mudou\n\n"
+                           "> **Atualização 2026-02-10**: outra\n\nA decisao X esta SUPERADA.\n\n`SUPERADA` em codigo nao conta.\n"
+                           "\n### Changelog\n\n- c\n\n## Atualizações\n\n- a\n\nÚltima atualização: 2026-02-10\n",
+                           resumo="spec remendada", data="2026-02-10")
+    confere("Padrao: remendo" in saida and "## Histórico" in saida and "> **Atualização" in saida
+            and "### Changelog" in saida and "## Atualizações" in saida and "Última atualização:" in saida
+            and saida.count("SUPERADA") == 1, f"spec com remendo e avisada na gravacao: {saida}")
+    saida = sv.salvar_nota("pagamentos-repo", "spec", "Histórico de vendas",
+                           secoes_spec + "\n## Atualizações de segurança\n\nTLS.\n", resumo="r", data="2026-02-10")
+    confere("Padrao: remendo" not in saida, f"o titulo da nota e a secao que so comeca como remendo nao sao remendo: {saida}")
+    saida = sv.salvar_nota("pagamentos-repo", "evolucao", "Evolucao com historico",
+                           "Abertura.\n\n## O que mudou\n\nx\n\n## Verificação\n\nv\n\n## Pendências\n\np\n\n## Histórico\n\nh\n",
+                           resumo="r", data="2026-02-10")
+    confere("Padrao: remendo" not in saida, "evolucao fica fora do A10")
+    saida = sv.salvar_nota("pagamentos-repo", "plano", "T3 Ticket com historico", "## Histórico\n\nh\n", resumo="r",
+                           artefato="2026-02-10 Com remendo", data="2026-02-10")
+    confere("Padrao: remendo" not in saida, "ticket fica fora do A10")
+    saida = sv.salvar_nota("pagamentos-repo", "spec", "Grande demais",
+                           "Abertura.\n\n## Objetivo\n\n" + grande * 40 + "\n## Fora de escopo\n\n" + grande * 30,
+                           resumo="spec grande", data="2026-02-10")
+    confere("Padrao: nota com" in saida and f"teto {sv.TETO_NOTA}" in saida and sv.TETO_NOTA == 12000
+            and saida.index("## Objetivo (") < saida.index("## Fora de escopo ("),
+            f"salvar_nota acima do teto avisa o tamanho e as maiores secoes: {saida}")
+    confere("Nota grande" in sv.ler_nota("2026-02-10 Grande demais"), "ler_nota devolve o esboco acima de 12.000")
+    saida = sv.atualizar_nota("2026-02-10 Com remendo", status="ativo")
+    confere("Padrao: remendo" in saida and saida.startswith("Atualizada:"), "atualizar_nota devolve os avisos do padrao")
+    saida = sv.atualizar_nota("2026-02-10 Grande demais", tags=["x"])
+    confere("Padrao: nota com" in saida, "atualizar_nota avisa o tamanho")
+    saida = sv.salvar_nota("pagamentos-repo", "mapa", "m", "Mapa de [[pagamentos-repo]].\n\n## Comunidades\n\n" + grande * 70)
+    confere("Padrao: nota com" in saida, f"salvar_nota avisa o tamanho tambem no mapa: {saida}")
+    saida = sv.atualizar_nota("2026-02-10 T3 Ticket com historico", resumo="r " * 120)
+    confere("resumo na spec de origem" in saida and "resumo com" not in saida,
+            f"atualizar_nota mede o padrao com o resumo vazio: {saida}")
+
     # --- atualizar_nota ---
     saida = sv.atualizar_nota("2026-02-01 Nota bug", status="resolvido", resumo="bug fechado", tags=["a", "b"])
     nota = le("pagamentos/Bugs/2026-02-01 Nota bug.md")
@@ -218,6 +271,63 @@ def testes():
                        (dict(nota="nada disso", status="ativo"), "nao encontrada"),
                        (dict(nota="2026-02-01 Nota bug"), "ao menos um")):
         recusa(f"atualizar_nota recusa {args}", erro, sv.atualizar_nota, **args)
+
+    # --- buscar: repeticao no corpo conta ate 5; obsoleta vai ao fim, com a sucessora ---
+    sv.salvar_nota("pagamentos", "analise", "Repetida", "Abertura.\n\n" + "estorno " * 100, resumo="repete", data="2026-02-11")
+    sv.salvar_nota("pagamentos", "analise", "Estorno de cobranca", "O estorno vale: estorno.", resumo="trata", data="2026-02-11")
+    sv.salvar_nota("pagamentos", "analise", "Estorno antigo", "estorno " * 50, resumo="velha", data="2026-02-11")
+    sv.atualizar_nota("2026-02-11 Estorno antigo", sucessora="2026-02-11 Estorno de cobranca")
+    b = sv.buscar("estorno")
+    confere(b.index("Estorno de cobranca.md") < b.index("Repetida.md"), f"repetir o termo no corpo nao vence o titulo: {b}")
+    confere(b.rindex("Estorno antigo.md") > b.index("Repetida.md")
+            and "substituída por [[2026-02-11 Estorno de cobranca]]" in b.split("Estorno antigo.md", 1)[1],
+            "obsoleta vai ao fim e mostra a sucessora")
+
+    # --- ticket: o resumo vive na spec de origem, a do proprio projeto ---
+    # spec homonima noutro projeto, que a varredura acha antes da de pagamentos
+    outro = os.path.join(sv.VAULT, "a-outro", "Specs")
+    os.makedirs(outro)
+    with open(os.path.join(outro, "2026-01-10 Cobrança recorrente.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: a-outro\ntipo: spec\nstatus: resolvido\ndata: 2026-01-10\n---\n# Cobrança recorrente\n")
+    saida = sv.atualizar_nota("2026-02-02 T1 Criar tabela", resumo="tabela de cobranca")
+    confere("- [[2026-02-02 T1 Criar tabela]] — tabela de cobranca" in le("pagamentos/Specs/2026-01-10 Cobrança recorrente.md")
+            and "resumo na spec de origem" in saida, f"atualizar_nota resumo= troca a linha do ticket na spec de origem: {saida}")
+    confere("\n  tabela de cobranca" in sv.buscar("Criar tabela"), "buscar mostra o resumo do ticket, lido da spec")
+    con = sv.conexoes("2026-02-02 T1 Criar tabela")
+    confere("Spec de origem: [[2026-01-10 Cobrança recorrente]] (lista esta nota)" in con
+            and "Relacionadas de saida: nenhuma" in con, f"conexoes do ticket aponta a spec de origem: {con}")
+    con = sv.conexoes("pagamentos/Specs/2026-01-10 Cobrança recorrente.md")
+    confere("Tickets: 2 (a lista esta na propria nota)" in con and "T1 Criar tabela" not in con,
+            f"conexoes da spec resume os tickets numa linha: {con}")
+    confere("Tickets:" not in sv.conexoes("a-outro/Specs/2026-01-10 Cobrança recorrente.md")
+            and not any(c == "A12" for c, _, _ in sv.validar_vault()[1]),
+            "a spec homonima resolvida noutro projeto nao ganha os tickets nem os acusa no A12")
+    shutil.rmtree(os.path.join(sv.VAULT, "a-outro"))
+
+    # --- atualizar_nota secao=: troca so o conteudo de uma secao ---
+    rel = "pagamentos/Evolucoes/2026-02-12 Leva por secao.md"
+    sv.salvar_nota("pagamentos", "evolucao", "Leva por secao",
+                   "Abertura.\n\n## O que mudou\n\nAntigo.\n\n### Detalhe\n\nd\n\n## Verificação\n\nTestes.\n\n"
+                   "## Pendências\n\n- nada\n", resumo="r", data="2026-02-12")
+    saida = sv.atualizar_nota("2026-02-12 Leva por secao", secao="o que mudou", corpo="Novo.")
+    nota = le(rel)
+    confere("Abertura.\n\n## O que mudou\n\nNovo.\n\n## Verificação\n\nTestes." in nota and "Antigo." not in nota
+            and "### Detalhe" not in nota and "- nada" in nota and nota.startswith("---\nprojeto: pagamentos\n")
+            and "(secao ## O que mudou)" in saida,
+            f"secao= troca a secao com as subsecoes e preserva o resto: {saida}")
+    sv.atualizar_nota("2026-02-12 Leva por secao", secao="pend", corpo="- migrar\n")
+    confere(le(rel).endswith("## Pendências\n\n- migrar\n"), "secao= acha por prefixo e troca a ultima secao")
+    recusa("secao= inexistente falha com a lista", "## Verificação",
+           sv.atualizar_nota, "2026-02-12 Leva por secao", secao="nada", corpo="x")
+    recusa("secao= ambigua falha com as candidatas", "Mais de uma secao",
+           sv.atualizar_nota, "2026-02-12 Leva por secao", secao="i", corpo="x")
+    recusa("secao= sem corpo e recusado", "corpo", sv.atualizar_nota, "2026-02-12 Leva por secao", secao="pend")
+    recusa("secao= nao acha o `# titulo`, que e a nota inteira", "nao existe",
+           sv.atualizar_nota, "2026-02-12 Leva por secao", secao="Leva por secao", corpo="x")
+    confere("- migrar" in le(rel), "a recusa nao toca na nota")
+    saida = sv.atualizar_nota("2026-02-12 Leva por secao", secao="", corpo="Abertura.\n\n## O que mudou\n\nTudo.\n\n"
+                              "## Verificação\n\nv\n\n## Pendências\n\n- migrar\n")
+    confere("(corpo)" in saida and "Tudo." in le(rel), f"secao vazia e o mesmo que sem secao: {saida}")
 
     # --- protocolo ---
     saida = io.StringIO()
@@ -270,7 +380,8 @@ def testes_validar():
     # nota e orfa, porque o servidor lista todas no hub
     confere("Erros: 1" in rel and "E4" in rel and "Avisos: 0" in rel,
             f"vault gravado pelo servidor so tem o E4 deliberado: {rel.splitlines()[-4:]}")
-    confere("Padrao de nota" in rel and "A5: 1" in rel and "A6:" in rel and "A7: 1" in rel and "A8: 1" in rel
+    confere("Padrao de nota" in rel and "A5: 3" in rel and "A6:" in rel and "A7: 1" in rel and "A8: 1" in rel
+            and "A10: 1" in rel
             and "aviso A5" not in rel, "o padrao de nota entra so contado no relatorio comum")
     pad = sv.validar(tipo="padrao")
     confere("aviso A5" in pad and "Enorme" in pad and "aviso A6" in pad and "sem as secoes do padrao" in pad
@@ -321,6 +432,47 @@ def testes_validar():
     vg = sv.visao_geral()
     confere("- 1 projeto(s) so com hub, sem notas: vazio" in vg and "- vazio —" not in vg and "- pagamentos —" in vg,
             "visao_geral agrupa os projetos sem notas numa linha")
+    # ticket antigo, listado no hub e nao na spec: nao e E5 ate a migracao, que o leva a spec
+    hub_rel, spec_rel = "pagamentos/pagamentos.md", "pagamentos/Specs/2026-01-10 Cobrança recorrente.md"
+    # a evolucao da mesma leva tem o nome da spec (achado no vault real): a origem e a de Specs/
+    evo_rel = "pagamentos/Evolucoes/2026-01-10 Cobrança recorrente.md"
+    with open(os.path.join(sv.VAULT, *evo_rel.split("/")), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: pagamentos\ntipo: evolucao\nstatus: ativo\ndata: 2026-01-10\n---\n"
+                "# Cobrança recorrente\n\nProjeto: [[pagamentos]]\n")
+    with open(os.path.join(sv.VAULT, "pagamentos", "Specs", "Tickets - 2026-01-10 Cobrança recorrente",
+                           "2026-01-20 T0 Antigo.md"), "w", encoding="utf-8") as f:
+        f.write("---\nprojeto: pagamentos\ntipo: plano\nstatus: ativo\ndata: 2026-01-20\n---\n# T0 Antigo\n\nProjeto: [[pagamentos]]\n")
+    with open(os.path.join(sv.VAULT, *hub_rel.split("/")), "a", encoding="utf-8") as f:
+        f.write("- [[2026-01-20 T0 Antigo]] — ticket antigo\n")
+    confere(not any(c == "E5" and "T0 Antigo" in o for c, o, _ in sv.validar_vault()[0]),
+            "ticket antigo listado so no hub nao e E5")
+    confere("Hub: [[pagamentos]] (lista esta nota)" in sv.conexoes("2026-01-20 T0 Antigo")
+            and "\n  ticket antigo" in sv.buscar("T0 Antigo"),
+            "conexoes e buscar do ticket antigo leem o hub, que o lista ate a migracao")
+    saida = sv.atualizar_nota("2026-01-20 T0 Antigo", resumo="ticket legado")
+    confere("resumo no hub" in saida and "- [[2026-01-20 T0 Antigo]] — ticket legado" in le(hub_rel),
+            f"atualizar_nota resumo= do ticket antigo troca a linha no hub: {saida}")
+    r = subprocess.run([sys.executable, sv.__file__, "--vault", sv.VAULT, "--migrar-tickets"],
+                       capture_output=True, text=True, encoding="utf-8")
+    confere(r.returncode == 0 and "1 linha(s) de ticket" in r.stdout and "--aplicar" in r.stdout
+            and "T0 Antigo" in le(hub_rel), f"--migrar-tickets sem --aplicar so mostra: {r.stdout}{r.stderr}")
+    saida = sv.migrar_tickets(aplicar=True)
+    confere("T0 Antigo" not in le(hub_rel) and "- [[2026-01-20 T0 Antigo]] — ticket legado" in le(spec_rel)
+            and "T0 Antigo" not in le(evo_rel) and "Git: sem git" in saida,
+            f"--aplicar move a linha do hub para a spec, nunca para a evolucao homonima: {saida}")
+    confere(not any(c == "E5" and "/Tickets - " in o for c, o, _ in sv.validar_vault()[0]),
+            "depois da migracao nenhum ticket e E5, mesmo com a evolucao homonima")
+    confere("0 linha(s) de ticket" in sv.migrar_tickets(), "migracao refeita nao acha mais nada")
+    # ciclo de vida: substituida sem obsoleto (A11) e ticket aberto de spec resolvida (A12)
+    sv.atualizar_nota("2026-02-11 Estorno antigo", status="ativo")
+    sv.atualizar_nota(spec_rel, status="resolvido")
+    rel = sv.validar(projeto="pagamentos")
+    confere("Ciclo de vida (validar tipo=ciclo lista): A11: 1, A12: 3" in rel and "aviso A11" not in rel,
+            f"o ciclo de vida entra so contado no relatorio comum: {rel.splitlines()[-3:]}")
+    cic = sv.validar(tipo="ciclo")
+    confere("aviso A11 pagamentos/Analises/2026-02-11 Estorno antigo.md" in cic and cic.count("aviso A12") == 3
+            and "T1 Criar tabela" in cic and "E4" not in cic and "A5" not in cic,
+            f"validar tipo=ciclo lista A11 e A12 e so eles: {cic}")
 
 
 def testes_reorganizar():
@@ -352,9 +504,9 @@ def testes_reorganizar():
             and "Parte 2 de 2 de [[2026-02-07 Enorme]]" in parte and parte.count("x" * 200) == 100,
             "anexo fica ao lado, com o frontmatter da mae mais parte_de, o titulo da secao e o conteudo inteiro")
     erros, avisos, _ = sv.validar_vault(projeto="pagamentos")
-    confere(not any(c == "E5" and "Enorme - " in o for c, o, _ in erros) and not any(c == "A5" for c, _, _ in avisos)
+    confere(not any(c == "E5" and "Enorme - " in o for c, o, _ in erros) and not any(c == "A5" and o.endswith("Enorme.md") for c, o, _ in avisos)
             and not any(c in ("A6", "A8") and "Enorme" in o for c, o, _ in avisos),
-            "anexos e nota-mae nao sao cobrados no hub nem no padrao de secoes e nome, e a nota grande sumiu do A5")
+            "anexos e nota-mae nao sao cobrados no hub nem no padrao de secoes e nome, e a nota-mae sumiu do A5 (o anexo de 24 mil segue nele)")
     confere("Nota grande" not in sv.ler_nota("2026-02-07 Enorme") and "xxxx" in sv.ler_nota("Enorme - 02 B"),
             "a mae ja nao devolve esboco e o anexo se acha pelo nome")
     con = sv.conexoes("2026-02-07 Enorme")
