@@ -556,6 +556,14 @@ def testes_git():
                                       capture_output=True, text=True).stdout,
             "arquivo de outra sessao NAO entra no commit do lote")
     confere("0 arquivo(s) no lote" in sv.sincronizar_lote("nada"), "lote vazio diz que nao ha o que commitar")
+    # lote grande: os caminhos juntos passam do limite de linha de comando do Windows (32 mil)
+    for i in range(250):
+        sv.salvar_nota("loja", "spec", f"Lote grande {i:03d} " + "x" * 70, "c", resumo="r", lote=True)
+    saida = sv.sincronizar_lote("loja: lote grande")
+    pendentes = subprocess.run(["git", "-C", vault, "status", "--porcelain", "--", "loja"],
+                               capture_output=True, text=True).stdout
+    confere(saida.startswith("251 arquivo(s) no lote") and "commit local" in saida and not pendentes,
+            f"lote acima do limite de linha de comando commita tudo: {saida[:120]}")
 
 
 def main():

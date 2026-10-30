@@ -17,7 +17,7 @@ argument-hint: [migrar|migrar tudo]
 
 # obsidian-docs — documentação de projetos no Obsidian
 
-# Versao: 15.5
+# Versao: 15.6
 
 Todo acesso ao vault é pelo MCP `vault-docs`, que aplica as convenções (pasta por tipo, nome
 datado, frontmatter, entrada no hub e no `Home.md`, commit → `pull --rebase` → push). Você decide

@@ -896,8 +896,9 @@ def sincronizar(mensagem, caminhos=None):
     """commit -> pull --rebase -> push. Falha vira texto; a nota ja esta gravada."""
     if not vault_com_git():
         return "sem git (vault nao e repositorio, ou --sem-git)"
-    if caminhos:
-        git("add", "--", *caminhos)
+    if caminhos:  # em partes: juntos, os caminhos de um lote grande passam do limite do Windows
+        for i in range(0, len(caminhos), 100):
+            git("add", "--", *caminhos[i:i + 100])
     else:
         git("add", "-A")
     rc, saida = git("commit", "-q", "-m", mensagem)
