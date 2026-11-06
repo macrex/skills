@@ -19,12 +19,14 @@ jobs:
         with:
           # o historico inteiro: a checagem das versoes compara com o commit de antes do push
           fetch-depth: 0
+      # versoes flutuantes: o runner novo (ubuntu-latest 26.04) nao traz Python fora de suporte,
+      # e um numero fixo quebra a CI quando a versao sai de linha
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "lts/*"
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.9"
+          python-version: "3.x"
 
       - name: Manifestos, frontmatter das skills, contrato por harness e versoes
         env:
