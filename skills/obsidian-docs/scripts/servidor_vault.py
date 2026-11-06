@@ -760,11 +760,13 @@ def projeto_da_pasta(pasta):
         rc, comum = git_em(os.path.expanduser(pasta), "rev-parse", "--path-format=absolute", "--git-common-dir")
         if rc == 0 and os.path.basename(comum) == ".git":
             pasta = os.path.dirname(comum)
-    alvo = os.path.normcase(os.path.abspath(os.path.expanduser(pasta)))
+    # realpath, nao abspath: o git devolve o caminho longo, e o do hub pode vir no nome 8.3 do Windows
+    def caminho(p):
+        return os.path.normcase(os.path.realpath(os.path.expanduser(p)))
+    alvo = caminho(pasta)
     return next((n["projeto"] for n in notas()
                  if n["projeto"] and eh_hub(n) and (m := REPO_RE.search(n["texto"]))
-                 and os.path.normcase(os.path.abspath(os.path.expanduser(
-                     caminho_da_linha(m.group(1))))) == alvo),
+                 and caminho(caminho_da_linha(m.group(1))) == alvo),
                 os.path.basename(os.path.abspath(pasta)))
 
 

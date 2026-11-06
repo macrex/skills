@@ -23,7 +23,7 @@ import criarExtensao from './vault-docs.ts';
 const PREFIXO = 'mcp__vault-docs__';
 const FERRAMENTAS = [
   'visao_geral', 'contexto_projeto', 'buscar', 'listar_notas', 'ler_nota', 'conexoes', 'salvar_nota',
-  'atualizar_nota', 'renomear_nota', 'dividir_nota', 'sincronizar', 'validar', 'mapa_codigo',
+  'atualizar_nota', 'renomear_nota', 'dividir_nota', 'sincronizar', 'tempos', 'validar', 'mapa_codigo',
   'consultar_codigo', 'gerar_mapa',
 ];
 
