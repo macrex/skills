@@ -73,7 +73,9 @@ real dos que rodam e2e ou bateria. A espera pelo usuário (permissão pendente, 
 ele digitar) não entra; o painel a mede à parte.
 
 Antes de prever, leia a calibração do projeto: no Claude Code, ela vem no resultado do marco `fase`
-`tickets`; nos outros harnesses, na seção `## Calibração` do `time.md` da raiz, quando ele existe.
+`tickets`; nos outros harnesses, na seção `## Calibração` do `time.md` do projeto, que a ferramenta
+`tempos` do vault-docs devolve (`pasta` = a raiz do repositório), quando ele existe. O `time.md` mora
+no vault, em `<projeto>/Tempos/time.md`, e nunca no repositório.
 Para cada ticket:
 
 1. dê o **perfil**, pelo mais pesado que o portão dele vai rodar: `texto` (só .md ou
@@ -102,7 +104,7 @@ Sem o painel ou sem o `time.md`, faça você a mesma conta (no inline, a soma do
 conciliações é o implement). O perfil, a onda, o modo e a previsão que você der vão no marco
 `tickets` (`references/painel.md`), e o painel os mostra contra o tempo da máquina, que ele mesmo
 mede; diga a previsão ao usuário na linha do modo. Na entrada da fase `fechamento`, o painel grava
-a leva no `time.md` da raiz, que vai no commit squash da leva e viaja com o push, com a conciliação
+a leva no `time.md` do vault, pela ferramenta `tempos`, que o commita no vault, com a conciliação
 de cada onda numa linha própria, e refaz a calibração sobre as levas mais recentes, sem o real
 contaminado (acima de 3× ou abaixo de ⅓ da mediana do grupo). Linha que não serve mais —
 a leva que rodou com a máquina travada, ou as de antes de uma mudança no portão do ticket — se
@@ -226,13 +228,13 @@ Só com a qualidade verde, nesta ordem, na working tree principal:
 2. o varredor de segredos do `/cpv`: `node skills/cpv/scripts/segredos.js <raiz>` neste
    repositório; em outro, o `scripts/segredos.js` da skill `cpv` instalada. Só segue com a última
    linha começando com `LIMPO`;
-3. onde há painel, o marco `fase` `fechamento`, que grava a leva no `time.md` da raiz, e
-   `git add time.md`: ele vai no commit squash mesmo que já estivesse sujo antes da leva, porque
-   traz as linhas das levas anteriores que nenhum commit levou, e é assim que a base chega à outra
-   máquina;
+3. onde há painel, o marco `fase` `fechamento`, que grava a leva no `time.md` do vault; ele nunca
+   entra no repositório. Antes do marco, um `time.md` antigo na raiz do repositório, sem um no
+   vault, vai para o vault pela `tempos` (`conteudo` = o arquivo inteiro) e sai do repositório
+   (`git rm time.md`, no commit squash);
 4. o commit squash, local: `git commit -m "<mensagem>" -- <caminhos da leva>` (os do
    `git diff --cached --name-only HEAD`, fora os sujos de antes dela, que o pathspec deixa de
-   fora, menos o `time.md`, que vai), com a mensagem no estilo do `git log` do repositório e a autoria do usuário (o
+   fora), com a mensagem no estilo do `git log` do repositório e a autoria do usuário (o
    `user.name` e o `user.email` do git), sem `Co-Authored-By` nem trailer de assistente. **Nunca
    push**: enviar à origem é do `/cpv`, que o usuário digita;
 5. a limpeza: `git worktree remove --force` de cada worktree da leva, `git worktree prune` e
@@ -241,7 +243,7 @@ Só com a qualidade verde, nesta ordem, na working tree principal:
    branch; worktree ou branch `leva/*` órfão de leva já fechada sai junto;
 6. onde há painel, o marco `fechamento` — depois do commit, que o hook `so_com_pedido` só libera
    com a leva aberta. O resultado dele traz a tabela dos tempos, previsto contra real; o `time.md`
-   já foi no commit, e ele não o regrava;
+   do vault a fase `fechamento` já gravou, e ele não o regrava;
 7. a nota de evolução no tracker, com a seção `## Tempos`: a tabela do resultado do `fechamento`
    como veio, e uma frase sobre o maior desvio. Sem painel, a seção leva só as previsões. As
    falhas instáveis que os portões e as conciliações relataram vão nas Pendências, com o texto

@@ -72,6 +72,17 @@ const OCIOSO = atom({ plugin: 'macrex-skills', key: 'ocioso' }, null)
 type Saida = { stdout?: unknown }
 
 // Grava o grill desta janela na chave do id dele.
+// o time.md do projeto mora no vault (<projeto>/Tempos), pela ferramenta tempos do vault-docs, nunca
+// no repositorio: sem conteudo, le (vazio se ainda nao existe); com ele, grava e commita no vault
+async function timeMdDoVault($: EngineInterface, conteudo?: string) {
+  const vault = await $.mcp.connect('vault-docs')
+  if (!vault.isConnected) throw new Error(`vault-docs desconectado: ${vault.message}`)
+  const r = await $.mcp.call(vault.server, 'tempos', { pasta: await $.session.root(), ...(conteudo == null ? {} : { conteudo }) })
+  const texto = r.content.map(b => (b.type === 'text' ? b.text : '')).join('')
+  if (r.isError) throw new Error(texto)
+  return texto
+}
+
 async function salvarGrill($: EngineInterface, grill: Grill) {
   await $.store.set(chaveDoGrill(await $.session.root(), grill.id), grill)
 }
@@ -630,7 +641,7 @@ export function registrarSessao(on: On, ctx: Contexto) {
               required: ['id', 'titulo'],
             },
           },
-          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos do tempo da maquina, so sem o time.md da raiz; com ele, o painel a calcula pelas ondas' },
+          previsao: { type: 'integer', minimum: 1, description: 'tickets: a previsao da leva inteira, do inicio ao fechamento, em minutos do tempo da maquina, so sem o time.md do vault; com ele, o painel a calcula pelas ondas' },
           ticket: { type: 'string', description: 'ticket e portao: o id do ticket' },
           item: { type: 'string', maxLength: 60, description: 'item: o nome do passo da revisao, das correcoes ou da qualidade, ou a Conciliacao do implement, nunca o da fase' },
           detalhe: { type: 'string', maxLength: 60, description: 'item: o resultado curto, ex. 3 achados ou 16/16' },
@@ -740,8 +751,8 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
     const leva = aplicar(antes, e, await $.clock.now(), usd, chamada.agentId)!
     // deny e a forma de um hook devolver erro de ferramenta: o modelo recebe o texto como erro
     if (leva.erro) return { deny: leva.erro }
-    // o marco tickets da a previsao dos tickets pela base do time.md da raiz e calcula a da leva pelas ondas
-    const base = e.marco === 'tickets' && leva.modo ? await $.session.root().then(r => $.fs.read(`${r}/${TIME_MD}`)).then(t => String(t), () => '') : ''
+    // o marco tickets da a previsao dos tickets pela base do time.md do vault e calcula a da leva pelas ondas
+    const base = e.marco === 'tickets' && leva.modo ? await timeMdDoVault($).catch(() => '') : ''
     let calculada = ''
     if (calibracao(base)) {
       const med = medianas(base)
@@ -754,17 +765,15 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       if (previsao) leva.previsao = previsao
       calculada = `\nprevisao dos tickets (a mediana do perfil no modo, ou a sua com motivo): ${porTicket}${previsao ? `\nprevisao da leva inteira calculada pelo painel pelas ondas e pela base do ${TIME_MD}: ${prevista(previsao)}; e ela que voce diz ao usuario` : ''}`
     }
-    // a entrada na fase fechamento grava a leva no time.md da raiz, antes do commit squash, que o leva
-    // junto e o faz viajar com o push; o fechamento depois do commit nao o regrava
-    const timeMd = `${await $.session.root()}/${TIME_MD}`
+    // a entrada na fase fechamento grava a leva no time.md do vault, com o fim no fechamento; o
+    // fechamento depois do commit nao o regrava. Sem a leitura, nao grava: o Registro de antes se perderia
     const naFaseFechamento = e.marco === 'fase' && e.fase === 'fechamento' && !leva.fechada
     let gravadoNaFase = ''
     if (naFaseFechamento) {
-      const lido = await $.fs.read(timeMd).then(t => String(t), () => '')
-      gravadoNaFase = await $.fs.write(timeMd, comLeva(lido, { ...leva, fim: leva.entradas?.fechamento })).then(
+      gravadoNaFase = await timeMdDoVault($).then(lido => timeMdDoVault($, comLeva(lido, { ...leva, fim: leva.entradas?.fechamento }))).then(
         () => {
           leva.noTimeMd = true
-          return `\n${TIME_MD} da raiz gravado com as linhas desta leva: ponha-o no indice (git add ${TIME_MD}) para ele ir no commit squash`
+          return `\n${TIME_MD} do vault gravado com as linhas desta leva; ele nunca vai ao repositorio`
         },
         (erro: unknown) => `\n${TIME_MD} nao gravado: ${erro}; o fechamento tenta de novo`,
       )
@@ -803,18 +812,17 @@ export function registrarMarcosEGrill(on: On, ctx: Contexto) {
       await update($, USO, () => ({}))
       $.ui.toast('Leva registrada: /painel-macrex mostra o andamento')
     }
-    // o time.md da raiz: a entrada na fase tickets devolve a calibracao dele, antes da previsao, e o
+    // o time.md do vault: a entrada na fase tickets devolve a calibracao dele, antes da previsao, e o
     // primeiro fechamento grava nele as linhas da leva que a fase fechamento nao gravou; erro aqui nunca para a leva
     const naFaseTickets = e.marco === 'fase' && e.fase === 'tickets'
     const fecha = e.marco === 'fechamento' && !antes!.fechada
-    const lido = naFaseTickets || (fecha && !antes!.noTimeMd) ? await $.fs.read(timeMd).then(t => String(t), () => '') : ''
-    const calibrar = naFaseTickets ? `\n${comCalibracao(calibracao(lido))}` : ''
+    const calibrar = naFaseTickets ? `\n${comCalibracao(calibracao(await timeMdDoVault($).catch(() => '')))}` : ''
     // o primeiro fechamento devolve os tempos, previsto contra real, que a nota de evolucao leva ao vault
     let tempos = ''
     if (fecha) {
       const gravado = antes!.noTimeMd
-        ? `${TIME_MD} da raiz gravado na entrada da fase fechamento, no commit da leva`
-        : await $.fs.write(timeMd, comLeva(lido, leva)).then(() => `${TIME_MD} da raiz atualizado com as linhas desta leva; ele fica na working tree, fora do commit da leva`, (erro: unknown) => `${TIME_MD} nao gravado: ${erro}`)
+        ? `${TIME_MD} do vault gravado na entrada da fase fechamento`
+        : await timeMdDoVault($).then(lido => timeMdDoVault($, comLeva(lido, leva))).then(() => `${TIME_MD} do vault atualizado com as linhas desta leva`, (erro: unknown) => `${TIME_MD} nao gravado: ${erro}`)
       tempos = `\nTempos da leva, para a secao ## Tempos da nota de evolucao, como vieram:\n${tabelaDeTempos(leva)}\n${gravado}`
     }
     return { result: `marco registrado; fase ${leva.fase}${falta ? ` sem /${falta} invocada` : ''}${calibrar}${calculada}${gravadoNaFase}${tempos}` }

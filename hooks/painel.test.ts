@@ -143,9 +143,17 @@ describe('painel da leva', () => {
   })
   test('a fase tickets devolve a calibracao do time.md; o fechamento grava nele a leva em tempo da maquina, sem a espera pelo usuario', async ($, on) => {
     const { relogio, marco } = mundo($, on)
-    const arquivos: Record<string, string> = {}
-    on('fs.read', ($, e) => (e.path in arquivos ? { value: arquivos[e.path]! } : { deny: 'ENOENT' }))
-    on('fs.write', ($, e) => { arquivos[e.path] = e.text; return { value: undefined } })
+    // o time.md do projeto, na ferramenta tempos do vault-docs; nada vai ao repositorio
+    let noVault = ''
+    let vaultFora = false
+    on('mcp.connect', () => ({ value: { isConnected: true, server: 'plugin:macrex-skills:vault-docs' } }))
+    on('mcp.call', ($, e) => {
+      expect([e.server, e.tool, e.args.pasta]).toEqual(['plugin:macrex-skills:vault-docs', 'tempos', 'D:/ws/a'])
+      if (vaultFora && e.args.conteudo === undefined) return { value: { content: [{ type: 'text', text: 'vault indisponivel' }], isError: true } }
+      if (typeof e.args.conteudo === 'string') noVault = e.args.conteudo
+      return { value: { content: [{ type: 'text', text: typeof e.args.conteudo === 'string' ? 'gravado' : noVault }], isError: false } }
+    })
+    on('fs.write', () => { throw new Error('o time.md nunca vai ao repositorio') })
     on('classic.PermissionRequest', () => ({}) as never)
     on('turn.complete', () => ({ text: '' }))
     on('prompt.submit', ($, e) => ({ text: e.text }))
@@ -174,10 +182,8 @@ describe('painel da leva', () => {
     expect(r.result).toContain('| 01 Núcleo | verde | 40m | 5m00s | -88% |')
     expect(r.result).toContain('| Leva inteira | fechada | 1h00m | 25m00s | -58% |')
     expect(r.result).toContain('| Espera do usuário | — | — | 9m00s | — |')
-    expect(r.result).toMatch(/time\.md da raiz atualizado/)
-    // o time.md da raiz, no separador que o engine der ao caminho; fora do Windows, D:/ws/a e
-    // relativo e o engine o poe sob a pasta atual
-    const timeMd = () => Object.entries(arquivos).find(([p]) => /D:[\\/]ws[\\/]a[\\/]time\.md$/.test(p))?.[1] ?? ''
+    expect(r.result).toMatch(/time\.md do vault atualizado/)
+    const timeMd = () => noVault
     const md = timeMd()
     // a data e a do inicio da leva no relogio, sem a data do documento
     // no inline, um ticket por vez: Juntos 1
@@ -189,7 +195,7 @@ describe('painel da leva', () => {
 
     // a leva seguinte ve a calibracao na entrada da fase tickets, e o fechamento dela guarda as linhas da anterior
     await marco({ marco: 'inicio', documento: 'Outra' })
-    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Calibracao deste projeto \(time\.md da raiz\)[^]*\| unidade \| inline \| 1 \| 1 \| 5m00s \| 5m00s a 5m00s \| 0,13× \|/)
+    expect((await marco({ marco: 'fase', fase: 'tickets' })).result).toMatch(/Calibracao deste projeto \(time\.md do vault\)[^]*\| unidade \| inline \| 1 \| 1 \| 5m00s \| 5m00s a 5m00s \| 0,13× \|/)
     // com a mediana do perfil no modo, o painel da a previsao do ticket; a do agente so vem com o motivo
     expect((await marco({ marco: 'tickets', modo: 'inline', tickets: [{ id: '01', titulo: 'Só texto', previsao: 30, perfil: 'unidade', onda: 1 }] })).deny).toMatch(/previsao do 01 sem motivo: o painel da a previsao do ticket pela mediana do unidade em inline no time\.md \(5m00s\)/)
     const preenchida = await marco({ marco: 'tickets', modo: 'inline', tickets: [{ id: '01', titulo: 'Só texto', previsao: 30, perfil: 'unidade', onda: 1, motivo: 'reescreve o núcleo' }, { id: '03', titulo: 'Sem previsão', perfil: 'unidade', onda: 2 }] })
@@ -209,12 +215,12 @@ describe('painel da leva', () => {
     await marco({ marco: 'item', item: 'Conciliação 1' })
     await relogio.advance(segundos(3 * 60))
     await marco({ marco: 'item', item: 'Conciliação 1', portao: 'verde', detalhe: '2/2' })
-    // a entrada na fase fechamento grava o time.md, para ele ir no commit squash; o fechamento depois do commit nao o regrava
-    expect((await marco({ marco: 'fase', fase: 'fechamento' })).result).toMatch(/time\.md da raiz gravado com as linhas desta leva: ponha-o no indice/)
+    // a entrada na fase fechamento grava o time.md; o fechamento depois do commit nao o regrava
+    expect((await marco({ marco: 'fase', fase: 'fechamento' })).result).toMatch(/time\.md do vault gravado com as linhas desta leva; ele nunca vai ao repositorio/)
     const naFase = timeMd()
     expect(naFase).toContain('| Outra | Leva inteira | — | sub-agents | — | — | 12m | 23m00s |')
     await relogio.advance(segundos(60))
-    expect((await marco({ marco: 'fechamento' })).result).toMatch(/time\.md da raiz gravado na entrada da fase fechamento, no commit da leva/)
+    expect((await marco({ marco: 'fechamento' })).result).toMatch(/time\.md do vault gravado na entrada da fase fechamento/)
     expect(timeMd()).toBe(naFase)
     const depois = timeMd()
     expect(depois).toContain('| Modo Trio | 01 Núcleo |')
@@ -230,6 +236,12 @@ describe('painel da leva', () => {
     expect(depois).toContain('| conciliação (por onda) | sub-agents | 1 | 3m00s |')
     // a soma dos tickets sobre o implement saiu: ela induzia a somar os tickets do modo paralelo
     expect(depois).not.toMatch(/Tickets\/implement/)
+
+    // o vault que falha na leitura: o fechamento nao grava, senao o Registro de antes se perderia
+    await marco({ marco: 'inicio', documento: 'Terceira' })
+    vaultFora = true
+    expect((await marco({ marco: 'fase', fase: 'fechamento' })).result).toMatch(/time\.md nao gravado: Error: vault indisponivel/)
+    expect(timeMd()).toBe(depois)
   })
   test('a calibracao usa as 5 levas mais recentes e deixa de fora o real acima de 3× ou abaixo de 1/3 da mediana do grupo', async () => {
     const linha = (dia: number, real: string) => `| 2026-10-0${dia} | Leva ${dia} | 01 Um | unidade | inline | 1 | 0 | 10m | ${real} | — | 1,00× |`

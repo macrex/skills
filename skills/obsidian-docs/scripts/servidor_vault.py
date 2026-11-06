@@ -100,7 +100,8 @@ def _notas():
     for raiz, dirs, arqs in os.walk(VAULT):
         dirs[:] = sorted(d for d in dirs if d not in IGNORAR)
         for a in sorted(arqs):
-            if not a.lower().endswith(".md"):
+            # o time.md e dado do painel, sem frontmatter: nao e nota
+            if not a.lower().endswith(".md") or a == TIME_MD:
                 continue
             caminho = os.path.join(raiz, a)
             try:
@@ -746,16 +747,49 @@ def contexto_projeto(projeto="", por_secao=None):
 def contexto_da_pasta(pasta):
     """O contexto_projeto do projeto cujo hub aponta a pasta (`Repo:`), senao o do nome
     dela; vazio sem hub. E o que o hook do SessionStart injeta."""
-    alvo = os.path.normcase(os.path.abspath(os.path.expanduser(pasta)))
-    projeto = next((n["projeto"] for n in notas()
-                    if n["projeto"] and eh_hub(n) and (m := REPO_RE.search(n["texto"]))
-                    and os.path.normcase(os.path.abspath(os.path.expanduser(
-                        caminho_da_linha(m.group(1))))) == alvo),
-                   os.path.basename(os.path.abspath(pasta)))
     try:
-        return contexto_projeto(projeto)
+        return contexto_projeto(projeto_da_pasta(pasta))
     except ErroUso:
         return ""
+
+
+def projeto_da_pasta(pasta):
+    """O projeto cujo hub aponta a pasta (`Repo:`), senao o nome dela. A worktree vale pelo
+    repositorio principal: o pai do --git-common-dir."""
+    if shutil.which("git"):
+        rc, comum = git_em(os.path.expanduser(pasta), "rev-parse", "--path-format=absolute", "--git-common-dir")
+        if rc == 0 and os.path.basename(comum) == ".git":
+            pasta = os.path.dirname(comum)
+    alvo = os.path.normcase(os.path.abspath(os.path.expanduser(pasta)))
+    return next((n["projeto"] for n in notas()
+                 if n["projeto"] and eh_hub(n) and (m := REPO_RE.search(n["texto"]))
+                 and os.path.normcase(os.path.abspath(os.path.expanduser(
+                     caminho_da_linha(m.group(1))))) == alvo),
+                os.path.basename(os.path.abspath(pasta)))
+
+
+# O time.md do painel da leva (/faz): a calibracao dos tempos do projeto, que nunca fica no
+# repositorio. Um por projeto, nao por spec: a mediana de cada perfil sai de todas as levas dele.
+TIME_MD = "time.md"
+PASTA_TEMPOS = "Tempos"
+
+
+def tempos(pasta, conteudo=None):
+    """Le (sem conteudo) ou grava o time.md do projeto do repositorio `pasta`."""
+    projeto = projeto_da_pasta(pasta)
+    if not os.path.exists(os.path.join(VAULT, projeto, projeto + ".md")):
+        raise ErroUso(f'projeto "{projeto}" (da pasta {pasta}) nao tem hub no vault: crie-o '
+                      "com salvar_nota (descricao_projeto e repo) antes do time.md")
+    rel = f"{projeto}/{PASTA_TEMPOS}/{TIME_MD}"
+    caminho = os.path.join(VAULT, *rel.split("/"))
+    if conteudo is None:
+        if not os.path.exists(caminho):
+            return ""
+        with open(caminho, encoding="utf-8") as f:
+            return f.read()
+    puxar()
+    escrever(caminho, conteudo)
+    return f"{rel} gravado ({sincronizar(f'{projeto}: tempos da leva', [rel])})"
 
 
 # ---------- escrita ----------
@@ -2018,6 +2052,16 @@ FERRAMENTAS = [
                       "description": "Mensagem do commit (ex.: 'pagamentos: migracao de 12 notas')."},
      }, "mensagem"),
      "fn": sincronizar_lote},
+    {"name": "tempos",
+     "description": "O time.md do painel da leva (/faz), em <projeto>/Tempos/ no vault, nunca "
+                    "no repositorio: sem conteudo, devolve o texto dele (vazio se nao existe); "
+                    "com conteudo, o substitui e faz commit+push.",
+     "inputSchema": esquema({
+         "pasta": {"type": "string",
+                   "description": "Caminho local do repositorio; o projeto e o do hub com esse Repo:."},
+         "conteudo": {"type": "string", "description": "O time.md inteiro, para gravar."},
+     }, "pasta"),
+     "fn": tempos},
     {"name": "validar",
      "description": "Linter do vault: frontmatter, vocabulario, wikilinks, hub e orfas; o padrao "
                     "de nota (A4-A10) e o ciclo de vida (A11-A12) entram so contados. Rode ao fechar "

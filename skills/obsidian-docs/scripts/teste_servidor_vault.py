@@ -198,6 +198,18 @@ def testes():
     r = contexto_cli(os.path.join(sv.VAULT, "sem-hub"))
     confere(r.returncode == 0 and r.stdout == "", "--contexto sem hub imprime nada e sai com 0")
 
+    # --- tempos: o time.md do painel mora no vault, em <projeto>/Tempos, achado pelo Repo: do hub ---
+    confere(sv.tempos("/tmp/pagamentos") == "", "tempos sem time.md devolve vazio")
+    saida = sv.tempos("/tmp/pagamentos", "# Tempos da leva\n")
+    confere(saida.startswith("pagamentos/Tempos/time.md gravado"), f"tempos grava no vault: {saida}")
+    confere(sv.tempos("/tmp/pagamentos") == "# Tempos da leva\n", "tempos le o que gravou")
+    confere(not any(n["nome"] == "time" for n in sv.notas()), "o time.md nao entra nas notas (nem no validar)")
+    try:
+        sv.tempos(os.path.join(sv.VAULT, "sem-hub"), "x")
+        confere(False, "tempos sem hub e recusado")
+    except sv.ErroUso as e:
+        confere("nao tem hub" in str(e), "tempos sem hub e recusado")
+
     # --- padrao de nota: avisa ao salvar, nunca recusa ---
     saida = sv.salvar_nota("pagamentos", "evolucao", "Fecha a cobranca " + "x" * 70,
                            "Fechou [[2026-01-10 Cobrança recorrente]].", resumo="r " * 120,
@@ -564,6 +576,14 @@ def testes_git():
                                capture_output=True, text=True).stdout
     confere(saida.startswith("251 arquivo(s) no lote") and "commit local" in saida and not pendentes,
             f"lote acima do limite de linha de comando commita tudo: {saida[:120]}")
+
+    # a worktree vale pelo repositorio principal: o time.md dela e o do projeto do hub
+    sv.salvar_nota("vitrine", "spec", "Com repo", "c", resumo="r", descricao_projeto="Vitrine", repo=vault)
+    worktree = os.path.join(os.path.dirname(vault), "loja-wt")
+    subprocess.run(["git", "-C", vault, "worktree", "add", "-q", worktree], check=True)
+    confere(sv.projeto_da_pasta(worktree) == "vitrine", "worktree acha o projeto pelo repositorio principal")
+    saida = sv.tempos(worktree, "# Tempos da leva\n")
+    confere(saida.startswith("vitrine/Tempos/time.md gravado (commit local"), f"tempos da worktree commita no vault: {saida}")
 
 
 def main():

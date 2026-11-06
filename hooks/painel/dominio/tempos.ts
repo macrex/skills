@@ -229,8 +229,8 @@ export function previsaoDaLeva(tickets: LevaTicket[], modo: string, med: Mediana
 // o que a entrada na fase tickets devolve ao agente, com a calibracao ou sem ela
 export const comCalibracao = (tabela: string) =>
   tabela
-    ? `Calibracao deste projeto (${TIME_MD} da raiz), para a previsao dos tickets em tempo da maquina ("A previsao de tempo", leva.md da /faz). De a cada ticket o perfil, a onda e a previsao a partir da mediana do perfil no modo da leva; fora de 1/2× a 2× dela, o marco tickets pede o motivo. A previsao da leva inteira o painel calcula pelas ondas:\n${tabela}`
-    : `Sem calibracao neste projeto (${TIME_MD} da raiz ausente ou sem tempo real): preveja em tempo da maquina ("A previsao de tempo", leva.md da /faz); o fechamento comeca o ${TIME_MD}.`
+    ? `Calibracao deste projeto (${TIME_MD} do vault), para a previsao dos tickets em tempo da maquina ("A previsao de tempo", leva.md da /faz). De a cada ticket o perfil, a onda e a previsao a partir da mediana do perfil no modo da leva; fora de 1/2× a 2× dela, o marco tickets pede o motivo. A previsao da leva inteira o painel calcula pelas ondas:\n${tabela}`
+    : `Sem calibracao neste projeto (${TIME_MD} do vault ausente ou sem tempo real): preveja em tempo da maquina ("A previsao de tempo", leva.md da /faz); o fechamento comeca o ${TIME_MD}.`
 
 // O time.md novo: o Registro de antes sem as linhas desta leva (o reenvio a substitui), mais as dela,
 // e a Calibracao refeita sobre ele.

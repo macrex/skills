@@ -54,7 +54,7 @@ export type Leva = {
   // os intervalos [inicio, fim] em que a leva esperou o usuario (permissao pendente, ou a sessao
   // parada ate ele digitar), que o tempo da maquina desconta
   esperas?: [number, number][]
-  // a entrada na fase fechamento ja gravou a leva no time.md da raiz, que vai no commit squash
+  // a entrada na fase fechamento ja gravou a leva no time.md do vault
   noTimeMd?: boolean
   tickets: LevaTicket[]
   itens?: LevaItem[]

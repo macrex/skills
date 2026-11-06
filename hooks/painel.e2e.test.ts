@@ -216,9 +216,9 @@ describe('painel da leva, de ponta a ponta', () => {
     on('tool.call', { tool: 'Bash' }, ($, e) => ({ result: { stdout: /--linha/.test(e.command) ? `${PROMPT}\n` : '', stderr: '' } }) as never)
     on('tool.call', { tool: 'Read' }, () => ({ result: {} }) as never)
     on('tool.call', { tool: 'Edit' }, () => ({ result: {} }) as never)
-    // o time.md da raiz: ausente na fase tickets, gravado no fechamento
-    on('fs.read', () => ({ deny: 'ENOENT' }))
-    on('fs.write', () => ({ value: undefined }))
+    // o time.md do vault, pela ferramenta tempos do vault-docs: ausente na fase tickets, gravado no fechamento
+    on('mcp.connect', () => ({ value: { isConnected: true, server: 'plugin:macrex-skills:vault-docs' } }))
+    on('mcp.call', ($, e) => ({ value: { content: [{ type: 'text', text: e.args.conteudo === undefined ? '' : 'gravado' }], isError: false } }))
     // o dialogo nativo: as respostas do grill no terminal e o Descartar do diff ($.ui.ask)
     const RESPOSTAS: Record<string, string> = {
       'Onde fica o golden?': 'Módulo .ts (Recommended)',

@@ -7,8 +7,9 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `fase` ao entrar em cada fase seguinte (`tickets`, `implement`, `revisao`, `correcoes`,
   `qualidade`, `fechamento`), a de `implement` com o `modo` (o da seção `## Execução` do documento,
   `leva.md`) e o `branch` da leva (`leva/<slug>`), que o estado da leva guarda para a retomada. O
-  resultado da `fase` `tickets` traz a calibração do `time.md` da raiz, de onde a previsão parte, e
-  a `fase` `fechamento`, antes do commit squash, grava a leva nele, para o `git add time.md`.
+  resultado da `fase` `tickets` traz a calibração do `time.md` do projeto, que mora no vault
+  (`<projeto>/Tempos/time.md`, pela ferramenta `tempos` do vault-docs) e nunca no repositório, e a
+  `fase` `fechamento` grava a leva nele.
 - `tickets` com a lista `{ id, titulo, perfil, onda }` e o `modo` da seção `## Execução` assim que
   o `to-tickets` publicar: o `perfil` de cada ticket (`texto`, `unidade`, `tela` ou `pesado`; "A
   previsão de tempo", em `leva.md`) e a `onda` dele. Com o `time.md`, o painel dá a previsão de
@@ -40,8 +41,8 @@ Cada marco é uma chamada de `mcp__macrex-skills__faz_marco`:
 - `fechamento` no fim, depois do commit squash: o hook `so_com_pedido` só libera esse commit com
   a leva aberta, e o `fechamento` a fecha. O resultado traz a tabela dos tempos, previsto contra
   o real da máquina (a espera pelo usuário numa linha à parte), que vai à seção `## Tempos` da nota
-  de evolução como veio. O `time.md` a `fase` `fechamento` já gravou; sem ela, o `fechamento` o
-  grava, e ele fica na working tree até o próximo commit.
+  de evolução como veio. O `time.md` do vault a `fase` `fechamento` já gravou; sem ela, o
+  `fechamento` o grava.
 
 **Retomada:** resposta do `inicio` que começa com `retomada na fase` traz a leva aberta do mesmo
 documento. Diga ao usuário em uma linha de onde retomou, pule as fases já passadas, comece o
