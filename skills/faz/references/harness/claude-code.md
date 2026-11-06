@@ -9,10 +9,12 @@
 - **Perguntar:** `AskUserQuestion`.
 - **Sub-agente:** `Agent`, com `model` quando o modelo não é o da sessão. Com `name`, ele roda
   como teammate: a resposta final não volta como resultado da ferramenta, chega na
-  `idle_notification`, cortada perto de 16 mil caracteres, e repete o que ele já mandou por
-  `SendMessage`. Por isso o prompt de cada um (ticket e conciliação) leva a linha "Entregue o
-  retorno inteiro uma vez, por `SendMessage` ao team-lead; a resposta final é só
-  `entregue: <ticket ou item>`".
+  `idle_notification`, que o harness manda toda vez que ele para, cortada perto de 16 mil
+  caracteres. Ela é a entrega: um `SendMessage` com o retorno acorda a sessão duas vezes por
+  rodada, e o eco atrasado parece entrega velha. Por isso o prompt de cada um (ticket e
+  conciliação) leva a linha "Grave o retorno inteiro num arquivo do scratchpad e termine com o
+  resumo e o caminho dele, abaixo de 16 mil caracteres; `SendMessage` ao team-lead só para
+  pergunta ou bloqueio no meio do trabalho".
 - **Mensagem a um sub-agente:** `SendMessage`, com o `name` dele; o que já devolveu retoma com o
   contexto.
 - **Modo do implement:** workflow, pela ferramenta `Workflow`, com o esqueleto em
