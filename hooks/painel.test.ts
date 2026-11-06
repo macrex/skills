@@ -175,8 +175,9 @@ describe('painel da leva', () => {
     expect(r.result).toContain('| Leva inteira | fechada | 1h00m | 25m00s | -58% |')
     expect(r.result).toContain('| Espera do usuário | — | — | 9m00s | — |')
     expect(r.result).toMatch(/time\.md da raiz atualizado/)
-    // o time.md da raiz, no separador que o engine der ao caminho
-    const timeMd = () => Object.entries(arquivos).find(([p]) => /^D:[\\/]ws[\\/]a[\\/]time\.md$/.test(p))?.[1] ?? ''
+    // o time.md da raiz, no separador que o engine der ao caminho; fora do Windows, D:/ws/a e
+    // relativo e o engine o poe sob a pasta atual
+    const timeMd = () => Object.entries(arquivos).find(([p]) => /D:[\\/]ws[\\/]a[\\/]time\.md$/.test(p))?.[1] ?? ''
     const md = timeMd()
     // a data e a do inicio da leva no relogio, sem a data do documento
     // no inline, um ticket por vez: Juntos 1
