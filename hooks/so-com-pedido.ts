@@ -8,8 +8,9 @@
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Hook, On } from 'claude-code'
 
-// a palavra do pedido: commit, commita, commitar, push, publica, publicar, publish
-const PEDIDO = /\b(commit\w*|push\w*|publi(ca|sh)\w*)\b/i
+// a palavra do pedido: commit, commita, commitar, comitado, comita, push, publica, publicar, publish;
+// o lookahead barra o comitê, que o \w sem acento cortaria em "comit"
+const PEDIDO = /\b(comm?it\w*(?![À-ÿ])|push\w*|publi(ca|sh)\w*)\b/i
 // as opcoes entre o git (ou o gh) e o subcomando, com ou sem valor, por = ou espaco, e o valor
 // com aspas no meio: -C <dir>, -c user.name="A B", --no-pager, --repo=x, -R o/r. O valor por
 // espaco nao comeca com -, para a opcao seguinte nao poder ser lida como valor (sem isso, o

@@ -24,6 +24,9 @@ export type Contexto = {
   // escuta ate a resposta ir ao agente
   // ponytail: vive no ctx, e o hot reload a perde; a resposta fica na pagina
   rodadaNaTela: { url: string; n: number; questions: Perguntas; textos: string[] } | null
+  // a sessao num terminal do herdr-app: a pasta que ela divide com o mod painel-macrex de la, o
+  // ultimo pedido rodado, a ultima arvore gravada e se o painel de la esta a vista
+  herdr: { dir: string; ultimo: number; texto: string; visivel: boolean } | null
 }
 
 export const chave = (cwd: string) => `leva:${cwd}`

@@ -69,6 +69,10 @@ sem Obsidian, pule o que fala de vault.
 - Informe a pasta do vault ao habilitar e ligue o auto-update em `/plugin`, aba Marketplaces, `macrex`.
 - Pede o Claude Code 2.1.287 ou mais novo. O `/painel-macrex` é um mod: só aparece onde a Anthropic já
   liberou os mods, e sem eles o resto do plugin funciona igual.
+- No [herdr-app](https://herdr.dev), com o layout `main-conversas` do
+  [herdr-mods](https://github.com/n1mb3/herdr-mods), o `/painel-macrex` e o Abrir painel da faixa mostram
+  o painel **Faz** na coluna da direita, ao lado de Files, Changes e Conversas, no lugar do pane do terminal;
+  o botão Faz da barra de abas o abre também. Num layout sem o painel, abre o pane de sempre.
 - Depois de instalar ou atualizar, reinicie a sessão (`claude --continue` mantém a conversa); até lá
   vale a versão anterior.
 - No Windows o plugin chama `python3`: se só existe `python`, ponha um `python3` no PATH.

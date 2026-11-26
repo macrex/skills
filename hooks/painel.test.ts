@@ -295,6 +295,86 @@ describe('painel da leva', () => {
     expect([...abertos]).toEqual([])
   })
 
+  // a sessao num terminal do herdr-app: os arquivos da pasta que ela divide com o mod painel-macrex
+  // de la, e os herdr-app do que ela pede
+  function noHerdr(on: On) {
+    const arquivos: Record<string, string> = {}
+    const pedidos: string[] = []
+    let select = 0
+    const env: Record<string, string> = { HC_TERMINAL_ID: 't7', USERPROFILE: 'C:\\Users\\eu' }
+    on('env.get', ($, e) => ({ value: env[e.name] ?? '' }))
+    // o engine entrega o caminho com a barra do sistema
+    const barra = (p: string) => p.replace(/\\/g, '/')
+    on('fs.write', ($, e) => { arquivos[barra(e.path)] = e.text; return { value: undefined } })
+    on('fs.read', ($, e) => (barra(e.path) in arquivos ? { value: arquivos[barra(e.path)] } : { deny: 'ENOENT' }) as never)
+    on('process.run', ($, e) => {
+      if (e.argv[0] === 'herdr-app') pedidos.push(`${e.argv[2]} ${e.argv[3]}`)
+      const exitCode = e.argv[2] === 'layout.select' ? select : 0
+      return { value: { exitCode, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const dir = 'C:/Users/eu/.config/herdr-app/painel-macrex/t7'
+    return { arquivos, pedidos, dir, semBloco: () => { select = 1 } }
+  }
+
+  test('no herdr-app, o /painel-macrex mostra o painel de la; sem o bloco no layout, o pane de sempre', async ($, on) => {
+    const { relogio, sessao } = mundo($, on)
+    const herdr = noHerdr(on)
+    const abertos: string[] = []
+    on('ui.open', ($, e) => { abertos.push(e.id); return { value: { isPlaced: true } } })
+    on('ui.panes', () => ({ value: [] }))
+    await sessao()
+    expect(Object.keys(herdr.arquivos)).toEqual([`${herdr.dir}/sessao.json`])
+    expect((await $.command.run({ command: 'painel-macrex' }) as { text: string }).text).toBe('Painel da leva aberto no herdr-app.')
+    expect(herdr.pedidos).toEqual(['layout.select {"stack":"panel-body","child":"painel-macrex"}', 'layout.show {"id":"panel"}'])
+    expect(abertos).toEqual([])
+    // o painel a vista fecha pelo mesmo comando
+    herdr.arquivos[`${herdr.dir}/vista.json`] = JSON.stringify({ em: relogio.now(), colunas: 46, linhas: 40 })
+    await relogio.advance(segundos(1))
+    expect((await $.command.run({ command: 'painel-macrex' }) as { text: string }).text).toBe('Painel da leva fechado no herdr-app.')
+    expect(herdr.pedidos.at(-1)).toBe('layout.hide {"id":"panel"}')
+    herdr.semBloco()
+    await relogio.advance(segundos(5))
+    await $.command.run({ command: 'painel-macrex' })
+    expect(abertos).toEqual(['painel-macrex'])
+  })
+
+  test('no herdr-app, o /painel-macrex sem o session.start do mod (a sessao de antes da recarga) liga o painel de la', async ($, on) => {
+    const { relogio } = mundo($, on)
+    const herdr = noHerdr(on)
+    on('ui.open', () => ({ value: { isPlaced: true } }))
+    on('ui.panes', () => ({ value: [] }))
+    expect((await $.command.run({ command: 'painel-macrex' }) as { text: string }).text).toBe('Painel da leva aberto no herdr-app.')
+    expect(herdr.arquivos[`${herdr.dir}/sessao.json`]).toBeDefined()
+    // e o espelho anda: com a vista, a arvore vai ao painel
+    herdr.arquivos[`${herdr.dir}/vista.json`] = JSON.stringify({ em: relogio.now(), colunas: 46, linhas: 40 })
+    await relogio.advance(segundos(1))
+    expect(herdr.arquivos[`${herdr.dir}/arvore.json`]).toContain('Geral')
+  })
+
+  test('no herdr-app, a arvore do pane vai ao painel de la so com ele a vista, e o clique dele volta como o do pane', async ($, on) => {
+    const { relogio, sessao, marco } = mundo($, on)
+    const herdr = noHerdr(on)
+    await sessao()
+    await marco({ marco: 'inicio', documento: 'doc' })
+    const arvore = () => herdr.arquivos[`${herdr.dir}/arvore.json`]
+    await relogio.advance(segundos(1))
+    expect(arvore()).toBeUndefined()
+    herdr.arquivos[`${herdr.dir}/vista.json`] = JSON.stringify({ em: relogio.now(), colunas: 46, linhas: 40 })
+    // o pedido que ja estava na fila quando a sessao comecou a ler nao roda de novo
+    herdr.arquivos[`${herdr.dir}/pedidos.json`] = JSON.stringify({ fila: [{ id: 1, key: 'aba:tickets', tipo: 'press' }] })
+    await relogio.advance(segundos(1))
+    const geral = JSON.parse(arvore()).arvore
+    expect(JSON.stringify(geral)).toContain('"label":"Diff"')
+    expect(JSON.stringify(geral)).toContain('to-spec')
+    herdr.arquivos[`${herdr.dir}/pedidos.json`] = JSON.stringify({ fila: [{ id: 1, key: 'aba:tickets', tipo: 'press' }, { id: 2, key: 'aba:uso', tipo: 'press' }] })
+    herdr.arquivos[`${herdr.dir}/vista.json`] = JSON.stringify({ em: relogio.now(), colunas: 46, linhas: 40 })
+    await relogio.advance(segundos(1))
+    const ui = await $.ui.mount(PANE)
+    expect(await ui.find({ type: 'Text', text: /^Uso$/ })).toBeDefined()
+    expect(arvore()).toContain('Uso')
+    expect(arvore()).not.toContain('to-spec')
+  })
+
   test('o repouso cabe no pane: frase e boneco no grande, so o boneco no estreito, o boneco menor no baixo', async ($, on) => {
     mundo($, on)
     // o tamanho que vale e o do corpo do pane, nao o da tela inteira

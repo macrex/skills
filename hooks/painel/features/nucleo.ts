@@ -20,6 +20,8 @@ import { chave, chaveDoHistorico, chaveDoGrill, chaveAntigaDoGrill, GRILLS_POR_W
 import type { Contexto } from '../estado.ts'
 import { primitivas } from '../desenho/primitivas.ts'
 import type { Acoes, Elementos } from '../desenho/primitivas.ts'
+import { espelho } from '../desenho/espelho.ts'
+import type { Pedido } from '../desenho/espelho.ts'
 import { abaRepouso } from '../desenho/aba-repouso.ts'
 import { abaDiff } from '../desenho/aba-diff.ts'
 import { abaArquivos } from '../desenho/aba-arquivos.ts'
@@ -588,6 +590,7 @@ export function registrarSessao(on: On, ctx: Contexto) {
     await carregar($, await $.session.root(), (await read($, GRILL))?.id)
     await sugerirLinha($, false)
     await marcarBase($, e.cwd)
+    await ligarHerdr($, ctx)
     for (const t of ctx.tiques) t.cancel()
     ctx.tiques = [
       // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
@@ -603,6 +606,8 @@ export function registrarSessao(on: On, ctx: Contexto) {
       }),
       // no repouso, o ronco: so o pane montado redesenha
       $.clock.every(RONCO, async () => !(await read($, LEVA)) && !naTela(await read($, GRILL)) && $.ui.invalidate('ui.render')),
+      // no herdr-app, o painel de la recebe a arvore do pane e devolve os cliques
+      ...(ctx.herdr ? [$.clock.every(HERDR_MS, () => espelharNoHerdr($, ctx))] : []),
     ]
     await $.command.register({
       name: PANE,
@@ -1046,9 +1051,77 @@ export function registrarFerramentas(on: On, ctx: Contexto) {
   })
 }
 
-// o comando que abre e fecha o pane, e o desenho dele
+// o painel do herdr-app (o mod painel-macrex do herdr-mods, na coluna da direita, com o botao na barra
+// de abas): a sessao num terminal dele divide uma pasta com o mod, por terminal. O mod grava a
+// vista.json (o tamanho, a cada segundo em que aparece) e os pedidos.json (cliques e digitacao); a
+// sessao grava a arvore.json, a arvore do pane em JSON. O painel sem vista ha VISTA_MS esta fechado
+const VISTA_MS = 3000
+const HERDR_MS = 400
+const lerJson = async <T>($: EngineInterface, caminho: string): Promise<T | null> => {
+  try {
+    return JSON.parse(await $.fs.read(caminho)) as T
+  } catch {
+    return null
+  }
+}
+const herdrApp = ($: EngineInterface, comando: string, args: Record<string, unknown>) =>
+  $.process.run(['herdr-app', 'do', comando, JSON.stringify(args)]).catch(() => ({ exitCode: 1 }))
+async function noHerdr($: EngineInterface): Promise<Contexto['herdr']> {
+  // shortcut: so o herdr-app desta maquina; numa maquina remota dele o terminal e de outro core
+  // sem env (o host que nao a tem), sem herdr-app
+  const terminal = await $.env.get('HC_TERMINAL_ID').catch(() => undefined)
+  if (!terminal) return null
+  const casa = (await $.env.get('HERDR_APP_HOME')) || `${(await $.env.get('USERPROFILE')) || (await $.env.get('HOME'))}/.config/herdr-app`
+  return { dir: `${casa.replace(/\\/g, '/')}/painel-macrex/${terminal}`, ultimo: -1, texto: '', visivel: false }
+}
+// o modo herdr-app ligado: a pasta do terminal e a marca de que ele tem o painel, que o mod do
+// herdr-app procura para segui-lo
+async function ligarHerdr($: EngineInterface, ctx: Contexto) {
+  ctx.herdr = await noHerdr($)
+  if (ctx.herdr) await $.fs.write(`${ctx.herdr.dir}/sessao.json`, JSON.stringify({ em: await $.clock.now() })).catch(() => (ctx.herdr = null))
+  return ctx.herdr != null
+}
+async function espelharNoHerdr($: EngineInterface, ctx: Contexto) {
+  const herdr = ctx.herdr
+  if (!herdr) return
+  const vista = await lerJson<{ em: number; colunas?: number; linhas?: number }>($, `${herdr.dir}/vista.json`)
+  herdr.visivel = Boolean(vista && (await $.clock.now()) - vista.em < VISTA_MS)
+  if (!vista || !herdr.visivel) return
+  const fila = (await lerJson<{ fila?: Pedido[] }>($, `${herdr.dir}/pedidos.json`))?.fila ?? []
+  // a primeira leitura so marca onde a fila esta: o hot reload nao roda de novo o que ja rodou
+  const novos = herdr.ultimo < 0 ? [] : fila.filter(p => p.id > herdr.ultimo)
+  herdr.ultimo = Math.max(herdr.ultimo, 0, ...fila.map(p => p.id))
+  const desenhar = () => {
+    const tabela = espelho($.ui.resolve({ surface: 'terminal', component: 'Pane' }) as Elementos)
+    return desenharPane($, ctx, tabela.elementos, vista.linhas, vista.colunas).then(arvore => ({ arvore, efeito: tabela.efeito }))
+  }
+  let { arvore, efeito } = await desenhar()
+  if (novos.length > 0) {
+    for (const p of novos) await Promise.resolve(efeito(p)?.(p.texto)).catch(() => $.ui.toast(`O painel do herdr-app não conseguiu rodar ${p.key}`))
+    ;({ arvore } = await desenhar())
+  }
+  const texto = JSON.stringify({ arvore })
+  if (texto === herdr.texto) return
+  await $.fs.write(`${herdr.dir}/arvore.json`, texto)
+  herdr.texto = texto
+}
+
+// o comando que abre e fecha o pane, e o desenho dele; no herdr-app, o painel de la no lugar do pane
 export function registrarPane(on: On, ctx: Contexto) {
   on('command.run', { command: PANE }, async $ => {
+    // a sessao de antes de uma recarga do mod sem session.start liga o modo aqui, e o espelho com ele
+    if (!ctx.herdr && (await ligarHerdr($, ctx))) ctx.tiques.push($.clock.every(HERDR_MS, () => espelharNoHerdr($, ctx)))
+    if (ctx.herdr?.visivel) {
+      await herdrApp($, 'layout.hide', { id: 'panel' })
+      ctx.herdr.visivel = false
+      return { text: 'Painel da leva fechado no herdr-app.' }
+    }
+    // o layout sem o bloco painel-macrex na pilha panel-body (outro que nao o main-conversas do
+    // herdr-mods) recusa o select, e o pane de sempre abre
+    if (ctx.herdr && (await herdrApp($, 'layout.select', { stack: 'panel-body', child: PANE })).exitCode === 0) {
+      await herdrApp($, 'layout.show', { id: 'panel' })
+      return { text: 'Painel da leva aberto no herdr-app.' }
+    }
     if ((await $.ui.panes()).some(pane => pane.id === PANE)) {
       await $.ui.close({ id: PANE })
       return { text: 'Painel da leva fechado.' }
@@ -1057,70 +1130,72 @@ export function registrarPane(on: On, ctx: Contexto) {
     return { text: 'Painel da leva aberto.' }
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const elementos = $.ui.resolve(e) as Elementos
-    const leva = await read($, LEVA)
-    // a aba Grill mostra o ultimo grill do workspace; a aba Geral, so o que ainda esta na tela
-    const ultimoGrill = await read($, GRILL)
-    // sem leva, o grill que o inicio tirou daqui volta, para o Limpar alcanca-lo
-    const grill = leva ? naTela(ultimoGrill) : ultimoGrill
-    const aba = await read($, ABA)
-    const arquivos = await read($, CODIGO)
-    // os efeitos dos botoes e do campo, ligados ao $ aqui: o desenho (painel/desenho/) e puro
-    const acoes: Acoes = {
-      trocarAba: qual => trocarAba($, qual),
-      limpar: () => {
-        ctx.limpo = true
-        return limpar($)
-      },
-      // o diff aberto na aba Diff ou na Arquivos: a mesma lista de abertos
-      alternarDiff: caminho => update($, ABERTOS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho])),
-      alternarPasta: caminho => update($, PASTAS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho])),
-      filtrar: texto => update($, FILTRO, () => texto),
-      copiar: async (a, press) => {
-        const r = await $.ui.copy({ text: a.patch, surface: press?.surface }).catch(() => ({ isCopied: false }))
-        if (!r.isCopied) $.ui.toast(`Não deu para copiar o diff de ${a.caminho}`)
-      },
-      descartar: caminho => descartar($, caminho),
-      parar: a => parar($, a),
-      abrirTela: url => abrirTela($, url),
-      abrirHistorico: () => abrirHistorico($),
-      clear: () => $.command.run({ command: 'clear' }),
-      executar: async texto => (await $.prompt.fill({ text: texto })).isFilled || $.ui.toast('Não deu para colar o prompt'),
-    }
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) =>
     // o tamanho do corpo do pane; o viewport e o da tela inteira, e centralizar por ele joga o
     // desenho para baixo, fora do pane baixo
-    const linhas = e.props?.scroll?.bodyRows ?? e.viewport?.rows
-    const colunas = e.props?.bodyColumns ?? e.viewport?.columns
-    const kit = primitivas(elementos, { aba, arquivos, linhas, colunas }, acoes)
-    if (aba === 'painel' && !grill && !leva) return abaRepouso(kit, { agora: await $.clock.now() })
-    // um renderer por aba; cada entrada le o que a aba desenha, na ordem de sempre
-    const abertos = await read($, ABERTOS)
-    const desenhar: Record<Aba, () => Promise<RenderElement>> = {
-      codigo: async () => abaDiff(kit, { arquivos, abertos, base: await read($, BASE) }, acoes),
-      arquivos: async () => {
-        const arvore = await read($, ARVORE)
-        const abertas = await read($, PASTAS)
-        const filtro = await read($, FILTRO)
-        return abaArquivos(kit, { arvore, abertas, filtro, arquivos, abertos, raiz: await $.session.root() }, acoes)
-      },
-      tickets: async () => abaTickets(kit, { leva, agora: await $.clock.now() }),
-      uso: async () => {
-        const agora = await $.clock.now()
-        const uso = Object.entries(await read($, USO))
-        const agentes = await read($, AGENTES)
-        return abaUso(kit, { uso, agentes, medida: await read($, MEDIDA), leva, agora })
-      },
-      grill: async () => abaGrill(kit, { ultimoGrill, agora: await $.clock.now() }, acoes),
-      painel: async () => {
-        const agora = await $.clock.now()
-        if (grill) return geralDoGrill(kit, { grill, agora }, acoes)
-        // o repouso ja voltou sem leva: aqui, na aba Geral sem grill, a leva existe
-        const skills = await read($, SKILLS)
-        const agentes = await read($, AGENTES)
-        return geralDaLeva(kit, { leva: leva!, ultimoGrill, skills, agentes, historico: await read($, HISTORICO), agora }, acoes)
-      },
-    }
-    return desenhar[aba]()
-  })
+    desenharPane($, ctx, $.ui.resolve(e) as Elementos, e.props?.scroll?.bodyRows ?? e.viewport?.rows, e.props?.bodyColumns ?? e.viewport?.columns),
+  )
+}
+
+// o desenho do pane, a aba da vez, com os elementos da superficie (ou os do espelho do herdr-app)
+async function desenharPane($: EngineInterface, ctx: Contexto, elementos: Elementos, linhas?: number, colunas?: number): Promise<RenderElement> {
+  const leva = await read($, LEVA)
+  // a aba Grill mostra o ultimo grill do workspace; a aba Geral, so o que ainda esta na tela
+  const ultimoGrill = await read($, GRILL)
+  // sem leva, o grill que o inicio tirou daqui volta, para o Limpar alcanca-lo
+  const grill = leva ? naTela(ultimoGrill) : ultimoGrill
+  const aba = await read($, ABA)
+  const arquivos = await read($, CODIGO)
+  // os efeitos dos botoes e do campo, ligados ao $ aqui: o desenho (painel/desenho/) e puro
+  const acoes: Acoes = {
+    trocarAba: qual => trocarAba($, qual),
+    limpar: () => {
+      ctx.limpo = true
+      return limpar($)
+    },
+    // o diff aberto na aba Diff ou na Arquivos: a mesma lista de abertos
+    alternarDiff: caminho => update($, ABERTOS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho])),
+    alternarPasta: caminho => update($, PASTAS, l => (l.includes(caminho) ? l.filter(c => c !== caminho) : [...l, caminho])),
+    filtrar: texto => update($, FILTRO, () => texto),
+    copiar: async (a, press) => {
+      const r = await $.ui.copy({ text: a.patch, surface: press?.surface }).catch(() => ({ isCopied: false }))
+      if (!r.isCopied) $.ui.toast(`Não deu para copiar o diff de ${a.caminho}`)
+    },
+    descartar: caminho => descartar($, caminho),
+    parar: a => parar($, a),
+    abrirTela: url => abrirTela($, url),
+    abrirHistorico: () => abrirHistorico($),
+    clear: () => $.command.run({ command: 'clear' }),
+    executar: async texto => (await $.prompt.fill({ text: texto })).isFilled || $.ui.toast('Não deu para colar o prompt'),
+  }
+  const kit = primitivas(elementos, { aba, arquivos, linhas, colunas }, acoes)
+  if (aba === 'painel' && !grill && !leva) return abaRepouso(kit, { agora: await $.clock.now() })
+  // um renderer por aba; cada entrada le o que a aba desenha, na ordem de sempre
+  const abertos = await read($, ABERTOS)
+  const desenhar: Record<Aba, () => Promise<RenderElement>> = {
+    codigo: async () => abaDiff(kit, { arquivos, abertos, base: await read($, BASE) }, acoes),
+    arquivos: async () => {
+      const arvore = await read($, ARVORE)
+      const abertas = await read($, PASTAS)
+      const filtro = await read($, FILTRO)
+      return abaArquivos(kit, { arvore, abertas, filtro, arquivos, abertos, raiz: await $.session.root() }, acoes)
+    },
+    tickets: async () => abaTickets(kit, { leva, agora: await $.clock.now() }),
+    uso: async () => {
+      const agora = await $.clock.now()
+      const uso = Object.entries(await read($, USO))
+      const agentes = await read($, AGENTES)
+      return abaUso(kit, { uso, agentes, medida: await read($, MEDIDA), leva, agora })
+    },
+    grill: async () => abaGrill(kit, { ultimoGrill, agora: await $.clock.now() }, acoes),
+    painel: async () => {
+      const agora = await $.clock.now()
+      if (grill) return geralDoGrill(kit, { grill, agora }, acoes)
+      // o repouso ja voltou sem leva: aqui, na aba Geral sem grill, a leva existe
+      const skills = await read($, SKILLS)
+      const agentes = await read($, AGENTES)
+      return geralDaLeva(kit, { leva: leva!, ultimoGrill, skills, agentes, historico: await read($, HISTORICO), agora }, acoes)
+    },
+  }
+  return desenhar[aba]()
 }

@@ -62,6 +62,14 @@ describe('so com pedido', () => {
     await digita('agora ajusta o README')
     expect((await bash('git push')).deny).toBeDefined()
 
+    // a grafia com um m (comitado, comita, comitar) tambem pede; o comitê nao
+    for (const pedido of ['deixa comitado, so local', 'comita isso', 'pode comitar']) {
+      await digita(pedido)
+      expect((await bash('git commit -m x')).result).toBe('ok')
+    }
+    await digita('leva ao comitê')
+    expect((await bash('git commit -m x')).deny).toBeDefined()
+
     // a mensagem de plugin nao pede, mesmo com a palavra
     await digita('publica')
     await plugin('commit e push agora')

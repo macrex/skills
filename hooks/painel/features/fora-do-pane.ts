@@ -4,6 +4,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, On, RenderElement } from 'claude-code'
 import { AMARELO, VERMELHO, ROTULO } from '../dominio/vocabulario.ts'
 import type { Marco } from '../dominio/vocabulario.ts'
+import type { Contexto } from '../estado.ts'
 import { ticketDaLeva, duracao } from '../dominio/formato.ts'
 import { alertas } from '../dominio/alertas.ts'
 
@@ -18,10 +19,13 @@ const AGENTES = atom({ plugin: 'macrex-skills', key: 'agentes' }, [])
 // ponytail: uma por vez; duas pendentes juntas mostram a ultima
 const PERMISSAO = atom({ plugin: 'macrex-skills', key: 'permissao' }, null)
 
+// o herdrApp e copia do do nucleo
+const herdrApp = ($: EngineInterface, comando: string, args: Record<string, unknown>) =>
+  $.process.run(['herdr-app', 'do', comando, JSON.stringify(args)]).catch(() => ({ exitCode: 1 }))
 // o alertasDe e copia do do nucleo: o validate nao segue o $ por um import
 const alertasDe = async ($: EngineInterface) => alertas({ leva: await read($, LEVA), agentes: await read($, AGENTES), permissao: await read($, PERMISSAO), agora: await $.clock.now() })
 
-export function registrarForaDoPane(on: On) {
+export function registrarForaDoPane(on: On, ctx: Contexto) {
   // a faixa acima do prompt: a leva aberta numa linha, sem abrir o pane, e embaixo a linha do
   // alerta, que vale com ou sem leva; durante o turno a linha da leva sai, porque o spinner ja leva
   // a fase e o ticket. O que outro mod desenha na faixa segue embaixo
@@ -34,7 +38,7 @@ export function registrarForaDoPane(on: On) {
     const doAlerta = lista.length > 0 && h(Text, { color: lista.some(a => a.vermelho) ? VERMELHO : AMARELO, wrap: 'truncate-end' }, lista.map(a => a.texto).join(' · '))
     // o h devolve RenderNode ou null, e o Box e sempre o elemento
     if (!comLeva) return h(Box, { flexDirection: 'column' }, doAlerta, await next(e)) as RenderElement
-    const aberto = (await $.ui.panes()).some(pane => pane.id === PANE)
+    const aberto = Boolean(ctx.herdr?.visivel) || (await $.ui.panes()).some(pane => pane.id === PANE)
     // comLeva so com a leva aberta, que tem inicio
     const contagem = ticketDaLeva(leva!)
     const partes = ['Leva', ROTULO[leva!.fase] ?? leva!.fase, ...(contagem ? [contagem] : []), duracao((await $.clock.now()) - leva!.inicio!)]
@@ -43,8 +47,10 @@ export function registrarForaDoPane(on: On) {
     const cabe = (larg: number) => partes.join(' · ').length <= larg
     while (partes.length > 1 && !cabe(e.props.bodyColumns - doBotao)) partes.pop()
     const comBotao = !aberto && cabe(e.props.bodyColumns - doBotao)
+    // o pane, ou o painel do herdr-app quando a sessao roda nele e o layout tem o bloco (como no /painel-macrex)
     const abrir = async () => {
-      await $.ui.open({ id: PANE, title: 'Leva' })
+      if (ctx.herdr && (await herdrApp($, 'layout.select', { stack: 'panel-body', child: PANE })).exitCode === 0) await herdrApp($, 'layout.show', { id: 'panel' })
+      else await $.ui.open({ id: PANE, title: 'Leva' })
       $.ui.invalidate('ui.render')
     }
     return h(
