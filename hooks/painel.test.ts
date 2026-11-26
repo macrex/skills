@@ -301,6 +301,9 @@ describe('painel da leva', () => {
     const arquivos: Record<string, string> = {}
     const pedidos: string[] = []
     let select = 0
+    // o reparar.mjs do painel-faz-herdr: 3 quando repos o bloco ou o botao
+    const reparos: string[] = []
+    let reparo = 0
     const env: Record<string, string> = { HC_TERMINAL_ID: 't7', USERPROFILE: 'C:\\Users\\eu' }
     on('env.get', ($, e) => ({ value: env[e.name] ?? '' }))
     // o engine entrega o caminho com a barra do sistema
@@ -309,12 +312,34 @@ describe('painel da leva', () => {
     on('fs.read', ($, e) => (barra(e.path) in arquivos ? { value: arquivos[barra(e.path)] } : { deny: 'ENOENT' }) as never)
     on('process.run', ($, e) => {
       if (e.argv[0] === 'herdr-app') pedidos.push(`${e.argv[2]} ${e.argv[3]}`)
-      const exitCode = e.argv[2] === 'layout.select' ? select : 0
+      if (e.argv[0] === 'node') reparos.push(e.argv[1])
+      const exitCode = e.argv[0] === 'node' ? reparo : e.argv[2] === 'layout.select' ? select : 0
       return { value: { exitCode, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     const dir = 'C:/Users/eu/.config/herdr-app/painel-macrex/t7'
-    return { arquivos, pedidos, dir, semBloco: () => { select = 1 } }
+    return { arquivos, pedidos, reparos, dir, semBloco: () => { select = 1 }, reparando: (codigo: number) => { reparo = codigo } }
   }
+
+  test('no herdr-app, o reparar.mjs do Faz roda no inicio da sessao e no /painel-macrex, que espera o bloco reposto', async ($, on) => {
+    const { relogio, sessao } = mundo($, on)
+    const herdr = noHerdr(on)
+    on('ui.open', () => ({ value: { isPlaced: true } }))
+    on('ui.panes', () => ({ value: [] }))
+    await sessao()
+    const reparar = 'C:/Users/eu/.config/herdr-app/painel-macrex/reparar.mjs'
+    expect(herdr.reparos).toEqual([reparar])
+    // outro instalador tirou o bloco: o comando repara e so pede o select depois de o app aplicar
+    herdr.reparando(3)
+    let aberto = false
+    const comando = Promise.resolve($.command.run({ command: 'painel-macrex' })).then(r => { aberto = true; return r })
+    await relogio.advance(1000)
+    expect(aberto).toBe(false)
+    expect(herdr.pedidos).toEqual([])
+    await relogio.advance(200)
+    expect(((await comando) as { text: string }).text).toBe('Painel da leva aberto no herdr-app.')
+    expect(herdr.reparos).toEqual([reparar, reparar])
+    expect(herdr.pedidos[0]).toBe('layout.select {"stack":"panel-body","child":"painel-macrex"}')
+  })
 
   test('no herdr-app, o /painel-macrex mostra o painel de la; sem o bloco no layout, o pane de sempre', async ($, on) => {
     const { relogio, sessao } = mundo($, on)

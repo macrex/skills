@@ -590,7 +590,7 @@ export function registrarSessao(on: On, ctx: Contexto) {
     await carregar($, await $.session.root(), (await read($, GRILL))?.id)
     await sugerirLinha($, false)
     await marcarBase($, e.cwd)
-    await ligarHerdr($, ctx)
+    if (await ligarHerdr($, ctx)) await repararFaz($, ctx.herdr!)
     for (const t of ctx.tiques) t.cancel()
     ctx.tiques = [
       // o tempo da fase, dos agentes em curso e do grill anda sozinho no pane; no grill, a pagina da
@@ -1051,8 +1051,8 @@ export function registrarFerramentas(on: On, ctx: Contexto) {
   })
 }
 
-// o painel do herdr-app (o mod painel-macrex do herdr-mods, na coluna da direita, com o botao na barra
-// de abas): a sessao num terminal dele divide uma pasta com o mod, por terminal. O mod grava a
+// o painel do herdr-app (o mod painel-macrex do painel-faz-herdr, na coluna da direita, com o botao Faz
+// na barra de abas): a sessao num terminal dele divide uma pasta com o mod, por terminal. O mod grava a
 // vista.json (o tamanho, a cada segundo em que aparece) e os pedidos.json (cliques e digitacao); a
 // sessao grava a arvore.json, a arvore do pane em JSON. O painel sem vista ha VISTA_MS esta fechado
 const VISTA_MS = 3000
@@ -1081,6 +1081,11 @@ async function ligarHerdr($: EngineInterface, ctx: Contexto) {
   if (ctx.herdr) await $.fs.write(`${ctx.herdr.dir}/sessao.json`, JSON.stringify({ em: await $.clock.now() })).catch(() => (ctx.herdr = null))
   return ctx.herdr != null
 }
+// o instalador do painel-faz-herdr deixa o reparar.mjs ao lado das pastas dos terminais: ele repõe o
+// bloco e o botão Faz que outro instalador (o do herdr-mods) tirou ao sobrescrever o layout ou a barra
+// de abas, e sai com 3 quando mudou algo. Sem ele (o Faz nao instalado), o node falha e nada muda
+const repararFaz = async ($: EngineInterface, herdr: NonNullable<Contexto['herdr']>) =>
+  (await $.process.run(['node', `${herdr.dir.replace(/\/[^/]+$/, '')}/reparar.mjs`]).catch(() => ({ exitCode: 1 }))).exitCode === 3
 async function espelharNoHerdr($: EngineInterface, ctx: Contexto) {
   const herdr = ctx.herdr
   if (!herdr) return
@@ -1111,13 +1116,15 @@ export function registrarPane(on: On, ctx: Contexto) {
   on('command.run', { command: PANE }, async $ => {
     // a sessao de antes de uma recarga do mod sem session.start liga o modo aqui, e o espelho com ele
     if (!ctx.herdr && (await ligarHerdr($, ctx))) ctx.tiques.push($.clock.every(HERDR_MS, () => espelharNoHerdr($, ctx)))
+    // o bloco reposto agora o app so aplica em ate um segundo: o select espera por ele
+    if (ctx.herdr && (await repararFaz($, ctx.herdr))) await $.clock.sleep(1200)
     if (ctx.herdr?.visivel) {
       await herdrApp($, 'layout.hide', { id: 'panel' })
       ctx.herdr.visivel = false
       return { text: 'Painel da leva fechado no herdr-app.' }
     }
-    // o layout sem o bloco painel-macrex na pilha panel-body (outro que nao o main-conversas do
-    // herdr-mods) recusa o select, e o pane de sempre abre
+    // o layout sem o bloco painel-macrex na pilha panel-body (um layout do Herdr, ou o Faz nao
+    // instalado) recusa o select, e o pane de sempre abre
     if (ctx.herdr && (await herdrApp($, 'layout.select', { stack: 'panel-body', child: PANE })).exitCode === 0) {
       await herdrApp($, 'layout.show', { id: 'panel' })
       return { text: 'Painel da leva aberto no herdr-app.' }

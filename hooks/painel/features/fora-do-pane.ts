@@ -22,6 +22,9 @@ const PERMISSAO = atom({ plugin: 'macrex-skills', key: 'permissao' }, null)
 // o herdrApp e copia do do nucleo
 const herdrApp = ($: EngineInterface, comando: string, args: Record<string, unknown>) =>
   $.process.run(['herdr-app', 'do', comando, JSON.stringify(args)]).catch(() => ({ exitCode: 1 }))
+// o repararFaz e copia do do nucleo
+const repararFaz = async ($: EngineInterface, herdr: NonNullable<Contexto['herdr']>) =>
+  (await $.process.run(['node', `${herdr.dir.replace(/\/[^/]+$/, '')}/reparar.mjs`]).catch(() => ({ exitCode: 1 }))).exitCode === 3
 // o alertasDe e copia do do nucleo: o validate nao segue o $ por um import
 const alertasDe = async ($: EngineInterface) => alertas({ leva: await read($, LEVA), agentes: await read($, AGENTES), permissao: await read($, PERMISSAO), agora: await $.clock.now() })
 
@@ -49,6 +52,7 @@ export function registrarForaDoPane(on: On, ctx: Contexto) {
     const comBotao = !aberto && cabe(e.props.bodyColumns - doBotao)
     // o pane, ou o painel do herdr-app quando a sessao roda nele e o layout tem o bloco (como no /painel-macrex)
     const abrir = async () => {
+      if (ctx.herdr && (await repararFaz($, ctx.herdr))) await $.clock.sleep(1200)
       if (ctx.herdr && (await herdrApp($, 'layout.select', { stack: 'panel-body', child: PANE })).exitCode === 0) await herdrApp($, 'layout.show', { id: 'panel' })
       else await $.ui.open({ id: PANE, title: 'Leva' })
       $.ui.invalidate('ui.render')
