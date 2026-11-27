@@ -306,8 +306,8 @@ describe('painel da leva', () => {
     let reparo = 0
     const env: Record<string, string> = { HC_TERMINAL_ID: 't7', USERPROFILE: 'C:\\Users\\eu' }
     on('env.get', ($, e) => ({ value: env[e.name] ?? '' }))
-    // o engine entrega o caminho com a barra do sistema
-    const barra = (p: string) => p.replace(/\\/g, '/')
+    // o engine entrega o caminho com a barra do sistema e, fora do Windows, prefixa a pasta atual ao C:/ simulado
+    const barra = (p: string) => p.replace(/\\/g, '/').replace(/^.*(?=[A-Z]:\/)/, '')
     on('fs.write', ($, e) => { arquivos[barra(e.path)] = e.text; return { value: undefined } })
     on('fs.read', ($, e) => (barra(e.path) in arquivos ? { value: arquivos[barra(e.path)] } : { deny: 'ENOENT' }) as never)
     on('process.run', ($, e) => {
